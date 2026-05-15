@@ -1,0 +1,496 @@
+import { useMemo, useState } from 'react';
+import {
+  ArrowUp,
+  Banknote,
+  BriefcaseBusiness,
+  ClipboardCheck,
+  Download,
+  GraduationCap,
+  RefreshCcw,
+  Search,
+  ShieldCheck,
+  SlidersHorizontal,
+  Sparkles,
+  UserRound,
+  X,
+} from 'lucide-react';
+import { interviewQuestions } from './data/questions.generated';
+import type { CandidateProfile, InterviewQuestion, QuestionTag } from './data/types';
+
+const defaultProfile: CandidateProfile = {
+  ageRange: '25to29',
+  workYears: 'under2',
+  isFreshGraduate: false,
+  hasBankExperience: false,
+  bankYears: 'under1',
+  hasSalesExperience: false,
+  targetFocus: 'balanced',
+  practiceSize: 20,
+};
+
+const focusLabel: Record<CandidateProfile['targetFocus'], string> = {
+  balanced: '均衡準備',
+  motivation: '報考動機',
+  sales: '業務推廣',
+  service: '客戶應對',
+  compliance: '法遵洗防',
+  news: '時事財經',
+};
+
+const tagLabels: Record<QuestionTag, string> = {
+  top10: '十大必問',
+  motivation: '動機',
+  freshGraduate: '新鮮人',
+  experienced: '有年資',
+  noBankExperience: '無銀行經驗',
+  bankExperience: '銀行實務',
+  sales: '銷售',
+  customerService: '客戶',
+  compliance: '法遵',
+  fintech: '數位金融',
+  marketNews: '時事',
+  scenario: '情境',
+  manager: '主管',
+  teamwork: '團隊',
+  pressure: '抗壓',
+};
+
+const focusTags: Record<CandidateProfile['targetFocus'], QuestionTag[]> = {
+  balanced: ['top10', 'motivation', 'scenario', 'customerService'],
+  motivation: ['motivation', 'top10', 'noBankExperience'],
+  sales: ['sales', 'customerService', 'scenario'],
+  service: ['customerService', 'scenario', 'pressure'],
+  compliance: ['compliance', 'scenario'],
+  news: ['marketNews', 'fintech'],
+};
+
+const hasTag = (question: InterviewQuestion, tag: QuestionTag) => question.tags.includes(tag);
+
+const scoreQuestion = (question: InterviewQuestion, profile: CandidateProfile) => {
+  let score = 10;
+  const reasons: string[] = [];
+
+  if (hasTag(question, 'top10')) {
+    score += 28;
+    reasons.push('口試高頻核心題');
+  }
+
+  if (profile.isFreshGraduate && hasTag(question, 'freshGraduate')) {
+    score += 22;
+    reasons.push('適合應屆畢業生');
+  }
+
+  if (!profile.isFreshGraduate && hasTag(question, 'experienced')) {
+    score += 18;
+    reasons.push('可連結工作經歷');
+  }
+
+  if (!profile.hasBankExperience && hasTag(question, 'noBankExperience')) {
+    score += 24;
+    reasons.push('補強無銀行經驗說法');
+  }
+
+  if (profile.hasBankExperience && hasTag(question, 'bankExperience')) {
+    score += 18;
+    reasons.push('延伸銀行實務經驗');
+  }
+
+  if (profile.hasBankExperience && profile.bankYears === 'under1') {
+    if (hasTag(question, 'bankExperience')) score += 8;
+    if (hasTag(question, 'customerService') || hasTag(question, 'scenario')) {
+      score += 8;
+      reasons.push('強化銀行適應期情境');
+    }
+  }
+
+  if (profile.hasBankExperience && profile.bankYears === '1to3') {
+    if (hasTag(question, 'bankExperience')) score += 12;
+    if (hasTag(question, 'sales') || hasTag(question, 'compliance')) {
+      score += 8;
+      reasons.push('連結銀行實務表現');
+    }
+  }
+
+  if (profile.hasBankExperience && profile.bankYears === '3plus') {
+    if (hasTag(question, 'bankExperience')) score += 14;
+    if (hasTag(question, 'manager') || hasTag(question, 'teamwork')) {
+      score += 10;
+      reasons.push('延伸資深行員協作題');
+    }
+    if (hasTag(question, 'compliance') || hasTag(question, 'marketNews')) {
+      score += 8;
+      reasons.push('展現進階銀行視野');
+    }
+  }
+
+  if (profile.hasSalesExperience && hasTag(question, 'sales')) {
+    score += 18;
+    reasons.push('凸顯銷售經驗');
+  }
+
+  if (!profile.hasSalesExperience && hasTag(question, 'sales')) {
+    score += 8;
+    reasons.push('預先準備業績壓力');
+  }
+
+  if (profile.workYears === 'none' && hasTag(question, 'freshGraduate')) score += 10;
+  if (profile.workYears === '5plus' && hasTag(question, 'experienced')) score += 10;
+  if (profile.ageRange === '30plus' && hasTag(question, 'experienced')) score += 8;
+  if (profile.ageRange === 'under24' && hasTag(question, 'freshGraduate')) score += 8;
+
+  for (const tag of focusTags[profile.targetFocus]) {
+    if (hasTag(question, tag)) {
+      score += profile.targetFocus === 'balanced' ? 8 : 18;
+      if (!reasons.includes(focusLabel[profile.targetFocus])) reasons.push(focusLabel[profile.targetFocus]);
+    }
+  }
+
+  if (question.difficulty === '進階' && profile.targetFocus !== 'news' && profile.targetFocus !== 'compliance') {
+    score -= 4;
+  }
+
+  return {
+    question,
+    score,
+    reasons: reasons.slice(0, 3),
+  };
+};
+
+const categorySummary = (questions: InterviewQuestion[]) =>
+  questions.reduce<Record<string, number>>((acc, question) => {
+    acc[question.category] = (acc[question.category] ?? 0) + 1;
+    return acc;
+  }, {});
+
+export function App() {
+  const [profile, setProfile] = useState<CandidateProfile>(defaultProfile);
+  const [keyword, setKeyword] = useState('');
+  const [activeCategory, setActiveCategory] = useState('全部');
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+  const categories = useMemo(
+    () => ['全部', ...Array.from(new Set(interviewQuestions.map((question) => question.category)))],
+    [],
+  );
+
+  const rankedQuestions = useMemo(() => {
+    const normalizedKeyword = keyword.trim().toLowerCase();
+
+    return interviewQuestions
+      .filter((question) => activeCategory === '全部' || question.category === activeCategory)
+      .filter((question) => {
+        if (!normalizedKeyword) return true;
+        return `${question.question} ${question.category} ${question.tags.join(' ')}`.toLowerCase().includes(normalizedKeyword);
+      })
+      .map((question) => scoreQuestion(question, profile))
+      .sort((a, b) => b.score - a.score || a.question.id - b.question.id)
+      .slice(0, profile.practiceSize);
+  }, [activeCategory, keyword, profile]);
+
+  const visibleQuestions = rankedQuestions.map((item) => item.question);
+  const summary = categorySummary(visibleQuestions);
+  const topScore = rankedQuestions[0]?.score ?? 1;
+
+  const updateProfile = <K extends keyof CandidateProfile>(key: K, value: CandidateProfile[K]) => {
+    setProfile((current) => {
+      if (key === 'hasBankExperience' && value === false) {
+        return { ...current, hasBankExperience: false, bankYears: defaultProfile.bankYears };
+      }
+
+      return { ...current, [key]: value };
+    });
+  };
+
+  const renderCandidateControls = (idPrefix: string, showClose = false) => (
+    <div className="control-panel">
+      <div className="panel-heading">
+        <UserRound size={20} />
+        <h2>考生條件</h2>
+        {showClose && (
+          <button
+            className="icon-button ms-auto"
+            type="button"
+            aria-label="關閉考生條件"
+            onClick={() => setIsFilterOpen(false)}
+          >
+            <X size={19} />
+          </button>
+        )}
+      </div>
+
+      <label className="form-label" htmlFor={`${idPrefix}-ageRange`}>
+        年齡
+      </label>
+      <select
+        className="form-select mb-3"
+        id={`${idPrefix}-ageRange`}
+        value={profile.ageRange}
+        onChange={(event) => updateProfile('ageRange', event.target.value as CandidateProfile['ageRange'])}
+      >
+        <option value="under24">24 歲以下</option>
+        <option value="25to29">25-29 歲</option>
+        <option value="30plus">30 歲以上</option>
+      </select>
+
+      <label className="form-label" htmlFor={`${idPrefix}-workYears`}>
+        工作年資
+      </label>
+      <select
+        className="form-select mb-3"
+        id={`${idPrefix}-workYears`}
+        value={profile.workYears}
+        onChange={(event) => updateProfile('workYears', event.target.value as CandidateProfile['workYears'])}
+      >
+        <option value="none">無正式工作經驗</option>
+        <option value="under2">未滿 2 年</option>
+        <option value="2to5">2-5 年</option>
+        <option value="5plus">5 年以上</option>
+      </select>
+
+      <div className="toggle-stack mb-3">
+        <label className="switch-row">
+          <input
+            type="checkbox"
+            checked={profile.isFreshGraduate}
+            onChange={(event) => updateProfile('isFreshGraduate', event.target.checked)}
+          />
+          <span>應屆畢業生</span>
+          <GraduationCap size={18} />
+        </label>
+        <label className="switch-row">
+          <input
+            type="checkbox"
+            checked={profile.hasBankExperience}
+            onChange={(event) => updateProfile('hasBankExperience', event.target.checked)}
+          />
+          <span>有銀行經驗</span>
+          <BriefcaseBusiness size={18} />
+        </label>
+        <label className="switch-row">
+          <input
+            type="checkbox"
+            checked={profile.hasSalesExperience}
+            onChange={(event) => updateProfile('hasSalesExperience', event.target.checked)}
+          />
+          <span>有銷售經驗</span>
+          <Sparkles size={18} />
+        </label>
+      </div>
+
+      {profile.hasBankExperience && (
+        <>
+          <label className="form-label" htmlFor={`${idPrefix}-bankYears`}>
+            銀行年資
+          </label>
+          <select
+            className="form-select mb-3"
+            id={`${idPrefix}-bankYears`}
+            value={profile.bankYears}
+            onChange={(event) => updateProfile('bankYears', event.target.value as CandidateProfile['bankYears'])}
+          >
+            <option value="under1">未滿 1 年</option>
+            <option value="1to3">1-3 年</option>
+            <option value="3plus">3 年以上</option>
+          </select>
+        </>
+      )}
+
+      <label className="form-label" htmlFor={`${idPrefix}-targetFocus`}>
+        準備重點
+      </label>
+      <select
+        className="form-select mb-3"
+        id={`${idPrefix}-targetFocus`}
+        value={profile.targetFocus}
+        onChange={(event) => updateProfile('targetFocus', event.target.value as CandidateProfile['targetFocus'])}
+      >
+        {Object.entries(focusLabel).map(([value, label]) => (
+          <option key={value} value={value}>
+            {label}
+          </option>
+        ))}
+      </select>
+
+      <label className="form-label d-flex justify-content-between" htmlFor={`${idPrefix}-practiceSize`}>
+        <span>推薦題數</span>
+        <strong>{profile.practiceSize}</strong>
+      </label>
+      <input
+        className="form-range"
+        id={`${idPrefix}-practiceSize`}
+        type="range"
+        min="10"
+        max="50"
+        step="5"
+        value={profile.practiceSize}
+        onChange={(event) => updateProfile('practiceSize', Number(event.target.value))}
+      />
+
+      <button className="btn btn-outline-dark w-100 mt-3" type="button" onClick={() => setProfile(defaultProfile)}>
+        <RefreshCcw size={17} />
+        重設條件
+      </button>
+    </div>
+  );
+
+  return (
+    <main>
+      <section className="hero-band">
+        <div className="container py-4 py-lg-5">
+          <div className="row g-4 align-items-end">
+            <div className="col-lg-7">
+              <div className="d-inline-flex align-items-center gap-2 hero-kicker mb-3">
+                <Banknote size={18} />
+                公股銀行面試題庫
+              </div>
+              <h1 className="display-title mb-3">公股銀行面試題目選擇器</h1>
+              <p className="hero-copy mb-0">
+                依照考生背景排序 123 題常見口試題，快速抓出最該優先練的動機題、情境題、業務題與時事題。
+                推薦結果僅供準備方向參考，實際面試仍應以自身經歷、報考銀行與職缺內容為主。
+              </p>
+            </div>
+            <div className="col-lg-5">
+              <div className="hero-metrics">
+                <div>
+                  <strong>{interviewQuestions.length}</strong>
+                  <span>題庫題目</span>
+                </div>
+                <div>
+                  <strong>{categories.length - 1}</strong>
+                  <span>題型分類</span>
+                </div>
+                <div>
+                  <strong>{rankedQuestions.length}</strong>
+                  <span>本次推薦</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="workspace-band">
+        <div className="container py-4">
+          <button className="btn btn-dark mobile-filter-button mb-3" type="button" onClick={() => setIsFilterOpen(true)}>
+            <SlidersHorizontal size={18} />
+            考生條件
+          </button>
+
+          <div className="row g-4">
+            <aside className="col-lg-4 col-xl-3 desktop-filter-panel">
+              {renderCandidateControls('desktop')}
+            </aside>
+
+            <div className="col-lg-8 col-xl-9">
+              <div className="toolbar">
+                <div className="search-box">
+                  <Search size={19} />
+                  <input
+                    type="search"
+                    placeholder="搜尋題目、分類或標籤"
+                    value={keyword}
+                    onChange={(event) => setKeyword(event.target.value)}
+                    aria-label="搜尋題目"
+                  />
+                </div>
+                <select
+                  className="form-select category-select"
+                  value={activeCategory}
+                  onChange={(event) => setActiveCategory(event.target.value)}
+                  aria-label="題型分類"
+                >
+                  {categories.map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+                <a className="btn btn-dark source-link" href="/20260515bank123.pdf" target="_blank" rel="noreferrer">
+                  <Download size={17} />
+                  題庫 PDF
+                </a>
+              </div>
+
+              <div className="result-overview">
+                <div className="overview-item accent-teal">
+                  <ClipboardCheck size={20} />
+                  <div>
+                    <span>題目適配度</span>
+                    <strong>{Math.round((topScore / 100) * 100)}%</strong>
+                  </div>
+                </div>
+                <div className="overview-item accent-amber">
+                  <ShieldCheck size={20} />
+                  <div>
+                    <span>進階題</span>
+                    <strong>{visibleQuestions.filter((question) => question.difficulty === '進階').length}</strong>
+                  </div>
+                </div>
+                <div className="category-pills">
+                  {Object.entries(summary)
+                    .slice(0, 5)
+                    .map(([category, count]) => (
+                      <span key={category}>
+                        {category} {count}
+                      </span>
+                    ))}
+                </div>
+              </div>
+
+              <div className="question-list">
+                {rankedQuestions.map(({ question, score, reasons }) => (
+                  <article className="question-card" key={question.id}>
+                    <div className="question-rank">
+                      <span>#{question.id}</span>
+                    </div>
+                    <div className="question-body">
+                      <div className="question-meta">
+                        <span>{question.category}</span>
+                        <span>{question.difficulty}</span>
+                      </div>
+                      <h3>{question.question}</h3>
+                      <div className="reason-row">
+                        {(reasons.length ? reasons : ['一般題庫練習']).map((reason) => (
+                          <span key={reason}>{reason}</span>
+                        ))}
+                      </div>
+                      <div className="tag-row">
+                        {question.tags.slice(0, 6).map((tag) => (
+                          <span key={tag}>{tagLabels[tag]}</span>
+                        ))}
+                      </div>
+                      <div className="match-score">題目適配度 {score}%</div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {isFilterOpen && (
+        <div className="filter-modal" role="dialog" aria-modal="true" aria-label="考生條件">
+          <button
+            className="filter-backdrop"
+            type="button"
+            aria-label="關閉考生條件"
+            onClick={() => setIsFilterOpen(false)}
+          />
+          <div className="filter-drawer">{renderCandidateControls('mobile', true)}</div>
+        </div>
+      )}
+
+      <div className="site-credit">Credit: Jack</div>
+      <button
+        className="back-to-top"
+        type="button"
+        aria-label="回到頂端"
+        onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+      >
+        <ArrowUp size={19} />
+        <span>回到頂端</span>
+      </button>
+    </main>
+  );
+}
