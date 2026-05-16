@@ -155,7 +155,7 @@ select {
 
 .switch-row {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto 1fr;
   align-items: center;
   gap: 0.65rem;
   min-height: 42px;
@@ -171,6 +171,11 @@ select {
   width: 1.05rem;
   height: 1.05rem;
   accent-color: #0f766e;
+}
+
+.switch-row:has(input:checked) {
+  border-color: #0f766e;
+  background: #e2f3f0;
 }
 
 .btn {

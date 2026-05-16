@@ -2,30 +2,27 @@ import { useMemo, useState } from 'react';
 import {
   ArrowUp,
   Banknote,
-  BriefcaseBusiness,
   ClipboardCheck,
   Download,
-  GraduationCap,
   RefreshCcw,
   Search,
   ShieldCheck,
   SlidersHorizontal,
-  Sparkles,
   UserRound,
   X,
 } from 'lucide-react';
 import { interviewQuestions } from './data/questions.generated';
-import type { CandidateProfile, InterviewQuestion, QuestionTag } from './data/types';
+import type { AnswerOption, CandidateProfile, InterviewQuestion, QuestionTag } from './data/types';
 
 const defaultProfile: CandidateProfile = {
-  ageRange: '25to29',
-  workYears: 'under2',
-  isFreshGraduate: false,
-  hasBankExperience: false,
+  ageRange: 'unset',
+  workYears: 'unset',
+  isFreshGraduate: 'unset',
+  hasBankExperience: 'unset',
   bankYears: 'under1',
-  hasSalesExperience: false,
+  hasSalesExperience: 'unset',
   targetFocus: 'balanced',
-  practiceSize: 20,
+  practiceSize: 123,
 };
 
 const focusLabel: Record<CandidateProfile['targetFocus'], string> = {
@@ -79,27 +76,27 @@ const scoreQuestion = (question: InterviewQuestion, profile: CandidateProfile) =
     addReason(reasons, '口試高頻核心題');
   }
 
-  if (profile.isFreshGraduate && hasTag(question, 'freshGraduate')) {
+  if (profile.isFreshGraduate === 'yes' && hasTag(question, 'freshGraduate')) {
     score += 22;
     addReason(reasons, '適合應屆畢業生');
   }
 
-  if (!profile.isFreshGraduate && hasTag(question, 'experienced')) {
+  if (profile.isFreshGraduate === 'no' && hasTag(question, 'experienced')) {
     score += 18;
     addReason(reasons, '可連結工作經歷');
   }
 
-  if (!profile.hasBankExperience && hasTag(question, 'noBankExperience')) {
+  if (profile.hasBankExperience === 'no' && hasTag(question, 'noBankExperience')) {
     score += 24;
     addReason(reasons, '補強無銀行經驗說法');
   }
 
-  if (profile.hasBankExperience && hasTag(question, 'bankExperience')) {
+  if (profile.hasBankExperience === 'yes' && hasTag(question, 'bankExperience')) {
     score += 18;
     addReason(reasons, '延伸銀行實務經驗');
   }
 
-  if (profile.hasBankExperience && profile.bankYears === 'under1') {
+  if (profile.hasBankExperience === 'yes' && profile.bankYears === 'under1') {
     if (hasTag(question, 'bankExperience')) score += 8;
     if (hasTag(question, 'customerService') || hasTag(question, 'scenario')) {
       score += 8;
@@ -107,7 +104,7 @@ const scoreQuestion = (question: InterviewQuestion, profile: CandidateProfile) =
     }
   }
 
-  if (profile.hasBankExperience && profile.bankYears === '1to3') {
+  if (profile.hasBankExperience === 'yes' && profile.bankYears === '1to3') {
     if (hasTag(question, 'bankExperience')) score += 12;
     if (hasTag(question, 'sales') || hasTag(question, 'compliance')) {
       score += 8;
@@ -115,7 +112,7 @@ const scoreQuestion = (question: InterviewQuestion, profile: CandidateProfile) =
     }
   }
 
-  if (profile.hasBankExperience && profile.bankYears === '3plus') {
+  if (profile.hasBankExperience === 'yes' && profile.bankYears === '3plus') {
     if (hasTag(question, 'bankExperience')) score += 14;
     if (hasTag(question, 'manager') || hasTag(question, 'teamwork')) {
       score += 10;
@@ -127,12 +124,12 @@ const scoreQuestion = (question: InterviewQuestion, profile: CandidateProfile) =
     }
   }
 
-  if (profile.hasSalesExperience && hasTag(question, 'sales')) {
+  if (profile.hasSalesExperience === 'yes' && hasTag(question, 'sales')) {
     score += 18;
     addReason(reasons, '凸顯銷售經驗');
   }
 
-  if (!profile.hasSalesExperience && hasTag(question, 'sales')) {
+  if (profile.hasSalesExperience === 'no' && hasTag(question, 'sales')) {
     score += 8;
     addReason(reasons, '預先準備業績壓力');
   }
@@ -151,19 +148,19 @@ const scoreQuestion = (question: InterviewQuestion, profile: CandidateProfile) =
   }
   score += Math.min(focusBonus, profile.targetFocus === 'balanced' ? 20 : 28);
 
-  if (!profile.hasBankExperience && (hasTag(question, 'manager') || hasTag(question, 'teamwork'))) {
+  if (profile.hasBankExperience === 'no' && (hasTag(question, 'manager') || hasTag(question, 'teamwork'))) {
     score -= 14;
   }
 
-  if (!profile.hasBankExperience && hasTag(question, 'bankExperience') && !hasTag(question, 'motivation')) {
+  if (profile.hasBankExperience === 'no' && hasTag(question, 'bankExperience') && !hasTag(question, 'motivation')) {
     score -= 10;
   }
 
-  if (profile.hasBankExperience && profile.bankYears === 'under1' && (hasTag(question, 'manager') || hasTag(question, 'teamwork'))) {
+  if (profile.hasBankExperience === 'yes' && profile.bankYears === 'under1' && (hasTag(question, 'manager') || hasTag(question, 'teamwork'))) {
     score -= 8;
   }
 
-  if (profile.isFreshGraduate && hasTag(question, 'experienced') && !hasTag(question, 'top10')) {
+  if (profile.isFreshGraduate === 'yes' && hasTag(question, 'experienced') && !hasTag(question, 'top10')) {
     score -= 8;
   }
 
@@ -184,6 +181,14 @@ const categorySummary = (questions: InterviewQuestion[]) =>
     return acc;
   }, {});
 
+const isProfileEmpty = (profile: CandidateProfile) =>
+  profile.ageRange === 'unset' &&
+  profile.workYears === 'unset' &&
+  profile.isFreshGraduate === 'unset' &&
+  profile.hasBankExperience === 'unset' &&
+  profile.hasSalesExperience === 'unset' &&
+  profile.targetFocus === defaultProfile.targetFocus;
+
 export function App() {
   const [profile, setProfile] = useState<CandidateProfile>(defaultProfile);
   const [keyword, setKeyword] = useState('');
@@ -197,31 +202,61 @@ export function App() {
 
   const rankedQuestions = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
+    const hasProfileCriteria = !isProfileEmpty(profile);
+    const scoringProfile: CandidateProfile = hasProfileCriteria
+      ? {
+          ...profile,
+          isFreshGraduate: profile.isFreshGraduate === 'yes' ? 'yes' : 'no',
+          hasBankExperience: profile.hasBankExperience === 'yes' ? 'yes' : 'no',
+          hasSalesExperience: profile.hasSalesExperience === 'yes' ? 'yes' : 'no',
+        }
+      : profile;
 
-    return interviewQuestions
+    const filteredQuestions = interviewQuestions
       .filter((question) => activeCategory === '全部' || question.category === activeCategory)
       .filter((question) => {
         if (!normalizedKeyword) return true;
         return `${question.question} ${question.category} ${question.tags.join(' ')}`.toLowerCase().includes(normalizedKeyword);
-      })
-      .map((question) => scoreQuestion(question, profile))
-      .sort((a, b) => b.score - a.score || a.question.id - b.question.id)
+      });
+
+    return filteredQuestions
+      .map((question) => (hasProfileCriteria ? scoreQuestion(question, scoringProfile) : { question, score: 0, reasons: [] }))
+      .sort((a, b) => (hasProfileCriteria ? b.score - a.score || a.question.id - b.question.id : a.question.id - b.question.id))
       .slice(0, profile.practiceSize);
   }, [activeCategory, keyword, profile]);
 
+  const profileIsEmpty = isProfileEmpty(profile);
   const visibleQuestions = rankedQuestions.map((item) => item.question);
   const summary = categorySummary(visibleQuestions);
-  const topScore = rankedQuestions[0]?.score ?? 1;
+  const topScore = rankedQuestions[0]?.score ?? 0;
 
   const updateProfile = <K extends keyof CandidateProfile>(key: K, value: CandidateProfile[K]) => {
     setProfile((current) => {
-      if (key === 'hasBankExperience' && value === false) {
-        return { ...current, hasBankExperience: false, bankYears: defaultProfile.bankYears };
+      if (key === 'hasBankExperience' && value !== 'yes') {
+        return { ...current, hasBankExperience: value as CandidateProfile['hasBankExperience'], bankYears: defaultProfile.bankYears };
       }
 
       return { ...current, [key]: value };
     });
   };
+
+  const renderAnswerCheckbox = (
+    idPrefix: string,
+    key: 'isFreshGraduate' | 'hasBankExperience' | 'hasSalesExperience',
+    label: string,
+  ) => (
+    <label className="switch-row">
+      <input
+        type="checkbox"
+        checked={profile[key] === 'yes'}
+        onChange={(event) => updateProfile(key, event.target.checked ? 'yes' : 'unset')}
+      />
+      <span>{label}</span>
+      <span className="visually-hidden" id={`${idPrefix}-${key}-hint`}>
+        未勾選代表否
+      </span>
+    </label>
+  );
 
   const renderCandidateControls = (idPrefix: string, showClose = false) => (
     <div className="control-panel">
@@ -249,6 +284,7 @@ export function App() {
         value={profile.ageRange}
         onChange={(event) => updateProfile('ageRange', event.target.value as CandidateProfile['ageRange'])}
       >
+        <option value="unset">未選擇</option>
         <option value="under24">24 歲以下</option>
         <option value="25to29">25-29 歲</option>
         <option value="30plus">30 歲以上</option>
@@ -263,6 +299,7 @@ export function App() {
         value={profile.workYears}
         onChange={(event) => updateProfile('workYears', event.target.value as CandidateProfile['workYears'])}
       >
+        <option value="unset">未選擇</option>
         <option value="none">無正式工作經驗</option>
         <option value="under2">未滿 2 年</option>
         <option value="2to5">2-5 年</option>
@@ -270,36 +307,12 @@ export function App() {
       </select>
 
       <div className="toggle-stack mb-3">
-        <label className="switch-row">
-          <input
-            type="checkbox"
-            checked={profile.isFreshGraduate}
-            onChange={(event) => updateProfile('isFreshGraduate', event.target.checked)}
-          />
-          <span>應屆畢業生</span>
-          <GraduationCap size={18} />
-        </label>
-        <label className="switch-row">
-          <input
-            type="checkbox"
-            checked={profile.hasBankExperience}
-            onChange={(event) => updateProfile('hasBankExperience', event.target.checked)}
-          />
-          <span>有銀行經驗</span>
-          <BriefcaseBusiness size={18} />
-        </label>
-        <label className="switch-row">
-          <input
-            type="checkbox"
-            checked={profile.hasSalesExperience}
-            onChange={(event) => updateProfile('hasSalesExperience', event.target.checked)}
-          />
-          <span>有銷售經驗</span>
-          <Sparkles size={18} />
-        </label>
+        {renderAnswerCheckbox(idPrefix, 'isFreshGraduate', '應屆畢業生')}
+        {renderAnswerCheckbox(idPrefix, 'hasBankExperience', '有銀行經驗')}
+        {renderAnswerCheckbox(idPrefix, 'hasSalesExperience', '有銷售經驗')}
       </div>
 
-      {profile.hasBankExperience && (
+      {profile.hasBankExperience === 'yes' && (
         <>
           <label className="form-label" htmlFor={`${idPrefix}-bankYears`}>
             銀行年資
@@ -334,7 +347,7 @@ export function App() {
       </select>
 
       <label className="form-label d-flex justify-content-between" htmlFor={`${idPrefix}-practiceSize`}>
-        <span>推薦題數</span>
+        <span>顯示題數</span>
         <strong>{profile.practiceSize}</strong>
       </label>
       <input
@@ -342,8 +355,8 @@ export function App() {
         id={`${idPrefix}-practiceSize`}
         type="range"
         min="10"
-        max="50"
-        step="5"
+        max={interviewQuestions.length}
+        step="1"
         value={profile.practiceSize}
         onChange={(event) => updateProfile('practiceSize', Number(event.target.value))}
       />
@@ -438,7 +451,7 @@ export function App() {
                   <ClipboardCheck size={20} />
                   <div>
                     <span>題目適配度</span>
-                    <strong>{Math.round((topScore / 100) * 100)}%</strong>
+                    <strong>{profileIsEmpty ? '未排序' : `${Math.round((topScore / 100) * 100)}%`}</strong>
                   </div>
                 </div>
                 <div className="overview-item accent-amber">
@@ -471,17 +484,19 @@ export function App() {
                         <span>{question.difficulty}</span>
                       </div>
                       <h3>{question.question}</h3>
-                      <div className="reason-row">
-                        {(reasons.length ? reasons : ['一般題庫練習']).map((reason) => (
-                          <span key={reason}>{reason}</span>
-                        ))}
-                      </div>
+                      {!profileIsEmpty && (
+                        <div className="reason-row">
+                          {(reasons.length ? reasons : ['一般題庫練習']).map((reason) => (
+                            <span key={reason}>{reason}</span>
+                          ))}
+                        </div>
+                      )}
                       <div className="tag-row">
                         {question.tags.slice(0, 6).map((tag) => (
                           <span key={tag}>{tagLabels[tag]}</span>
                         ))}
                       </div>
-                      <div className="match-score">題目適配度 {score}%</div>
+                      {!profileIsEmpty && <div className="match-score">題目適配度 {score}%</div>}
                     </div>
                   </article>
                 ))}
@@ -503,7 +518,7 @@ export function App() {
         </div>
       )}
 
-      <div className="site-credit">Credit: Jack</div>
+      <div className="site-credit">Credit: 公股銀行招考討論區Jack</div>
       <button
         className="back-to-top"
         type="button"

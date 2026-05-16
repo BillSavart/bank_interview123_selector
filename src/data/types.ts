@@ -23,13 +23,15 @@ export interface InterviewQuestion {
   tags: QuestionTag[];
 }
 
+export type AnswerOption = 'unset' | 'yes' | 'no';
+
 export interface CandidateProfile {
-  ageRange: 'under24' | '25to29' | '30plus';
-  workYears: 'none' | 'under2' | '2to5' | '5plus';
-  isFreshGraduate: boolean;
-  hasBankExperience: boolean;
+  ageRange: 'unset' | 'under24' | '25to29' | '30plus';
+  workYears: 'unset' | 'none' | 'under2' | '2to5' | '5plus';
+  isFreshGraduate: AnswerOption;
+  hasBankExperience: AnswerOption;
   bankYears: 'under1' | '1to3' | '3plus';
-  hasSalesExperience: boolean;
+  hasSalesExperience: AnswerOption;
   targetFocus: 'balanced' | 'motivation' | 'sales' | 'service' | 'compliance' | 'news';
   practiceSize: number;
 }
