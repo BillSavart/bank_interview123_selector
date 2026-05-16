@@ -66,40 +66,44 @@ const focusTags: Record<CandidateProfile['targetFocus'], QuestionTag[]> = {
 
 const hasTag = (question: InterviewQuestion, tag: QuestionTag) => question.tags.includes(tag);
 
+const addReason = (reasons: string[], reason: string) => {
+  if (!reasons.includes(reason)) reasons.push(reason);
+};
+
 const scoreQuestion = (question: InterviewQuestion, profile: CandidateProfile) => {
   let score = 10;
   const reasons: string[] = [];
 
   if (hasTag(question, 'top10')) {
     score += 28;
-    reasons.push('口試高頻核心題');
+    addReason(reasons, '口試高頻核心題');
   }
 
   if (profile.isFreshGraduate && hasTag(question, 'freshGraduate')) {
     score += 22;
-    reasons.push('適合應屆畢業生');
+    addReason(reasons, '適合應屆畢業生');
   }
 
   if (!profile.isFreshGraduate && hasTag(question, 'experienced')) {
     score += 18;
-    reasons.push('可連結工作經歷');
+    addReason(reasons, '可連結工作經歷');
   }
 
   if (!profile.hasBankExperience && hasTag(question, 'noBankExperience')) {
     score += 24;
-    reasons.push('補強無銀行經驗說法');
+    addReason(reasons, '補強無銀行經驗說法');
   }
 
   if (profile.hasBankExperience && hasTag(question, 'bankExperience')) {
     score += 18;
-    reasons.push('延伸銀行實務經驗');
+    addReason(reasons, '延伸銀行實務經驗');
   }
 
   if (profile.hasBankExperience && profile.bankYears === 'under1') {
     if (hasTag(question, 'bankExperience')) score += 8;
     if (hasTag(question, 'customerService') || hasTag(question, 'scenario')) {
       score += 8;
-      reasons.push('強化銀行適應期情境');
+      addReason(reasons, '強化銀行適應期情境');
     }
   }
 
@@ -107,7 +111,7 @@ const scoreQuestion = (question: InterviewQuestion, profile: CandidateProfile) =
     if (hasTag(question, 'bankExperience')) score += 12;
     if (hasTag(question, 'sales') || hasTag(question, 'compliance')) {
       score += 8;
-      reasons.push('連結銀行實務表現');
+      addReason(reasons, '連結銀行實務表現');
     }
   }
 
@@ -115,22 +119,22 @@ const scoreQuestion = (question: InterviewQuestion, profile: CandidateProfile) =
     if (hasTag(question, 'bankExperience')) score += 14;
     if (hasTag(question, 'manager') || hasTag(question, 'teamwork')) {
       score += 10;
-      reasons.push('延伸資深行員協作題');
+      addReason(reasons, '延伸資深行員協作題');
     }
     if (hasTag(question, 'compliance') || hasTag(question, 'marketNews')) {
       score += 8;
-      reasons.push('展現進階銀行視野');
+      addReason(reasons, '展現進階銀行視野');
     }
   }
 
   if (profile.hasSalesExperience && hasTag(question, 'sales')) {
     score += 18;
-    reasons.push('凸顯銷售經驗');
+    addReason(reasons, '凸顯銷售經驗');
   }
 
   if (!profile.hasSalesExperience && hasTag(question, 'sales')) {
     score += 8;
-    reasons.push('預先準備業績壓力');
+    addReason(reasons, '預先準備業績壓力');
   }
 
   if (profile.workYears === 'none' && hasTag(question, 'freshGraduate')) score += 10;
@@ -138,11 +142,29 @@ const scoreQuestion = (question: InterviewQuestion, profile: CandidateProfile) =
   if (profile.ageRange === '30plus' && hasTag(question, 'experienced')) score += 8;
   if (profile.ageRange === 'under24' && hasTag(question, 'freshGraduate')) score += 8;
 
+  let focusBonus = 0;
   for (const tag of focusTags[profile.targetFocus]) {
     if (hasTag(question, tag)) {
-      score += profile.targetFocus === 'balanced' ? 8 : 18;
-      if (!reasons.includes(focusLabel[profile.targetFocus])) reasons.push(focusLabel[profile.targetFocus]);
+      focusBonus += profile.targetFocus === 'balanced' ? 8 : 18;
+      addReason(reasons, focusLabel[profile.targetFocus]);
     }
+  }
+  score += Math.min(focusBonus, profile.targetFocus === 'balanced' ? 20 : 28);
+
+  if (!profile.hasBankExperience && (hasTag(question, 'manager') || hasTag(question, 'teamwork'))) {
+    score -= 14;
+  }
+
+  if (!profile.hasBankExperience && hasTag(question, 'bankExperience') && !hasTag(question, 'motivation')) {
+    score -= 10;
+  }
+
+  if (profile.hasBankExperience && profile.bankYears === 'under1' && (hasTag(question, 'manager') || hasTag(question, 'teamwork'))) {
+    score -= 8;
+  }
+
+  if (profile.isFreshGraduate && hasTag(question, 'experienced') && !hasTag(question, 'top10')) {
+    score -= 8;
   }
 
   if (question.difficulty === '進階' && profile.targetFocus !== 'news' && profile.targetFocus !== 'compliance') {
@@ -151,7 +173,7 @@ const scoreQuestion = (question: InterviewQuestion, profile: CandidateProfile) =
 
   return {
     question,
-    score,
+    score: Math.max(0, Math.min(100, score)),
     reasons: reasons.slice(0, 3),
   };
 };

@@ -6,7 +6,26 @@ import { PDFParse } from 'pdf-parse';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 const pdfPath = path.join(rootDir, 'public', '20260515bank123.pdf');
+const semanticJsonPath = path.join(rootDir, 'bank123_pdftojson.json');
 const outputPath = path.join(rootDir, 'src', 'data', 'questions.generated.ts');
+const allowedTags = new Set([
+  'top10',
+  'motivation',
+  'freshGraduate',
+  'experienced',
+  'noBankExperience',
+  'bankExperience',
+  'sales',
+  'customerService',
+  'compliance',
+  'fintech',
+  'marketNews',
+  'scenario',
+  'manager',
+  'teamwork',
+  'pressure',
+]);
+const allowedDifficulties = new Set(['核心必練', '基礎', '情境題', '進階']);
 
 const headingPattern = /^(壹|貳|參|肆|伍|陸|柒|捌|玖|拾|壹拾|一|二|三|四|五|六|七|八|九|十).*[、．]/;
 const questionPattern = /^(\d{1,3})[.、．]?\s*(.+)$/;
@@ -47,6 +66,48 @@ const getDifficulty = (question, id) => {
   if (containsAny(question, ['央行', '洗錢', '內部控制', '金管會', '外匯', '升息', '降息', '匯率'])) return '進階';
   if (containsAny(question, ['如果', '遇到', '推銷', '銷售', '客戶', '主管'])) return '情境題';
   return '基礎';
+};
+
+const stripCitation = (value) => value.replace(/\s*\[cite:\s*\d+\]\s*$/i, '').trim();
+
+const parseSemanticJson = async () => {
+  const raw = await fs.readFile(semanticJsonPath, 'utf8');
+  const data = JSON.parse(raw);
+
+  if (!Array.isArray(data)) {
+    throw new Error('bank123_pdftojson.json must contain an array of questions');
+  }
+
+  const questions = data
+    .map((item) => {
+      const id = Number(item.id);
+      const question = stripCitation(String(item.question ?? ''));
+      const category = String(item.category ?? '').trim();
+      const tags = Array.isArray(item.tags)
+        ? [...new Set(item.tags.filter((tag) => allowedTags.has(tag)))].sort()
+        : [];
+      const difficulty = allowedDifficulties.has(item.difficulty) ? item.difficulty : getDifficulty(question, id);
+
+      if (!Number.isInteger(id) || !question || !category) {
+        throw new Error(`Invalid question row in bank123_pdftojson.json: ${JSON.stringify(item)}`);
+      }
+
+      return {
+        id,
+        category,
+        question,
+        tags,
+        difficulty,
+      };
+    })
+    .sort((a, b) => a.id - b.id);
+
+  const ids = new Set(questions.map((item) => item.id));
+  if (ids.size !== questions.length) {
+    throw new Error('bank123_pdftojson.json contains duplicate question ids');
+  }
+
+  return questions;
 };
 
 const parseQuestions = async () => {
@@ -101,14 +162,20 @@ const parseQuestions = async () => {
   }));
 };
 
-const questions = await parseQuestions();
+const hasSemanticJson = await fs
+  .access(semanticJsonPath)
+  .then(() => true)
+  .catch(() => false);
+const questions = hasSemanticJson ? await parseSemanticJson() : await parseQuestions();
 await fs.mkdir(path.dirname(outputPath), { recursive: true });
 await fs.writeFile(
   outputPath,
-  `// Auto-generated from public/20260515bank123.pdf. Run \`npm run extract:questions\` after replacing the PDF.\n` +
+  `// Auto-generated from ${hasSemanticJson ? 'bank123_pdftojson.json' : 'public/20260515bank123.pdf'}. Run \`npm run extract:questions\` after replacing the source.\n` +
     `import type { InterviewQuestion } from './types';\n\n` +
     `export const interviewQuestions: InterviewQuestion[] = ${JSON.stringify(questions, null, 2)};\n`,
   'utf8',
 );
 
-console.log(`Generated ${questions.length} questions at ${path.relative(rootDir, outputPath)}`);
+console.log(
+  `Generated ${questions.length} questions from ${hasSemanticJson ? 'semantic JSON' : 'PDF keywords'} at ${path.relative(rootDir, outputPath)}`,
+);

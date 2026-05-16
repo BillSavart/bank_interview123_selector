@@ -1,6 +1,6 @@
 # 公股銀行面試題目選擇器
 
-React + Bootstrap + TypeScript 的靜態網站，可直接部署到 Vercel。題庫來源放在 `public/20260515bank123.pdf`，建置前會自動抽取 PDF 文字並產生前端使用的題庫資料。
+React + Bootstrap + TypeScript 的靜態網站，可直接部署到 Vercel。題庫 PDF 放在 `public/20260515bank123.pdf`，語意標註資料放在 `bank123_pdftojson.json`，建置前會產生前端使用的題庫資料。
 
 ## 功能
 
@@ -22,11 +22,13 @@ npm run dev
 
 ## 更新題庫
 
-替換 `public/20260515bank123.pdf` 後執行：
+如果已經有語意標註 JSON，請更新根目錄的 `bank123_pdftojson.json` 後執行：
 
 ```bash
 npm run extract:questions
 ```
+
+若沒有 `bank123_pdftojson.json`，腳本會退回從 `public/20260515bank123.pdf` 抽文字並用關鍵字規則標籤化。
 
 ## Vercel 部署
 
@@ -35,28 +37,27 @@ Vercel 偵測到 Vite 專案後可使用預設設定：
 - Build Command: `npm run build`
 - Output Directory: `dist`
 
-`npm run build` 會先執行 `npm run extract:questions`，確保最新 PDF 會轉成網站資料。
+`npm run build` 會先執行 `npm run extract:questions`，確保最新語意 JSON 或 PDF 會轉成網站資料。
 
 ## 選題邏輯
 
 目前這套不是 AI 即時判斷，而是透明、可調整的規則式推薦系統。實作位置主要在：
 
-- `scripts/extract-questions.mjs`：從 PDF 抽題、分類、產生標籤與難度。
+- `scripts/extract-questions.mjs`：優先讀取 `bank123_pdftojson.json` 的語意標註；若檔案不存在，才從 PDF 抽題並用關鍵字規則產生標籤與難度。
 - `src/App.tsx`：依考生條件計算每題分數、排序並顯示推薦題目。
 
 ### 資料處理流程
 
 1. 題庫 PDF 放在 `public/20260515bank123.pdf`。
-2. 執行 `npm run extract:questions`。
-3. 系統抽出 PDF 文字。
-4. 依照章節標題建立題目分類，例如「銀行基本知識」、「銀行業務推廣」、「洗錢防制」。
-5. 依照題目前面的編號辨識題目，例如 `1.`、`105、`。
-6. 依題目文字與分類，自動產生 `category`、`difficulty`、`tags`。
-7. 產生 `src/data/questions.generated.ts`，前端直接讀取這份靜態資料。
+2. Gemini 或人工整理後的語意標註 JSON 放在 `bank123_pdftojson.json`。
+3. 執行 `npm run extract:questions`。
+4. 如果 JSON 存在，系統會驗證題號、分類、題目、標籤與難度，並移除 `[cite: n]` 這類來源註記。
+5. 如果 JSON 不存在，系統才會抽出 PDF 文字，依章節與關鍵字產生 `category`、`difficulty`、`tags`。
+6. 產生 `src/data/questions.generated.ts`，前端直接讀取這份靜態資料。
 
 ### 題目標籤
 
-每題可以有多個標籤。標籤由題目文字與分類中的關鍵字決定。
+每題可以有多個標籤。目前主要由 `bank123_pdftojson.json` 的語意標註決定，以下是前端支援的標準標籤；如果退回 PDF 關鍵字模式，才會用右欄的關鍵字判斷。
 
 | 標籤 | 介面顯示 | 判斷條件 |
 | --- | --- | --- |
@@ -126,7 +127,7 @@ Vercel 偵測到 Vite 專案後可使用預設設定：
 
 ### 加權算法
 
-每一題一開始都有基本分 `10` 分，接著依條件加減分。
+每一題一開始都有基本分 `10` 分，接著依條件加減分。最後分數會限制在 `0-100`，避免題目適配度超出百分比語意。
 
 | 條件 | 分數 | 顯示原因 |
 | --- | ---: | --- |
@@ -148,8 +149,12 @@ Vercel 偵測到 Vite 專案後可使用預設設定：
 | 工作年資是 5 年以上，題目有 `experienced` | +10 | 不額外顯示原因 |
 | 年齡是 30 歲以上，題目有 `experienced` | +8 | 不額外顯示原因 |
 | 年齡是 24 歲以下，題目有 `freshGraduate` | +8 | 不額外顯示原因 |
-| 題目符合準備重點對應標籤，且準備重點是「均衡準備」 | 每個命中標籤 +8 | 均衡準備 |
-| 題目符合準備重點對應標籤，且準備重點不是「均衡準備」 | 每個命中標籤 +18 | 對應準備重點 |
+| 題目符合準備重點對應標籤，且準備重點是「均衡準備」 | 每個命中標籤 +8，最多 +20 | 均衡準備 |
+| 題目符合準備重點對應標籤，且準備重點不是「均衡準備」 | 每個命中標籤 +18，最多 +28 | 對應準備重點 |
+| 使用者沒有銀行經驗，題目有 `manager` 或 `teamwork` | -14 | 不額外顯示原因 |
+| 使用者沒有銀行經驗，題目有 `bankExperience` 且不是動機題 | -10 | 不額外顯示原因 |
+| 使用者有銀行經驗但銀行年資未滿 1 年，題目有 `manager` 或 `teamwork` | -8 | 不額外顯示原因 |
+| 使用者是應屆畢業生，題目有 `experienced` 且不是前 10 題 | -8 | 不額外顯示原因 |
 | 題目是進階題，但準備重點不是「時事財經」或「法遵洗防」 | -4 | 不額外顯示原因 |
 
 顯示在題目卡片上的原因最多只取前 3 個，避免介面太吵。
@@ -192,16 +197,15 @@ questions
 
 ### 目前限制
 
-1. 關鍵字是人工定義的，沒有語意理解能力。
-2. 題目只要包含關鍵字就會被標記，可能有少數誤判。
+1. 語意標籤品質取決於 `bank123_pdftojson.json`，如果 JSON 標錯，前端會照錯誤標籤排序。
+2. 目前 JSON 只有正向標籤，還沒有 `negativeTags` 或信心分數。
 3. 年齡與工作年資目前只影響「新鮮人」和「有年資」方向，還沒有細分到職等、報考類組或銀行別。
-4. 題庫沒有人工標註答案難度，所以 `difficulty` 是由關鍵字推估。
-5. 現在是前端靜態排序，不會記錄使用者練習結果，也不會根據答題表現調整推薦。
+4. 現在是前端靜態排序，不會記錄使用者練習結果，也不會根據答題表現調整推薦。
 
 ### 後續可優化方向
 
-1. 把題庫改成人工維護的 JSON，讓每題有更精準的標籤。
+1. 在 `bank123_pdftojson.json` 加上 `negativeTags` 與 `confidence`，讓 build 階段能保留更細的語意判斷。
 2. 加上報考銀行、類組、學歷背景、是否轉職、是否有金融證照等條件。
 3. 加上「已練習」、「不熟」、「想複習」狀態，做個人化排序。
 4. 將每題分數拆成更明確的權重設定檔，例如 `src/data/scoring-rules.ts`。
-5. 未來若要更聰明，可以加入後端或 AI API，但目前 MVP 不需要。
+5. 未來若要更聰明，可以在 build 階段呼叫 LLM API 重新產生 JSON，但網站 runtime 仍維持靜態。
