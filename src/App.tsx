@@ -240,7 +240,8 @@ export function App() {
 
   const profileIsEmpty = isProfileEmpty(profile);
   const visibleQuestions = rankedQuestions.map((item) => item.question);
-  const summary = categorySummary(overviewQuestions);
+  const showDefaultCategoryOverview = profileIsEmpty && !keyword.trim() && activeDifficulty === '全部' && activeCategory === '全部';
+  const summary = categorySummary(showDefaultCategoryOverview ? interviewQuestions : visibleQuestions);
   const topScore = rankedQuestions[0]?.score ?? 0;
 
   const handleResetFilters = () => {
@@ -475,28 +476,29 @@ export function App() {
               </div>
 
               <div className="result-overview">
-                <div className="overview-item accent-teal" aria-live="polite">
-                  <ClipboardCheck size={20} />
-                  <div>
-                    <span>題目適配度</span>
-                    <strong>{profileIsEmpty ? '未排序' : `${Math.round((topScore / 100) * 100)}%`}</strong>
+                <div className="overview-summary">
+                  <div className="overview-item accent-teal" aria-live="polite">
+                    <ClipboardCheck size={20} />
+                    <div>
+                      <span>題目適配度</span>
+                      <strong>{profileIsEmpty ? '未排序' : `${Math.round((topScore / 100) * 100)}%`}</strong>
+                    </div>
                   </div>
+                  <button
+                    className={`overview-item overview-button accent-amber ${activeDifficulty === '進階' ? 'is-active' : ''}`}
+                    type="button"
+                    onClick={() => toggleDifficulty('進階')}
+                    aria-pressed={activeDifficulty === '進階'}
+                  >
+                    <ShieldCheck size={20} />
+                    <div>
+                      <span>進階題</span>
+                      <strong>{overviewQuestions.filter((question) => question.difficulty === '進階').length}</strong>
+                    </div>
+                  </button>
                 </div>
-                <button
-                  className={`overview-item overview-button accent-amber ${activeDifficulty === '進階' ? 'is-active' : ''}`}
-                  type="button"
-                  onClick={() => toggleDifficulty('進階')}
-                  aria-pressed={activeDifficulty === '進階'}
-                >
-                  <ShieldCheck size={20} />
-                  <div>
-                    <span>進階題</span>
-                    <strong>{overviewQuestions.filter((question) => question.difficulty === '進階').length}</strong>
-                  </div>
-                </button>
                 <div className="category-pills">
                   {Object.entries(summary)
-                    .slice(0, 5)
                     .map(([category, count]) => (
                       <button
                         className={activeCategory === category ? 'is-active' : ''}

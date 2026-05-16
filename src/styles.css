@@ -276,18 +276,22 @@ select {
 
 .result-overview {
   display: grid;
-  grid-template-columns: repeat(2, minmax(150px, 190px)) 1fr;
-  gap: 0.75rem;
-  align-items: stretch;
+  gap: 0.65rem;
   margin-bottom: 1rem;
+}
+
+.overview-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(150px, 190px));
+  gap: 0.65rem;
 }
 
 .overview-item {
   display: flex;
   align-items: center;
   gap: 0.7rem;
-  min-height: 74px;
-  padding: 0.9rem;
+  min-height: 58px;
+  padding: 0.62rem 0.75rem;
   border: 0;
   border-radius: 8px;
   color: #ffffff;
@@ -324,13 +328,13 @@ select {
 
 .overview-item span {
   display: block;
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   opacity: 0.86;
 }
 
 .overview-item strong {
   display: block;
-  font-size: 1.35rem;
+  font-size: 1.08rem;
   line-height: 1.15;
 }
 
@@ -339,8 +343,8 @@ select {
   flex-wrap: wrap;
   gap: 0.5rem;
   align-content: center;
-  min-height: 74px;
-  padding: 0.85rem;
+  min-height: 0;
+  padding: 0.7rem;
   border: 1px solid #dce3e2;
   border-radius: 8px;
   background: #ffffff;
@@ -391,8 +395,11 @@ select {
   }
 
   .result-overview {
-    grid-template-columns: repeat(2, 118px) minmax(0, 1fr);
     gap: 0.55rem;
+  }
+
+  .overview-summary {
+    grid-template-columns: repeat(2, 118px);
   }
 
   .overview-item {
@@ -588,7 +595,11 @@ select {
   }
 
   .result-overview {
-    grid-template-columns: repeat(2, 118px) minmax(0, 1fr);
+    gap: 0.55rem;
+  }
+
+  .overview-summary {
+    grid-template-columns: repeat(2, 118px);
   }
 
   .source-link {
@@ -601,12 +612,8 @@ select {
 }
 
 @media (max-width: 767.98px) {
-  .result-overview {
+  .overview-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .category-pills {
-    grid-column: 1 / -1;
   }
 }
 
@@ -614,10 +621,6 @@ select {
   .hero-metrics {
     max-width: 520px;
     margin-inline: auto;
-  }
-
-  .result-overview {
-    grid-template-columns: repeat(2, 118px) minmax(0, 1fr);
   }
 
   .overview-item {
@@ -640,7 +643,6 @@ select {
   }
 
   .category-pills {
-    grid-column: auto;
     min-height: 54px;
     padding: 0.55rem 0.65rem;
   }
@@ -666,7 +668,7 @@ select {
   }
 
   .overview-item {
-    min-height: 64px;
+    min-height: 56px;
     padding: 0.75rem;
   }
 
