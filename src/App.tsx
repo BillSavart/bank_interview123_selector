@@ -193,6 +193,7 @@ export function App() {
   const [profile, setProfile] = useState<CandidateProfile>(defaultProfile);
   const [keyword, setKeyword] = useState('');
   const [activeCategory, setActiveCategory] = useState('全部');
+  const [activeDifficulty, setActiveDifficulty] = useState<InterviewQuestion['difficulty'] | '全部'>('全部');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
   const categories = useMemo(
@@ -213,6 +214,7 @@ export function App() {
       : profile;
 
     const filteredQuestions = interviewQuestions
+      .filter((question) => activeDifficulty === '全部' || question.difficulty === activeDifficulty)
       .filter((question) => activeCategory === '全部' || question.category === activeCategory)
       .filter((question) => {
         if (!normalizedKeyword) return true;
@@ -223,12 +225,38 @@ export function App() {
       .map((question) => (hasProfileCriteria ? scoreQuestion(question, scoringProfile) : { question, score: 0, reasons: [] }))
       .sort((a, b) => (hasProfileCriteria ? b.score - a.score || a.question.id - b.question.id : a.question.id - b.question.id))
       .slice(0, profile.practiceSize);
-  }, [activeCategory, keyword, profile]);
+  }, [activeCategory, activeDifficulty, keyword, profile]);
+
+  const overviewQuestions = useMemo(() => {
+    const normalizedKeyword = keyword.trim().toLowerCase();
+
+    return interviewQuestions
+      .filter((question) => activeDifficulty === '全部' || question.difficulty === activeDifficulty)
+      .filter((question) => {
+        if (!normalizedKeyword) return true;
+        return `${question.question} ${question.category} ${question.tags.join(' ')}`.toLowerCase().includes(normalizedKeyword);
+      });
+  }, [activeDifficulty, keyword]);
 
   const profileIsEmpty = isProfileEmpty(profile);
   const visibleQuestions = rankedQuestions.map((item) => item.question);
-  const summary = categorySummary(visibleQuestions);
+  const summary = categorySummary(overviewQuestions);
   const topScore = rankedQuestions[0]?.score ?? 0;
+
+  const handleResetFilters = () => {
+    setProfile(defaultProfile);
+    setKeyword('');
+    setActiveCategory('全部');
+    setActiveDifficulty('全部');
+  };
+
+  const toggleDifficulty = (difficulty: InterviewQuestion['difficulty']) => {
+    setActiveDifficulty((current) => (current === difficulty ? '全部' : difficulty));
+  };
+
+  const toggleCategory = (category: string) => {
+    setActiveCategory((current) => (current === category ? '全部' : category));
+  };
 
   const updateProfile = <K extends keyof CandidateProfile>(key: K, value: CandidateProfile[K]) => {
     setProfile((current) => {
@@ -361,7 +389,7 @@ export function App() {
         onChange={(event) => updateProfile('practiceSize', Number(event.target.value))}
       />
 
-      <button className="btn btn-outline-dark w-100 mt-3" type="button" onClick={() => setProfile(defaultProfile)}>
+      <button className="btn btn-outline-dark w-100 mt-3" type="button" onClick={handleResetFilters}>
         <RefreshCcw size={17} />
         重設條件
       </button>
@@ -447,27 +475,38 @@ export function App() {
               </div>
 
               <div className="result-overview">
-                <div className="overview-item accent-teal">
+                <div className="overview-item accent-teal" aria-live="polite">
                   <ClipboardCheck size={20} />
                   <div>
                     <span>題目適配度</span>
                     <strong>{profileIsEmpty ? '未排序' : `${Math.round((topScore / 100) * 100)}%`}</strong>
                   </div>
                 </div>
-                <div className="overview-item accent-amber">
+                <button
+                  className={`overview-item overview-button accent-amber ${activeDifficulty === '進階' ? 'is-active' : ''}`}
+                  type="button"
+                  onClick={() => toggleDifficulty('進階')}
+                  aria-pressed={activeDifficulty === '進階'}
+                >
                   <ShieldCheck size={20} />
                   <div>
                     <span>進階題</span>
-                    <strong>{visibleQuestions.filter((question) => question.difficulty === '進階').length}</strong>
+                    <strong>{overviewQuestions.filter((question) => question.difficulty === '進階').length}</strong>
                   </div>
-                </div>
+                </button>
                 <div className="category-pills">
                   {Object.entries(summary)
                     .slice(0, 5)
                     .map(([category, count]) => (
-                      <span key={category}>
+                      <button
+                        className={activeCategory === category ? 'is-active' : ''}
+                        key={category}
+                        type="button"
+                        onClick={() => toggleCategory(category)}
+                        aria-pressed={activeCategory === category}
+                      >
                         {category} {count}
-                      </span>
+                      </button>
                     ))}
                 </div>
               </div>
