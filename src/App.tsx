@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import {
   ArrowUp,
   Banknote,
   ClipboardCheck,
   Download,
+  MessageSquare,
   RefreshCcw,
   Search,
   ShieldCheck,
@@ -12,6 +13,8 @@ import {
   X,
 } from 'lucide-react';
 import { interviewQuestions } from './data/questions.generated';
+import { AdSlot } from './AdSlot';
+import { InterviewChat } from './InterviewChat';
 import type { AnswerOption, CandidateProfile, InterviewQuestion, QuestionTag } from './data/types';
 
 const defaultProfile: CandidateProfile = {
@@ -195,6 +198,7 @@ export function App() {
   const [activeCategory, setActiveCategory] = useState('全部');
   const [activeDifficulty, setActiveDifficulty] = useState<InterviewQuestion['difficulty'] | '全部'>('全部');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [chatQuestion, setChatQuestion] = useState<InterviewQuestion | null>(null);
 
   const categories = useMemo(
     () => ['全部', ...Array.from(new Set(interviewQuestions.map((question) => question.category)))],
@@ -513,9 +517,13 @@ export function App() {
                 </div>
               </div>
 
+              <AdSlot slot="0000000000" label="贊助" />
+
               <div className="question-list">
-                {rankedQuestions.map(({ question, score, reasons }) => (
-                  <article className="question-card" key={question.id}>
+                {rankedQuestions.map(({ question, score, reasons }, index) => (
+                  <Fragment key={question.id}>
+                    {index > 0 && index % 8 === 0 && <AdSlot slot="1111111111" />}
+                  <article className="question-card">
                     <div className="question-rank">
                       <span>#{question.id}</span>
                     </div>
@@ -537,9 +545,20 @@ export function App() {
                           <span key={tag}>{tagLabels[tag]}</span>
                         ))}
                       </div>
-                      {!profileIsEmpty && <div className="match-score">題目適配度 {score}%</div>}
+                      <div className="question-actions">
+                        {!profileIsEmpty && <div className="match-score">題目適配度 {score}%</div>}
+                        <button
+                          className="btn btn-dark practice-button"
+                          type="button"
+                          onClick={() => setChatQuestion(question)}
+                        >
+                          <MessageSquare size={16} />
+                          開始模擬面試
+                        </button>
+                      </div>
                     </div>
                   </article>
+                  </Fragment>
                 ))}
               </div>
             </div>
@@ -558,6 +577,8 @@ export function App() {
           <div className="filter-drawer">{renderCandidateControls('mobile', true)}</div>
         </div>
       )}
+
+      {chatQuestion && <InterviewChat question={chatQuestion} onClose={() => setChatQuestion(null)} />}
 
       <div className="site-credit">Credit: 公股銀行招考討論區Jack</div>
       <button

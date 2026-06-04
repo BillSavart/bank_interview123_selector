@@ -1,0 +1,35 @@
+# Runs on the GCP VM. Pulls pre-built images from ghcr — never builds here.
+#
+# Needs two env files alongside / referenced:
+#   ./.env                      → REGISTRY + DOMAIN (compose variable substitution)
+#       REGISTRY=ghcr.io/your-github-username
+#       DOMAIN=interview.example.com
+#   /etc/bank-interview/proxy.env → GEMINI_API_KEY / GROQ_API_KEY (chmod 600)
+
+services:
+  proxy:
+    image: ${REGISTRY}/bank-interview-proxy:latest
+    restart: unless-stopped
+    env_file:
+      - /etc/bank-interview/proxy.env
+    expose:
+      - "3001"
+    # not published to host — only the web container reaches it
+
+  web:
+    image: ${REGISTRY}/bank-interview-web:latest
+    restart: unless-stopped
+    depends_on:
+      - proxy
+    environment:
+      DOMAIN: ${DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - caddy_data:/data # persists Let's Encrypt certs across restarts
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:

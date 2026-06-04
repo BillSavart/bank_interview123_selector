@@ -1,0 +1,34 @@
+# systemd unit for the LLM proxy.
+#
+# Install:
+#   sudo cp deploy/llm-proxy.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now llm-proxy
+#
+# Keys live in /etc/bank-interview/proxy.env (NOT in the repo). Example:
+#   GEMINI_API_KEY=xxxx
+#   GROQ_API_KEY=gsk_xxxx
+#   PORT=3001
+# Lock it down:  sudo chmod 600 /etc/bank-interview/proxy.env
+
+[Unit]
+Description=Bank Interview LLM proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# adjust path to where you rsync the repo's server/ dir
+WorkingDirectory=/opt/bank-interview/server
+EnvironmentFile=/etc/bank-interview/proxy.env
+ExecStart=/usr/bin/node index.mjs
+Restart=always
+RestartSec=3
+# hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

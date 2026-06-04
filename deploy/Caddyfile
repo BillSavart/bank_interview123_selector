@@ -1,0 +1,30 @@
+# Caddy config for the bank-interview site on a GCP e2-micro VM.
+#
+# Replace YOUR_DOMAIN below. Caddy auto-provisions + renews HTTPS (Let's Encrypt).
+# When Cloudflare sits in front in "Full" mode, this still works:
+# Cloudflare → VM:443 (TLS terminated again at Caddy).
+#
+# Install Caddy:  https://caddyserver.com/docs/install  (apt repo)
+# Then:           sudo cp deploy/Caddyfile /etc/caddy/Caddyfile && sudo systemctl reload caddy
+
+YOUR_DOMAIN {
+	encode zstd gzip
+
+	# API → local Node proxy
+	handle /api/* {
+		reverse_proxy 127.0.0.1:3001
+	}
+
+	# Static SPA
+	handle {
+		root * /var/www/bank-interview
+		try_files {path} /index.html
+		file_server
+	}
+
+	# long-cache the hashed assets, no-cache the HTML entrypoint
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	@html path /index.html /
+	header @html Cache-Control "no-cache"
+}
