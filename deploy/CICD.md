@@ -27,6 +27,21 @@ GitHub Actions (.github/workflows/deploy.yml)
 
 ---
 
+## ⚠️ 費用安全（務必先讀）
+
+**程式不會、也無法保證你不被收費——能不能被收費取決於你的帳號設定。**
+
+- **Gemini**：API key 所屬的 Google Cloud 專案**不要綁定帳單帳戶**。沒綁帳單 = 永遠免費級，超額只會收到 429（程式會顯示「流量已用完」），**不可能產生費用**。要付費必須你**手動**開啟 billing。
+- **Groq**：預設就是免費級。除非你**主動加信用卡 / 升級付費**，否則超額一律 429，不收費。
+
+> 重點：proxy 的額度偵測是**被動的**——它只認供應商回的 429。**如果你開了帳單，供應商就不會回 429，而是直接讓你用並計費**，這時程式擋不住。所以唯一可靠的保險是「不綁帳單」。
+
+雙重保險（選用）：
+- Google Cloud → APIs & Services → **Quotas**，把 Generative Language API 的每日請求數手動調低（這是硬上限）。
+- proxy 設 `DAILY_CALL_CAP`（全站每日自訂上限，到了就回「流量已用完」）。
+
+---
+
 ## 一次性設定
 
 ### 1. VM 裝 Docker
@@ -45,6 +60,8 @@ sudo mkdir -p /opt/bank-interview /etc/bank-interview
 sudo tee /etc/bank-interview/proxy.env >/dev/null <<'EOF'
 GEMINI_API_KEY=你的_gemini_key
 GROQ_API_KEY=gsk_你的_groq_key
+# 選用：自訂每日呼叫上限（全站，0/不設=關閉）。防呆用，不是防帳單。
+# DAILY_CALL_CAP=2000
 EOF
 sudo chmod 600 /etc/bank-interview/proxy.env
 

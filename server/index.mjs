@@ -18,6 +18,12 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY || '';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const GROQ_MODEL = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile';
 
+// Self-imposed daily fuse: max chat turns the whole site will make per UTC day.
+// This is OUR own cap (defense in depth), unrelated to the providers' free-tier
+// limits. 0 = disabled. It does NOT protect against billing — keeping the API
+// keys on accounts with no billing enabled is what guarantees no charges.
+const DAILY_CALL_CAP = Number(process.env.DAILY_CALL_CAP || 0);
+
 // --- naive in-memory rate limit (per IP) --------------------------------
 const RATE_MAX = Number(process.env.RATE_MAX || 20); // requests
 const RATE_WINDOW_MS = Number(process.env.RATE_WINDOW_MS || 60_000); // per minute
@@ -39,6 +45,28 @@ setInterval(() => {
   const now = Date.now();
   for (const [ip, rec] of hits) if (now > rec.resetAt) hits.delete(ip);
 }, 5 * 60_000).unref();
+
+// --- self-imposed daily call budget (fuse) ------------------------------
+const utcDay = () => new Date().toISOString().slice(0, 10);
+let budgetDay = utcDay();
+let callsToday = 0;
+
+function rollBudgetDay() {
+  const today = utcDay();
+  if (today !== budgetDay) {
+    budgetDay = today;
+    callsToday = 0;
+  }
+}
+
+// Returns true if a call is allowed (and consumes one); false if the cap is hit.
+function consumeDailyBudget() {
+  if (!DAILY_CALL_CAP) return true;
+  rollBudgetDay();
+  if (callsToday >= DAILY_CALL_CAP) return false;
+  callsToday += 1;
+  return true;
+}
 
 // --- per-provider cooldown (quota) tracking -----------------------------
 // cooldownUntil[p] = epoch ms; while now < it, that provider is rate-limited.
@@ -244,6 +272,13 @@ async function handleChat(req, res, body) {
     connection: 'keep-alive',
   });
 
+  // Self-imposed daily fuse: stop before we lean too hard on the free tiers.
+  if (!consumeDailyBudget()) {
+    const resetAt = new Date(nextMidnight('UTC')).toISOString();
+    res.write(`data: ${JSON.stringify({ error: 'quota', resetAt })}\n\n`);
+    return res.end();
+  }
+
   // Try providers in order, skipping any that are keyless or in cooldown.
   // Gemini first (better Chinese), Groq as fallback.
   const callers = { gemini: callGemini, groq: callGroq };
@@ -288,6 +323,7 @@ const server = createServer((req, res) => {
         ok: true,
         gemini: { usable: isUsable('gemini'), cooldownUntil: cooldownUntil.gemini || null },
         groq: { usable: isUsable('groq'), cooldownUntil: cooldownUntil.groq || null },
+        dailyCap: DAILY_CALL_CAP ? { cap: DAILY_CALL_CAP, used: callsToday, day: budgetDay } : null,
         resetAt: earliestResetISO(),
       }),
     );

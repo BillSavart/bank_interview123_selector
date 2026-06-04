@@ -11,6 +11,8 @@ cp server/.env.example server/.env
 #   GROQ_API_KEY=...     （https://console.groq.com/keys 免費，可留空只用 Gemini）
 ```
 
+> **費用安全**：兩個 key 的帳號都**不要綁帳單/不要升級付費** → 超額只會顯示「流量已用完」，不會被收費。詳見 [CICD.md](CICD.md#-費用安全務必先讀)。
+
 ## 2. 起 LLM proxy（終端機 1）
 
 ```bash

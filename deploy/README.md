@@ -59,6 +59,8 @@ sudo chmod 600 /etc/bank-interview/proxy.env
 - Gemini key：https://aistudio.google.com/apikey （免費）
 - Groq key：https://console.groq.com/keys （免費）
 
+> **⚠️ 費用安全**：兩個 key 的帳號都**不要綁帳單/不要升級付費**，這樣超額只會回 429（顯示「流量已用完」），**不可能被收費**。程式的額度偵測是被動的，擋不住「已開帳單後的超額計費」。詳見 [CICD.md](CICD.md#-費用安全務必先讀)。可選 `DAILY_CALL_CAP=2000` 加一道自訂每日上限。
+
 ## 4. 裝 Caddy 設定 + systemd
 
 ```bash
