@@ -15,6 +15,12 @@ services:
     expose:
       - "3001"
     # not published to host — only the web container reaches it
+    mem_limit: 160m # hard cap so a spike can't OOM the 1GB host
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
 
   web:
     image: ${REGISTRY}/bank-interview-web:latest
@@ -29,6 +35,7 @@ services:
     volumes:
       - caddy_data:/data # persists Let's Encrypt certs across restarts
       - caddy_config:/config
+    mem_limit: 96m
 
 volumes:
   caddy_data:

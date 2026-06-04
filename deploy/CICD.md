@@ -51,6 +51,21 @@ curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker $USER   # 重新登入後生效
 ```
 
+### 1.5 低記憶體加固（e2-micro 1GB 必做）
+
+1GB RAM 很吃緊。**加一個 swapfile** 大幅降低尖峰 OOM 風險：
+
+```bash
+sudo fallocate -l 2G /swapfile
+sudo chmod 600 /swapfile
+sudo mkswap /swapfile
+sudo swapon /swapfile
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab   # 開機自動掛
+free -h   # 確認 Swap 那行有 2.0Gi
+```
+
+容器本身已設記憶體上限（compose 裡 `mem_limit`：proxy 160m、web 96m）+ Node heap 上限（128m），單一容器暴衝不會拖垮整機。
+
 ### 2. VM 放檔案與金鑰
 
 ```bash

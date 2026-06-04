@@ -4,7 +4,10 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package*.json ./
-RUN npm ci
+# `npm ci` is the fast/reproducible path; fall back to `npm install` if the
+# lockfile is missing Linux-only optional deps (happens when it was last
+# regenerated on macOS). Self-heals so CI never breaks on that.
+RUN npm ci || npm install
 # prebuild (extract:questions) needs public/*.pdf and bank123_pdftojson.json,
 # so copy the full context before building.
 COPY . .
