@@ -7,6 +7,39 @@ interface ChatMessage {
   content: string;
 }
 
+type ChatErrorCode = 'quota' | 'rate' | 'unavailable';
+
+// Carries the proxy's structured error (code + optional quota reset time).
+class ChatError extends Error {
+  code: ChatErrorCode;
+  resetAt?: string;
+  constructor(code: ChatErrorCode, resetAt?: string) {
+    super(code);
+    this.code = code;
+    this.resetAt = resetAt;
+  }
+}
+
+// Build the user-facing message, e.g. quota exhaustion with the reset time.
+function describeError(e: unknown): string {
+  if (e instanceof ChatError) {
+    if (e.code === 'rate') return '你問得太快了，請稍候幾秒再試。';
+    if (e.code === 'quota') {
+      if (e.resetAt) {
+        const reset = new Date(e.resetAt);
+        const now = new Date();
+        const sameDay = reset.toDateString() === now.toDateString();
+        const time = reset.toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' });
+        const mins = Math.max(1, Math.round((reset.getTime() - now.getTime()) / 60000));
+        const when = sameDay ? time : `${reset.toLocaleDateString('zh-TW')} ${time}`;
+        return `今日免費流量已用完，預計 ${when} 重置（約 ${mins} 分鐘後），屆時再來練習。`;
+      }
+      return '今日免費流量已用完，請稍後再試。';
+    }
+  }
+  return '連線失敗，請稍後再試。';
+}
+
 interface InterviewChatProps {
   question: InterviewQuestion;
   onClose: () => void;
@@ -27,8 +60,8 @@ async function streamChat(
   });
 
   if (!res.ok || !res.body) {
-    if (res.status === 429) throw new Error('請求過於頻繁，請稍候再試。');
-    throw new Error('連線失敗，請稍後再試。');
+    if (res.status === 429) throw new ChatError('rate');
+    throw new ChatError('unavailable');
   }
 
   const reader = res.body.getReader();
@@ -44,13 +77,14 @@ async function streamChat(
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed.startsWith('data:')) continue;
+      let payload: { text?: string; error?: ChatErrorCode; resetAt?: string };
       try {
-        const payload = JSON.parse(trimmed.slice(5).trim());
-        if (payload.error) throw new Error(payload.error);
-        if (payload.text) onDelta(payload.text);
-      } catch (e) {
-        if (e instanceof Error && e.message && !e.message.startsWith('Unexpected')) throw e;
+        payload = JSON.parse(trimmed.slice(5).trim());
+      } catch {
+        continue; // ignore partial / non-JSON lines
       }
+      if (payload.error) throw new ChatError(payload.error, payload.resetAt);
+      if (payload.text) onDelta(payload.text);
     }
   }
 }
@@ -97,7 +131,7 @@ export function InterviewChat({ question, onClose }: InterviewChatProps) {
       );
     } catch (e) {
       if (!(e instanceof DOMException && e.name === 'AbortError')) {
-        setError(e instanceof Error ? e.message : '發生未知錯誤。');
+        setError(describeError(e));
         // drop the empty assistant bubble on failure
         setMessages((current) => {
           const last = current[current.length - 1];

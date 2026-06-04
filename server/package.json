@@ -6,6 +6,6 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "node index.mjs",
-    "dev": "node --env-file=.env index.mjs"
+    "dev": "node --env-file-if-exists=.env index.mjs"
   }
 }

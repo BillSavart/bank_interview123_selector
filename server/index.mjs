@@ -40,10 +40,74 @@ setInterval(() => {
   for (const [ip, rec] of hits) if (now > rec.resetAt) hits.delete(ip);
 }, 5 * 60_000).unref();
 
-// --- Gemini daily-quota memory ------------------------------------------
-let geminiQuotaHitDay = null; // UTC date string, e.g. '2026-06-05'
-const utcDay = () => new Date().toISOString().slice(0, 10);
-const geminiExhausted = () => geminiQuotaHitDay === utcDay();
+// --- per-provider cooldown (quota) tracking -----------------------------
+// cooldownUntil[p] = epoch ms; while now < it, that provider is rate-limited.
+const cooldownUntil = { gemini: 0, groq: 0 };
+const hasKey = { gemini: () => !!GEMINI_API_KEY, groq: () => !!GROQ_API_KEY };
+const isUsable = (p) => hasKey[p]() && Date.now() >= cooldownUntil[p];
+
+// Parse "2m59.56s" / "7.66s" / "1h" / "500ms" → seconds.
+function parseDuration(str) {
+  if (!str) return null;
+  let total = 0;
+  let matched = false;
+  for (const [, num, unit] of str.matchAll(/(\d+(?:\.\d+)?)\s*(ms|s|m|h)/g)) {
+    matched = true;
+    const n = Number(num);
+    total += unit === 'ms' ? n / 1000 : unit === 's' ? n : unit === 'm' ? n * 60 : n * 3600;
+  }
+  return matched ? total : null;
+}
+
+// Wall-clock midnight (next day) in a timezone, as epoch ms — used as a
+// fallback reset time when the provider doesn't tell us when quota resets.
+// Gemini free tier resets at midnight Pacific; Groq daily limits at midnight UTC.
+function nextMidnight(timeZone) {
+  const now = new Date();
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit',
+  });
+  const p = Object.fromEntries(dtf.formatToParts(now).map((x) => [x.type, x.value]));
+  const asUTC = Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second);
+  const offset = asUTC - now.getTime(); // tz offset from UTC (ms)
+  const wall = new Date(now.getTime() + offset);
+  const nextWallMidnight = Date.UTC(wall.getUTCFullYear(), wall.getUTCMonth(), wall.getUTCDate() + 1, 0, 0, 0);
+  return nextWallMidnight - offset; // convert wall midnight back to real UTC ms
+}
+
+// Given a 429 response (+ its body text), decide how long to cool down.
+function cooldownFrom429(provider, res, bodyText) {
+  // 1) Retry-After header (seconds or HTTP-date) — most authoritative.
+  const ra = res.headers.get('retry-after');
+  if (ra) {
+    const secs = Number(ra);
+    if (!Number.isNaN(secs)) return Date.now() + secs * 1000;
+    const when = Date.parse(ra);
+    if (!Number.isNaN(when)) return when;
+  }
+  // 2) Groq duration headers.
+  const reset = res.headers.get('x-ratelimit-reset-requests') || res.headers.get('x-ratelimit-reset-tokens');
+  const resetSecs = parseDuration(reset);
+  if (resetSecs != null) return Date.now() + resetSecs * 1000;
+  // 3) Gemini RetryInfo in the body.
+  const m = bodyText && bodyText.match(/"retryDelay"\s*:\s*"([^"]+)"/);
+  const bodySecs = m && parseDuration(m[1]);
+  if (bodySecs != null) return Date.now() + bodySecs * 1000;
+  // 4) Fallback: next daily reset for that provider.
+  return nextMidnight(provider === 'gemini' ? 'America/Los_Angeles' : 'UTC');
+}
+
+// When no provider is usable, the earliest moment one comes back (ISO string).
+function earliestResetISO() {
+  const times = [];
+  for (const p of ['gemini', 'groq']) {
+    if (hasKey[p]() && Date.now() < cooldownUntil[p]) times.push(cooldownUntil[p]);
+  }
+  return times.length ? new Date(Math.min(...times)).toISOString() : null;
+}
 
 // --- prompt building -----------------------------------------------------
 function buildSystemPrompt(question) {
@@ -180,43 +244,53 @@ async function handleChat(req, res, body) {
     connection: 'keep-alive',
   });
 
-  // Decide provider order.
-  const tryGemini = GEMINI_API_KEY && !geminiExhausted();
+  // Try providers in order, skipping any that are keyless or in cooldown.
+  // Gemini first (better Chinese), Groq as fallback.
+  const callers = { gemini: callGemini, groq: callGroq };
+  let hadHardError = false;
 
-  if (tryGemini) {
+  for (const provider of ['gemini', 'groq']) {
+    if (!isUsable(provider)) continue;
     try {
-      const r = await callGemini(system, messages);
-      if (r.ok && r.body) return await pipeNormalized(r, res, 'gemini');
+      const r = await callers[provider](system, messages);
+      if (r.ok && r.body) return await pipeNormalized(r, res, provider);
+
       if (r.status === 429) {
-        geminiQuotaHitDay = utcDay(); // out of free quota for today
-        console.warn('[gemini] 429 quota hit → falling back to groq for the rest of today');
+        const bodyText = await r.text().catch(() => '');
+        cooldownUntil[provider] = cooldownFrom429(provider, r, bodyText);
+        console.warn(`[${provider}] 429 quota → cooldown until ${new Date(cooldownUntil[provider]).toISOString()}`);
       } else {
-        console.warn(`[gemini] status ${r.status} → falling back to groq`);
+        hadHardError = true;
+        console.error(`[${provider}] status ${r.status}`);
       }
     } catch (e) {
-      console.warn('[gemini] error → falling back to groq:', e.message);
+      hadHardError = true;
+      console.error(`[${provider}] error:`, e.message);
     }
   }
 
-  // Fallback: Groq
-  if (GROQ_API_KEY) {
-    try {
-      const r = await callGroq(system, messages);
-      if (r.ok && r.body) return await pipeNormalized(r, res, 'groq');
-      console.error(`[groq] status ${r.status}`);
-    } catch (e) {
-      console.error('[groq] error:', e.message);
-    }
+  // Nothing succeeded. If every keyed provider is in cooldown → it's a quota
+  // exhaustion; tell the client when it resets. Otherwise a generic failure.
+  const resetAt = earliestResetISO();
+  if (resetAt && !hadHardError) {
+    res.write(`data: ${JSON.stringify({ error: 'quota', resetAt })}\n\n`);
+  } else {
+    res.write(`data: ${JSON.stringify({ error: 'unavailable' })}\n\n`);
   }
-
-  res.write(`data: ${JSON.stringify({ error: '兩個服務暫時都無法使用，請稍後再試。' })}\n\n`);
   res.end();
 }
 
 const server = createServer((req, res) => {
   if (req.method === 'GET' && req.url === '/api/health') {
     res.writeHead(200, { 'content-type': 'application/json' });
-    return res.end(JSON.stringify({ ok: true, geminiExhausted: geminiExhausted() }));
+    return res.end(
+      JSON.stringify({
+        ok: true,
+        gemini: { usable: isUsable('gemini'), cooldownUntil: cooldownUntil.gemini || null },
+        groq: { usable: isUsable('groq'), cooldownUntil: cooldownUntil.groq || null },
+        resetAt: earliestResetISO(),
+      }),
+    );
   }
 
   if (req.method === 'POST' && req.url === '/api/chat') {
