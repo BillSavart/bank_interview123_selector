@@ -739,7 +739,8 @@ select {
   margin-right: auto;
 }
 
-.btn.practice-button {
+.btn.practice-button,
+.btn.answer-toggle-button {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -747,6 +748,19 @@ select {
   border-radius: 8px;
   font-weight: 800;
   font-size: 0.84rem;
+}
+
+.prebuilt-answer {
+  margin-top: 0.85rem;
+  padding: 0.85rem 0.95rem;
+  border: 1px solid #d9e2e1;
+  border-radius: 8px;
+  color: #17212b;
+  background: #f8fbfa;
+  font-size: 0.9rem;
+  line-height: 1.75;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* --- mock interview chat modal --- */

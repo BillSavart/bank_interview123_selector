@@ -4,29 +4,11 @@
 #   ./.env                      → REGISTRY + DOMAIN (compose variable substitution)
 #       REGISTRY=ghcr.io/your-github-username
 #       DOMAIN=interview.example.com
-#   /etc/bank-interview/proxy.env → GEMINI_API_KEY / GROQ_API_KEY (chmod 600)
 
 services:
-  proxy:
-    image: ${REGISTRY}/bank-interview-proxy:latest
-    restart: unless-stopped
-    env_file:
-      - /etc/bank-interview/proxy.env
-    expose:
-      - "3001"
-    # not published to host — only the web container reaches it
-    mem_limit: 160m # hard cap so a spike can't OOM the 1GB host
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/api/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-
   web:
     image: ${REGISTRY}/bank-interview-web:latest
     restart: unless-stopped
-    depends_on:
-      - proxy
     environment:
       DOMAIN: ${DOMAIN}
     ports:

@@ -4,7 +4,6 @@ import { Banknote, Download, Menu, X } from 'lucide-react';
 
 const navItems = [
   { to: '/', label: '首頁 / 題目篩選', end: true },
-  { to: '/interview', label: '模擬面試', end: false },
   { to: '/about', label: '使用說明' },
 ];
 

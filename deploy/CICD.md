@@ -1,149 +1,92 @@
-# Docker + CI/CD 部署（推薦路徑）
+# Docker + CI/CD 部署到 GCP e2-micro
 
-兩種部署方式擇一：
+推薦用 GitHub Actions 在雲端 build Docker image，再讓 GCP e2-micro pull image。e2-micro 記憶體只有 1GB，不適合在 VM 上跑 `vite build`。
 
-- **這份（Docker + GitHub Actions）** — 推送到 `main` 自動 build image、push 到 ghcr、SSH 到 VM 更新。**推薦**。
-- [README.md](README.md) 的 systemd 手動方式 — 不想用 Docker 時的替代方案。
+## 流程
 
----
-
-## 流程總覽
-
-```
+```text
 git push main
-   │
-   ▼
-GitHub Actions (.github/workflows/deploy.yml)
-   ├─ build web image   (Dockerfile → caddy + 靜態 SPA)
-   ├─ build proxy image (server/Dockerfile → node LLM proxy)
-   ├─ push 兩個 image 到 ghcr.io
-   └─ SSH 進 VM → docker compose pull && up -d
-                      │
-                      ▼
-            VM: web 容器(80/443) ──/api──> proxy 容器(3001, 不對外)
+  |
+  v
+GitHub Actions
+  |- npm run build
+  |- docker build bank-interview-web
+  |- push image to ghcr.io
+  |
+  v
+SSH 到 GCP VM
+  |- docker compose pull
+  |- docker compose up -d
 ```
 
-**image 在 GitHub 雲端 build，VM 只 pull** —— e2-micro 的 1GB RAM 不夠跑 `vite build`，這樣才不會 OOM。
+VM 上只跑一個 `web` container，Caddy 負責 HTTPS 與靜態檔服務。
 
----
-
-## ⚠️ 費用安全（務必先讀）
-
-**程式不會、也無法保證你不被收費——能不能被收費取決於你的帳號設定。**
-
-- **Gemini**：API key 所屬的 Google Cloud 專案**不要綁定帳單帳戶**。沒綁帳單 = 永遠免費級，超額只會收到 429（程式會顯示「流量已用完」），**不可能產生費用**。要付費必須你**手動**開啟 billing。
-- **Groq**：預設就是免費級。除非你**主動加信用卡 / 升級付費**，否則超額一律 429，不收費。
-
-> 重點：proxy 的額度偵測是**被動的**——它只認供應商回的 429。**如果你開了帳單，供應商就不會回 429，而是直接讓你用並計費**，這時程式擋不住。所以唯一可靠的保險是「不綁帳單」。
-
-雙重保險（選用）：
-- Google Cloud → APIs & Services → **Quotas**，把 Generative Language API 的每日請求數手動調低（這是硬上限）。
-- proxy 設 `DAILY_CALL_CAP`（全站每日自訂上限，到了就回「流量已用完」）。
-
----
-
-## 一次性設定
-
-### 1. VM 裝 Docker
+## VM 一次性設定
 
 ```bash
 curl -fsSL https://get.docker.com | sudo sh
-sudo usermod -aG docker $USER   # 重新登入後生效
+sudo usermod -aG docker $USER
 ```
 
-### 1.5 低記憶體加固（e2-micro 1GB 必做）
-
-1GB RAM 很吃緊。**加一個 swapfile** 大幅降低尖峰 OOM 風險：
+e2-micro 建議加 swap，避免容器更新時記憶體太緊：
 
 ```bash
 sudo fallocate -l 2G /swapfile
 sudo chmod 600 /swapfile
 sudo mkswap /swapfile
 sudo swapon /swapfile
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab   # 開機自動掛
-free -h   # 確認 Swap 那行有 2.0Gi
+echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
-容器本身已設記憶體上限（compose 裡 `mem_limit`：proxy 160m、web 96m）+ Node heap 上限（128m），單一容器暴衝不會拖垮整機。
-
-### 2. VM 放檔案與金鑰
+放 compose 檔與環境變數：
 
 ```bash
-sudo mkdir -p /opt/bank-interview /etc/bank-interview
-
-# LLM 金鑰（不進 git，proxy 容器用 env_file 讀）
-sudo tee /etc/bank-interview/proxy.env >/dev/null <<'EOF'
-GEMINI_API_KEY=你的_gemini_key
-GROQ_API_KEY=gsk_你的_groq_key
-# 選用：自訂每日呼叫上限（全站，0/不設=關閉）。防呆用，不是防帳單。
-# DAILY_CALL_CAP=2000
-EOF
-sudo chmod 600 /etc/bank-interview/proxy.env
-
-# compose 檔
+sudo mkdir -p /opt/bank-interview
 sudo cp deploy/docker-compose.yml /opt/bank-interview/docker-compose.yml
-# 或 scp 上去：scp deploy/docker-compose.yml user@vm:/opt/bank-interview/
 
-# compose 的變數（你的 ghcr 帳號 + 網域）
 sudo tee /opt/bank-interview/.env >/dev/null <<'EOF'
 REGISTRY=ghcr.io/你的github帳號
 DOMAIN=你的網域
 EOF
 ```
 
-> `DOMAIN` 設成真實網域時 Caddy 會自動申請 HTTPS 憑證。本機/測試可設 `DOMAIN=:80`（純 HTTP）。
+`DOMAIN` 是 Cloudflare 上的正式網域，例如 `example.com` 或 `interview.example.com`。
 
-### 3. ghcr image 設為 public（最省事）
+## Cloudflare
 
-第一次 workflow 跑完後，到 GitHub → 你的頭像 → Packages → `bank-interview-web` / `bank-interview-proxy` → Package settings → Change visibility → **Public**。
-這樣 VM 不用登入就能 pull。
+- A record `@` 或子網域指到 VM static IP。
+- Proxy 開啟，橘色雲。
+- SSL/TLS mode 設 `Full`。
 
-（若想保持 private：在 VM 上 `echo $CR_PAT | docker login ghcr.io -u 你的帳號 --password-stdin`，PAT 需 `read:packages` 權限。）
+## GitHub Secrets
 
-### 4. GitHub repo 加 Secrets
-
-Settings → Secrets and variables → Actions → New repository secret：
+Settings -> Secrets and variables -> Actions:
 
 | Secret | 內容 |
-|--------|------|
-| `SSH_HOST` | VM 外部 IP |
-| `SSH_USER` | VM SSH 帳號 |
-| `SSH_KEY` | 該帳號的 SSH **私鑰**（整段，含 BEGIN/END） |
+| --- | --- |
+| `SSH_HOST` | VM external IP |
+| `SSH_USER` | VM SSH user |
+| `SSH_KEY` | SSH private key |
 
-> 在 VM 上 `ssh-keygen` 產一把專用 deploy key，公鑰加進 `~/.ssh/authorized_keys`，私鑰貼到 `SSH_KEY`。
-> ghcr 的推送用內建 `GITHUB_TOKEN`，不必另設。
+ghcr push 可用 GitHub Actions 內建 `GITHUB_TOKEN`。
 
-### 5. Cloudflare DNS
+## ghcr image 權限
 
-A record `@` → VM 靜態 IP（橘色雲打開），SSL/TLS 模式 **Full**。靜態檔走 CDN，省 GCP 每月 1GB egress。
+第一次 workflow 跑完後，到 GitHub Packages 把 `bank-interview-web` 設成 public，VM 就不用 docker login。
 
----
-
-## 之後的日常
-
-改完 code → `git push` 到 `main` → 全自動部署。也可在 GitHub Actions 頁面手動 **Run workflow**。
-
-第一次部署（VM 上還沒有容器）會由 workflow 的 SSH 步驟自動 `up -d` 拉起來。
-
-## 驗證 / 排錯
+如果要 private package，請在 VM 上先登入 ghcr：
 
 ```bash
-# VM 上
+echo "$CR_PAT" | docker login ghcr.io -u 你的github帳號 --password-stdin
+```
+
+## 驗證
+
+```bash
 cd /opt/bank-interview
 docker compose ps
 docker compose logs -f web
-docker compose logs -f proxy
-
-# proxy 健康檢查（容器內）
-docker compose exec proxy wget -qO- localhost:3001/api/health
+curl -I https://你的網域
 ```
 
-## 本機跑整套（選用）
-
-```bash
-docker build -t local/bank-interview-web -f Dockerfile .
-docker build -t local/bank-interview-proxy -f server/Dockerfile server
-REGISTRY=local DOMAIN=:80 \
-  docker compose -f deploy/docker-compose.yml up
-# 開 http://localhost  （需先把 compose 的 env_file 指到一份有 key 的本機檔，或暫時移除該行）
-```
+首頁應能載入題庫，題目卡的「展開答案」應在前端直接顯示預製答案。

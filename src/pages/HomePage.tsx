@@ -1,27 +1,28 @@
 import { Fragment, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
   Banknote,
+  ChevronDown,
+  ChevronUp,
   ClipboardCheck,
   Download,
-  MessageSquare,
   Search,
   ShieldCheck,
   SlidersHorizontal,
 } from 'lucide-react';
 import { interviewQuestions } from '../data/questions.generated';
+import { generateQuestionAnswer } from '../data/prebuiltAnswers';
 import { AdSlot } from '../AdSlot';
 import { CandidateControls } from '../components/CandidateControls';
 import { categorySummary, defaultProfile, isProfileEmpty, scoreQuestion, tagLabels } from '../lib/scoring';
 import type { CandidateProfile, InterviewQuestion } from '../data/types';
 
 export function HomePage() {
-  const navigate = useNavigate();
   const [profile, setProfile] = useState<CandidateProfile>(defaultProfile);
   const [keyword, setKeyword] = useState('');
   const [activeCategory, setActiveCategory] = useState('全部');
   const [activeDifficulty, setActiveDifficulty] = useState<InterviewQuestion['difficulty'] | '全部'>('全部');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [expandedAnswers, setExpandedAnswers] = useState<Set<number>>(() => new Set());
 
   const categories = useMemo(
     () => ['全部', ...Array.from(new Set(interviewQuestions.map((question) => question.category)))],
@@ -76,6 +77,7 @@ export function HomePage() {
     setKeyword('');
     setActiveCategory('全部');
     setActiveDifficulty('全部');
+    setExpandedAnswers(new Set());
   };
 
   const toggleDifficulty = (difficulty: InterviewQuestion['difficulty']) => {
@@ -84,6 +86,15 @@ export function HomePage() {
 
   const toggleCategory = (category: string) => {
     setActiveCategory((current) => (current === category ? '全部' : category));
+  };
+
+  const toggleAnswer = (questionId: number) => {
+    setExpandedAnswers((current) => {
+      const next = new Set(current);
+      if (next.has(questionId)) next.delete(questionId);
+      else next.add(questionId);
+      return next;
+    });
   };
 
   const updateProfile = <K extends keyof CandidateProfile>(key: K, value: CandidateProfile[K]) => {
@@ -109,7 +120,7 @@ export function HomePage() {
               <h1 className="display-title mb-3">公股銀行面試題目選擇器</h1>
               <p className="hero-copy mb-0">
                 依照考生背景排序 123 題常見口試題，快速抓出最該優先練的動機題、情境題、業務題與時事題。
-                點任一題即可進入 AI 模擬面試逐題練習。
+                選好條件後可直接展開每題的預製答題方向與示範回答。
               </p>
             </div>
             <div className="col-lg-5">
@@ -242,14 +253,20 @@ export function HomePage() {
                         <div className="question-actions">
                           {!profileIsEmpty && <div className="match-score">題目適配度 {score}%</div>}
                           <button
-                            className="btn btn-dark practice-button"
+                            className="btn btn-dark answer-toggle-button"
                             type="button"
-                            onClick={() => navigate(`/interview/${question.id}`)}
+                            onClick={() => toggleAnswer(question.id)}
+                            aria-expanded={expandedAnswers.has(question.id)}
                           >
-                            <MessageSquare size={16} />
-                            開始模擬面試
+                            {expandedAnswers.has(question.id) ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            {expandedAnswers.has(question.id) ? '收合答案' : '展開答案'}
                           </button>
                         </div>
+                        {expandedAnswers.has(question.id) && (
+                          <div className="prebuilt-answer">
+                            {generateQuestionAnswer(question, profile)}
+                          </div>
+                        )}
                       </div>
                     </article>
                   </Fragment>

@@ -1,6 +1,6 @@
 # 公股銀行面試題目選擇器
 
-React + Bootstrap + TypeScript 的靜態網站，可直接部署到 Vercel。題庫 PDF 放在 `public/20260515bank123.pdf`，語意標註資料放在 `bank123_pdftojson.json`，建置前會產生前端使用的題庫資料。
+React + Bootstrap + TypeScript 的靜態網站，適合部署到 Cloudflare 網域 + GCP e2-micro。題庫 PDF 放在 `public/20260515bank123.pdf`，語意標註資料放在 `bank123_pdftojson.json`，建置前會產生前端使用的題庫資料。
 
 ## 功能
 
@@ -8,6 +8,7 @@ React + Bootstrap + TypeScript 的靜態網站，可直接部署到 Vercel。題
 - 可選擇準備重點：均衡準備、報考動機、業務推廣、客戶應對、法遵洗防、時事財經。
 - 可搜尋題目、分類或標籤。
 - 可依題型分類篩選。
+- 每題可直接「展開答案」，依目前考生條件顯示答題重點與示範回答。
 - 統計小卡可直接點擊篩選，例如點選「進階題」或「重要十大問題」會更新下方題目清單。
 - 手機版會把考生條件收進彈出式選單，保留更多空間給題目列表。
 - 首屏提供免責提醒，推薦結果僅供準備方向參考，仍應以自身經歷為主。
@@ -31,12 +32,14 @@ npm run extract:questions
 
 若沒有 `bank123_pdftojson.json`，腳本會退回從 `public/20260515bank123.pdf` 抽文字並用關鍵字規則標籤化。
 
-## Vercel 部署
+## GCP e2-micro 部署
 
-Vercel 偵測到 Vite 專案後可使用預設設定：
+目前不使用 Vercel，也不需要 runtime API。推薦用 Cloudflare 託管 DNS，A record 指向 GCP e2-micro static IP，VM 上用 Docker + Caddy 服務靜態 SPA。
 
-- Build Command: `npm run build`
-- Output Directory: `dist`
+部署細節見：
+
+- [deploy/README.md](deploy/README.md)
+- [deploy/CICD.md](deploy/CICD.md)
 
 `npm run build` 會先執行 `npm run extract:questions`，確保最新語意 JSON 或 PDF 會轉成網站資料。
 

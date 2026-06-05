@@ -11,21 +11,16 @@ export function Layout() {
     window.scrollTo({ top: 0 });
   }, [pathname]);
 
-  // interview pages carry their own bottom banner ad instead of the credit footer
-  const hideFooter = pathname.startsWith('/interview');
-
   return (
     <>
       <NavBar />
       <main className="site-main">
         <Outlet />
       </main>
-      {!hideFooter && (
-        <footer className="site-footer">
-          <span>Credit: 公股銀行招考討論區Jack</span>
-          <span className="site-footer-note">本站推薦僅供準備方向參考，實際面試以報考銀行與職缺為準。</span>
-        </footer>
-      )}
+      <footer className="site-footer">
+        <span>Credit: 公股銀行招考討論區Jack</span>
+        <span className="site-footer-note">本站推薦僅供準備方向參考，實際面試以報考銀行與職缺為準。</span>
+      </footer>
       <button
         className="back-to-top"
         type="button"

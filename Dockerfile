@@ -1,4 +1,4 @@
-# Frontend image: build the SPA, serve it (and reverse-proxy /api) with Caddy.
+# Frontend image: build the SPA and serve it with Caddy.
 # Built in CI — never on the e2-micro VM (1GB RAM would OOM on `vite build`).
 
 FROM node:20-alpine AS build
