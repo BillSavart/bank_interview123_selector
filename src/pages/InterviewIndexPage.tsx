@@ -1,92 +1,123 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { MessageSquare, Search, Sparkles } from 'lucide-react';
-import { interviewQuestions } from '../data/questions.generated';
-import { tagLabels } from '../lib/scoring';
+import { Play, Sparkles, SlidersHorizontal } from 'lucide-react';
+import { CandidateControls } from '../components/CandidateControls';
+import { ChatPanel } from '../components/ChatPanel';
+import { defaultProfile, isProfileEmpty, rankedForProfile } from '../lib/scoring';
+import type { CandidateProfile, InterviewQuestion } from '../data/types';
 
-// Landing page for the "模擬面試" nav item: pick a question to practise.
+// How many top-ranked questions one mock-interview session covers.
+const SESSION_SIZE = 8;
+
+interface Session {
+  questions: InterviewQuestion[];
+  key: number;
+}
+
 export function InterviewIndexPage() {
-  const [keyword, setKeyword] = useState('');
-  const [activeCategory, setActiveCategory] = useState('全部');
+  const [profile, setProfile] = useState<CandidateProfile>(defaultProfile);
+  const [session, setSession] = useState<Session | null>(null);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  const categories = useMemo(
-    () => ['全部', ...Array.from(new Set(interviewQuestions.map((q) => q.category)))],
-    [],
-  );
+  const profileReady = !isProfileEmpty(profile);
 
-  const filtered = useMemo(() => {
-    const k = keyword.trim().toLowerCase();
-    return interviewQuestions
-      .filter((q) => activeCategory === '全部' || q.category === activeCategory)
-      .filter((q) => !k || `${q.question} ${q.category} ${q.tags.join(' ')}`.toLowerCase().includes(k));
-  }, [keyword, activeCategory]);
+  const updateProfile = <K extends keyof CandidateProfile>(key: K, value: CandidateProfile[K]) => {
+    setProfile((current) => {
+      if (key === 'hasBankExperience' && value !== 'yes') {
+        return { ...current, hasBankExperience: value as CandidateProfile['hasBankExperience'], bankYears: defaultProfile.bankYears };
+      }
+      return { ...current, [key]: value };
+    });
+  };
+
+  const handleReset = () => {
+    setProfile(defaultProfile);
+    setSession(null);
+  };
+
+  const startSession = () => {
+    if (!profileReady) return;
+    setSession({ questions: rankedForProfile(profile, SESSION_SIZE), key: Date.now() });
+    setIsFilterOpen(false);
+  };
 
   return (
-    <div className="container py-4 interview-index">
-      <div className="interview-kicker">
-        <Sparkles size={18} />
-        模擬面試
-      </div>
-      <h1 className="display-title mb-2">挑一題開始練習</h1>
-      <p className="page-intro mb-4">
-        選一道題目，AI 面試官會把題目問出來，你回答後即時給回饋與追問。想依背景排序，請到
-        <Link to="/"> 首頁題目篩選</Link>。
-      </p>
+    <section className="workspace-band">
+      <div className="container py-4">
+        <button className="btn btn-dark mobile-filter-button mb-3" type="button" onClick={() => setIsFilterOpen(true)}>
+          <SlidersHorizontal size={18} />
+          考生條件
+        </button>
 
-      <div className="toolbar mb-3">
-        <div className="search-box">
-          <Search size={19} />
-          <input
-            type="search"
-            placeholder="搜尋題目、分類或標籤"
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            aria-label="搜尋題目"
-          />
-        </div>
-        <select
-          className="form-select category-select"
-          value={activeCategory}
-          onChange={(e) => setActiveCategory(e.target.value)}
-          aria-label="題型分類"
-        >
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
-      </div>
+        <div className="row g-4">
+          <aside className="col-lg-4 col-xl-3 desktop-filter-panel">
+            <CandidateControls
+              profile={profile}
+              onUpdate={updateProfile}
+              onReset={handleReset}
+              idPrefix="interview"
+              showPracticeSize={false}
+            />
+          </aside>
 
-      <p className="result-count">共 {filtered.length} 題</p>
-
-      <div className="question-list">
-        {filtered.map((question) => (
-          <Link key={question.id} to={`/interview/${question.id}`} className="question-card question-card-link">
-            <div className="question-rank">
-              <span>#{question.id}</span>
+          <div className="col-lg-8 col-xl-9">
+            <div className="interview-kicker">
+              <Sparkles size={18} />
+              模擬面試
             </div>
-            <div className="question-body">
-              <div className="question-meta">
-                <span>{question.category}</span>
-                <span>{question.difficulty}</span>
-              </div>
-              <h3>{question.question}</h3>
-              <div className="tag-row">
-                {question.tags.slice(0, 6).map((tag) => (
-                  <span key={tag}>{tagLabels[tag]}</span>
-                ))}
-              </div>
-              <div className="question-actions">
-                <span className="btn btn-dark practice-button">
-                  <MessageSquare size={16} />
+            <h1 className="display-title interview-title">AI 模擬面試</h1>
+            <p className="page-intro">
+              先在左側填寫考生條件，系統會依你的背景挑出最該優先練習的題目，由 AI 面試官帶你進行一場
+              約 {SESSION_SIZE} 題的連續模擬面試：逐題發問、針對你的回答給回饋並追問。
+              想單獨練某一題，可到<Link to="/"> 首頁 </Link>點該題。
+            </p>
+
+            {session ? (
+              <>
+                <div className="session-bar">
+                  <span>本場面試涵蓋 {session.questions.length} 題（依目前條件排序）</span>
+                  <button className="btn btn-outline-dark session-restart" type="button" onClick={startSession}>
+                    <Play size={15} />
+                    依目前條件重新開始
+                  </button>
+                </div>
+                <ChatPanel questions={session.questions} sessionKey={session.key} />
+              </>
+            ) : (
+              <div className="interview-start-card">
+                <p className="interview-start-hint">
+                  {profileReady ? '條件已就緒，可以開始了。' : '請先在左側填寫考生條件（至少選一項），再開始模擬面試。'}
+                </p>
+                <button className="btn btn-dark interview-start-btn" type="button" onClick={startSession} disabled={!profileReady}>
+                  <Play size={18} />
                   開始模擬面試
-                </span>
+                </button>
               </div>
-            </div>
-          </Link>
-        ))}
+            )}
+          </div>
+        </div>
       </div>
-    </div>
+
+      {isFilterOpen && (
+        <div className="filter-modal" role="dialog" aria-modal="true" aria-label="考生條件">
+          <button className="filter-backdrop" type="button" aria-label="關閉考生條件" onClick={() => setIsFilterOpen(false)} />
+          <div className="filter-drawer">
+            <CandidateControls
+              profile={profile}
+              onUpdate={updateProfile}
+              onReset={handleReset}
+              idPrefix="interview-mobile"
+              showPracticeSize={false}
+              showClose
+              onClose={() => setIsFilterOpen(false)}
+            />
+            <button className="btn btn-dark w-100 mt-2" type="button" onClick={startSession} disabled={!profileReady}>
+              <Play size={17} />
+              開始模擬面試
+            </button>
+          </div>
+        </div>
+      )}
+    </section>
   );
 }

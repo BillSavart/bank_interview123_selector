@@ -4,11 +4,14 @@ import type { InterviewQuestion } from '../data/types';
 import { describeError, streamChat, type ChatMessage } from '../lib/chat';
 
 interface ChatPanelProps {
-  question: InterviewQuestion;
+  // one question for single-question practice, or several for a full interview session
+  questions: InterviewQuestion[];
+  // change this to start a fresh conversation (e.g. question id, or a restart counter)
+  sessionKey: string | number;
 }
 
-// Full-page mock-interview chat. Re-seeds itself when `question` changes.
-export function ChatPanel({ question }: ChatPanelProps) {
+// Full-page mock-interview chat. Re-seeds itself when `sessionKey` changes.
+export function ChatPanel({ questions, sessionKey }: ChatPanelProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
@@ -33,7 +36,7 @@ export function ChatPanel({ question }: ChatPanelProps) {
 
     try {
       await streamChat(
-        question.question,
+        questions.map((q) => q.question),
         history,
         (delta) => {
           setMessages((current) => {
@@ -61,7 +64,7 @@ export function ChatPanel({ question }: ChatPanelProps) {
     }
   };
 
-  // (Re)start the interview whenever the target question changes.
+  // (Re)start the interview whenever the session changes.
   useEffect(() => {
     abortRef.current?.abort();
     setMessages([]);
@@ -69,7 +72,7 @@ export function ChatPanel({ question }: ChatPanelProps) {
     void runAssistantTurn([{ role: 'user', content: '請開始這場模擬面試。' }]);
     return () => abortRef.current?.abort();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [question.id]);
+  }, [sessionKey]);
 
   const handleSend = () => {
     const text = input.trim();

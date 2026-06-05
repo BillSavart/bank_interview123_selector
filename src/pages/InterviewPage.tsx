@@ -42,7 +42,7 @@ export function InterviewPage() {
         </div>
       </div>
 
-      <ChatPanel question={question} />
+      <ChatPanel questions={[question]} sessionKey={question.id} />
     </div>
   );
 }

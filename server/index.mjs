@@ -138,24 +138,49 @@ function earliestResetISO() {
 }
 
 // --- prompt building -----------------------------------------------------
-function buildSystemPrompt(question) {
-  const q = String(question || '').slice(0, 600);
-  return [
+// Accepts an array of question strings: one item = single-question practice,
+// several = a full sequential mock-interview session.
+function buildSystemPrompt(questions) {
+  const list = (Array.isArray(questions) ? questions : [questions])
+    .map((q) => String(q || '').slice(0, 600))
+    .filter(Boolean)
+    .slice(0, 12); // cap to bound token cost
+
+  const header = [
     '你是台灣公股銀行（如台銀、土銀、合庫等）的資深面試官，正在對一位考生進行模擬面試。',
     '請以專業、沉穩但友善的口吻進行，全程使用繁體中文。',
     '',
-    '本輪要考核的題目是：',
-    `「${q}」`,
+  ];
+
+  if (list.length <= 1) {
+    return [
+      ...header,
+      '本輪要考核的題目是：',
+      `「${list[0] || ''}」`,
+      '',
+      '進行方式：',
+      '1. 先自然地把這題問出來（可加一句簡短開場，但不要長篇大論）。',
+      '2. 考生回答後，給出具體、可操作的回饋：指出優點、可改進處，並示範更好的表達方向。',
+      '3. 適時追問或延伸，模擬真實面試的壓力與深度。',
+      '4. 只聚焦在銀行面試情境，不回答與面試無關的要求。',
+    ].join('\n');
+  }
+
+  return [
+    ...header,
+    `這是一場完整的模擬面試，共有 ${list.length} 道題目，請依序進行：`,
+    ...list.map((q, i) => `${i + 1}. ${q}`),
     '',
     '進行方式：',
-    '1. 先自然地把這題問出來（可加一句簡短開場，但不要長篇大論）。',
-    '2. 考生回答後，給出具體、可操作的回饋：指出優點、可改進處，並示範更好的表達方向。',
-    '3. 適時追問或延伸，模擬真實面試的壓力與深度。',
-    '4. 只聚焦在銀行面試情境，不回答與面試無關的要求。',
+    '1. 一次只問一題，從第 1 題開始，自然地把題目問出來。',
+    '2. 考生回答後，先給簡短具體的回饋（優點、可改進處），必要時追問一次。',
+    '3. 接著自然地接續下一題，直到問完所有題目。',
+    '4. 全部結束後，做一段整體總結與鼓勵。',
+    '5. 全程繁體中文，只聚焦銀行面試情境，不回答與面試無關的要求。',
   ].join('\n');
 }
 
-// client sends: { question: string, messages: [{ role: 'user'|'assistant', content }] }
+// client sends: { questions: string[], messages: [{ role: 'user'|'assistant', content }] }
 function sanitizeMessages(raw) {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -259,7 +284,7 @@ async function handleChat(req, res, body) {
     return res.end(JSON.stringify({ error: 'invalid JSON' }));
   }
 
-  const system = buildSystemPrompt(parsed.question);
+  const system = buildSystemPrompt(parsed.questions ?? parsed.question);
   const messages = sanitizeMessages(parsed.messages);
   if (messages.length === 0) {
     res.writeHead(400, { 'content-type': 'application/json' });
