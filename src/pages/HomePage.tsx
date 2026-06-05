@@ -4,13 +4,12 @@ import {
   ChevronDown,
   ChevronUp,
   ClipboardCheck,
-  Download,
   Search,
   ShieldCheck,
   SlidersHorizontal,
 } from 'lucide-react';
+import { hasAnswer, renderStoredAnswer } from '../data/answerBank';
 import { interviewQuestions } from '../data/questions.generated';
-import { generateQuestionAnswer } from '../data/prebuiltAnswers';
 import { AdSlot } from '../AdSlot';
 import { CandidateControls } from '../components/CandidateControls';
 import { categorySummary, defaultProfile, isProfileEmpty, scoreQuestion, tagLabels } from '../lib/scoring';
@@ -120,7 +119,7 @@ export function HomePage() {
               <h1 className="display-title mb-3">公股銀行面試題目選擇器</h1>
               <p className="hero-copy mb-0">
                 依照考生背景排序 123 題常見口試題，快速抓出最該優先練的動機題、情境題、業務題與時事題。
-                選好條件後可直接展開每題的預製答題方向與示範回答。
+                選好條件後可直接展開每題的答題方向與示範回答。
               </p>
             </div>
             <div className="col-lg-5">
@@ -179,10 +178,6 @@ export function HomePage() {
                     </option>
                   ))}
                 </select>
-                <a className="btn btn-dark source-link" href="/20260515bank123.pdf" target="_blank" rel="noreferrer">
-                  <Download size={17} />
-                  題庫 PDF
-                </a>
               </div>
 
               <div className="result-overview">
@@ -259,12 +254,12 @@ export function HomePage() {
                             aria-expanded={expandedAnswers.has(question.id)}
                           >
                             {expandedAnswers.has(question.id) ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                            {expandedAnswers.has(question.id) ? '收合答案' : '展開答案'}
+                            {expandedAnswers.has(question.id) ? '收合答案' : hasAnswer(question.id) ? '展開答案' : '尚未填答'}
                           </button>
                         </div>
                         {expandedAnswers.has(question.id) && (
                           <div className="prebuilt-answer">
-                            {generateQuestionAnswer(question, profile)}
+                            {renderStoredAnswer(question, profile)}
                           </div>
                         )}
                       </div>

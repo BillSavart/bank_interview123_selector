@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "extract:questions": "node scripts/extract-questions.mjs",
+    "make:answer-prompts": "node scripts/make-answer-prompts.mjs",
     "prebuild": "npm run extract:questions",
     "build": "tsc -b && vite build",
     "preview": "vite preview"

@@ -5,6 +5,7 @@ import { NavBar } from './NavBar';
 
 export function Layout() {
   const { pathname } = useLocation();
+  const showFooter = pathname !== '/about';
 
   // scroll to top on route change
   useEffect(() => {
@@ -17,10 +18,12 @@ export function Layout() {
       <main className="site-main">
         <Outlet />
       </main>
-      <footer className="site-footer">
-        <span>Credit: 公股銀行招考討論區Jack</span>
-        <span className="site-footer-note">本站推薦僅供準備方向參考，實際面試以報考銀行與職缺為準。</span>
-      </footer>
+      {showFooter && (
+        <footer className="site-footer">
+          <span>Credit: 公股銀行招考討論區Jack</span>
+          <span className="site-footer-note">本站推薦僅供準備方向參考，實際面試以報考銀行與職缺為準。</span>
+        </footer>
+      )}
       <button
         className="back-to-top"
         type="button"
