@@ -11,7 +11,7 @@ export function AboutPage() {
       </div>
       <h1 className="display-title mb-3">關於本站</h1>
       <p className="page-intro">
-        本站整理公股銀行（如台銀、土銀、合庫等）常見口試題庫，協助考生依自身背景挑出最該優先練習的題目，
+        本站整理自公股銀行招考討論區提供的 123 題常見面試題庫，協助考生依自身背景挑出最該優先練習的題目，
         並提供依條件調整的答題方向與示範回答。
       </p>
 

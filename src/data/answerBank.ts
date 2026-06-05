@@ -3,12 +3,22 @@ import { focusLabel } from '../lib/scoring';
 import type { CandidateProfile, InterviewQuestion } from './types';
 
 type VariantKey =
-  | 'freshGraduate'
-  | 'experienced'
-  | 'hasBankExperience'
-  | 'noBankExperience'
-  | 'hasSalesExperience'
-  | 'noSalesExperience'
+  | 'ageUnder24'
+  | 'age25to29'
+  | 'age30plus'
+  | 'workNone'
+  | 'workUnder2'
+  | 'work2to5'
+  | 'work5plus'
+  | 'freshGraduateYes'
+  | 'freshGraduateNo'
+  | 'bankExperienceYes'
+  | 'bankExperienceNo'
+  | 'bankYearsUnder1'
+  | 'bankYears1to3'
+  | 'bankYears3plus'
+  | 'salesExperienceYes'
+  | 'salesExperienceNo'
   | 'focusMotivation'
   | 'focusSales'
   | 'focusService'
@@ -35,14 +45,27 @@ const focusVariantKey: Record<CandidateProfile['targetFocus'], VariantKey | null
 const variantKeysForProfile = (profile: CandidateProfile): VariantKey[] => {
   const keys: VariantKey[] = [];
 
-  if (profile.isFreshGraduate === 'yes' || profile.workYears === 'none' || profile.ageRange === 'under24') {
-    keys.push('freshGraduate');
-  } else if (profile.workYears === '2to5' || profile.workYears === '5plus' || profile.ageRange === '30plus') {
-    keys.push('experienced');
+  if (profile.ageRange === 'under24') keys.push('ageUnder24');
+  if (profile.ageRange === '25to29') keys.push('age25to29');
+  if (profile.ageRange === '30plus') keys.push('age30plus');
+
+  if (profile.workYears === 'none') keys.push('workNone');
+  if (profile.workYears === 'under2') keys.push('workUnder2');
+  if (profile.workYears === '2to5') keys.push('work2to5');
+  if (profile.workYears === '5plus') keys.push('work5plus');
+
+  keys.push(profile.isFreshGraduate === 'yes' ? 'freshGraduateYes' : 'freshGraduateNo');
+
+  if (profile.hasBankExperience === 'yes') {
+    keys.push('bankExperienceYes');
+    if (profile.bankYears === 'under1') keys.push('bankYearsUnder1');
+    if (profile.bankYears === '1to3') keys.push('bankYears1to3');
+    if (profile.bankYears === '3plus') keys.push('bankYears3plus');
+  } else {
+    keys.push('bankExperienceNo');
   }
 
-  keys.push(profile.hasBankExperience === 'yes' ? 'hasBankExperience' : 'noBankExperience');
-  keys.push(profile.hasSalesExperience === 'yes' ? 'hasSalesExperience' : 'noSalesExperience');
+  keys.push(profile.hasSalesExperience === 'yes' ? 'salesExperienceYes' : 'salesExperienceNo');
 
   const focusKey = focusVariantKey[profile.targetFocus];
   if (focusKey) keys.push(focusKey);
@@ -70,8 +93,10 @@ export function renderStoredAnswer(question: InterviewQuestion, profile: Candida
           keyPoints: ['這題第一個答題重點', '這題第二個答題重點'],
           answer: '這題專屬的完整示範回答。',
           variants: {
-            freshGraduate: '應屆畢業生版本要補充的句子。',
-            noBankExperience: '無銀行經驗版本要補充的句子。',
+            ageUnder24: '24 歲以下版本要補充的句子。',
+            workNone: '無正式工作經驗版本要補充的句子。',
+            freshGraduateYes: '應屆畢業生版本要補充的句子。',
+            bankExperienceNo: '無銀行經驗版本要補充的句子。',
             focusMotivation: '準備重點為報考動機時要補充的句子。',
           },
         },

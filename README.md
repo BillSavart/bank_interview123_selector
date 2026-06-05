@@ -56,13 +56,19 @@ npm run extract:questions
 npm run make:answer-prompts
 ```
 
-預設每 10 題一批，會輸出到 `answer_prompts/`。如果想每批 5 題：
+它會產生：
+
+- `answer_bank.template.json`：123 題完整空白 JSON 格式。
+- `answer_prompts/question-001.md` 到 `question-123.md`：一題一題貼給 GPT 用。
+- `answer_prompts/chunk-01.md` 到 `chunk-13.md`：每 10 題一批貼給 GPT 用。
+
+如果想每批 5 題：
 
 ```bash
 npm run make:answer-prompts -- 5
 ```
 
-把 ChatGPT 回傳的 JSON 合併進 `answer_bank.json` 後，重新整理本地頁面即可看到答案。
+把 ChatGPT 回傳的 JSON 合併進 `answer_bank.json` 後，重新整理本地頁面即可看到答案。前端會依年齡、年資、是否應屆、銀行經驗、銀行年資、銷售經驗與準備重點，挑出對應的 `variants` 顯示在主答案下方。
 
 ## GCP e2-micro 部署
 
