@@ -1152,3 +1152,52 @@ select {
   padding: 0.4rem 0.8rem;
   font-size: 0.84rem;
 }
+
+/* --- interview page: conditions stack on top on mobile, sidebar on desktop --- */
+.interview-aside .control-panel {
+  position: static; /* mobile: in normal flow, above the content */
+}
+
+@media (min-width: 992px) {
+  .interview-aside .control-panel {
+    position: sticky;
+    top: 1rem;
+  }
+}
+
+/* --- dismissible bottom banner ad --- */
+.banner-ad {
+  position: relative;
+  margin: 1.25rem 0 0.5rem;
+  padding: 0.4rem;
+  border: 1px solid #e6edec;
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.banner-ad .ad-slot {
+  margin: 0;
+}
+
+.banner-ad-close {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #d9e2e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #475569;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.12);
+  cursor: pointer;
+}
+
+.banner-ad-close:hover {
+  background: #f1f5f4;
+  color: #0f172a;
+}

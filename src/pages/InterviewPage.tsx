@@ -3,6 +3,7 @@ import { ArrowLeft, Sparkles } from 'lucide-react';
 import { interviewQuestions } from '../data/questions.generated';
 import { tagLabels } from '../lib/scoring';
 import { ChatPanel } from '../components/ChatPanel';
+import { DismissibleAd } from '../components/DismissibleAd';
 
 export function InterviewPage() {
   const { id } = useParams();
@@ -43,6 +44,8 @@ export function InterviewPage() {
       </div>
 
       <ChatPanel questions={[question]} sessionKey={question.id} />
+
+      <DismissibleAd slot="3333333333" />
     </div>
   );
 }
