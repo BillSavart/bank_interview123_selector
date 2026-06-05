@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import {
   Banknote,
   ChevronDown,
@@ -7,13 +7,53 @@ import {
   Search,
   ShieldCheck,
   SlidersHorizontal,
+  Star,
 } from 'lucide-react';
 import { hasAnswer, renderStoredAnswer } from '../data/answerBank';
 import { interviewQuestions } from '../data/questions.generated';
 import { AdSlot } from '../AdSlot';
 import { CandidateControls } from '../components/CandidateControls';
 import { categorySummary, defaultProfile, isProfileEmpty, scoreQuestion, tagLabels } from '../lib/scoring';
+import { fetchRatings, loadLocalScores, submitRating, type RatingMap } from '../lib/ratings';
 import type { CandidateProfile, InterviewQuestion } from '../data/types';
+
+interface AnswerRatingProps {
+  questionId: number;
+  rating?: RatingMap[number];
+  myScore?: number;
+  isSaving: boolean;
+  onRate: (questionId: number, score: number) => void;
+}
+
+function AnswerRating({ questionId, rating, myScore, isSaving, onRate }: AnswerRatingProps) {
+  const average = rating?.average ?? null;
+  const count = rating?.count ?? 0;
+
+  return (
+    <div className="answer-rating" aria-label={`第 ${questionId} 題參考答案評分`}>
+      <div className="answer-rating-stars" role="radiogroup" aria-label="評分">
+        {[1, 2, 3, 4, 5].map((score) => (
+          <button
+            key={score}
+            className={myScore && score <= myScore ? 'is-active' : ''}
+            type="button"
+            onClick={() => onRate(questionId, score)}
+            disabled={isSaving}
+            aria-label={`給 ${score} 顆星`}
+            aria-checked={myScore === score}
+            role="radio"
+          >
+            <Star size={18} fill="currentColor" />
+          </button>
+        ))}
+      </div>
+      <div className="answer-rating-summary" aria-live="polite">
+        <strong>{average ? average.toFixed(1) : '尚無評分'}</strong>
+        <span>{count} 人評分</span>
+      </div>
+    </div>
+  );
+}
 
 export function HomePage() {
   const [profile, setProfile] = useState<CandidateProfile>(defaultProfile);
@@ -22,6 +62,25 @@ export function HomePage() {
   const [activeDifficulty, setActiveDifficulty] = useState<InterviewQuestion['difficulty'] | '全部'>('全部');
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [expandedAnswers, setExpandedAnswers] = useState<Set<number>>(() => new Set());
+  const [ratings, setRatings] = useState<RatingMap>({});
+  const [myScores, setMyScores] = useState<Record<number, number>>(() => loadLocalScores());
+  const [savingRatings, setSavingRatings] = useState<Set<number>>(() => new Set());
+
+  useEffect(() => {
+    let isMounted = true;
+
+    fetchRatings()
+      .then((nextRatings) => {
+        if (isMounted) setRatings(nextRatings);
+      })
+      .catch(() => {
+        if (isMounted) setRatings({});
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const categories = useMemo(
     () => ['全部', ...Array.from(new Set(interviewQuestions.map((question) => question.category)))],
@@ -94,6 +153,24 @@ export function HomePage() {
       else next.add(questionId);
       return next;
     });
+  };
+
+  const handleRateAnswer = async (questionId: number, score: number) => {
+    setMyScores((current) => ({ ...current, [questionId]: score }));
+    setSavingRatings((current) => new Set(current).add(questionId));
+
+    try {
+      const rating = await submitRating(questionId, score);
+      setRatings((current) => ({ ...current, [questionId]: rating }));
+    } catch {
+      setMyScores(loadLocalScores());
+    } finally {
+      setSavingRatings((current) => {
+        const next = new Set(current);
+        next.delete(questionId);
+        return next;
+      });
+    }
   };
 
   const updateProfile = <K extends keyof CandidateProfile>(key: K, value: CandidateProfile[K]) => {
@@ -258,8 +335,17 @@ export function HomePage() {
                           </button>
                         </div>
                         {expandedAnswers.has(question.id) && (
-                          <div className="prebuilt-answer">
-                            {renderStoredAnswer(question, profile)}
+                          <div className="answer-panel">
+                            <AnswerRating
+                              questionId={question.id}
+                              rating={ratings[question.id]}
+                              myScore={myScores[question.id]}
+                              isSaving={savingRatings.has(question.id)}
+                              onRate={handleRateAnswer}
+                            />
+                            <div className="prebuilt-answer">
+                              {renderStoredAnswer(question, profile)}
+                            </div>
                           </div>
                         )}
                       </div>

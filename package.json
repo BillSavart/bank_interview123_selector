@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "api": "node server/ratings-api.mjs",
     "extract:questions": "node scripts/extract-questions.mjs",
     "make:answer-prompts": "node scripts/make-answer-prompts.mjs",
     "prebuild": "npm run extract:questions",

@@ -1,6 +1,6 @@
 # 部署到 GCP e2-micro + Cloudflare 網域
 
-這個專案現在是純前端靜態 SPA。答案在 build 後由前端規則與題庫標籤產生，不需要 runtime API、LLM key、Vercel 或後端 proxy。
+這個專案主體是靜態 SPA。答案在 build 後由前端規則與題庫標籤產生；參考答案評分另外用一個輕量 Node API 儲存在 VM 本機 Docker volume，不需要 Firebase、外部資料庫、LLM key、Vercel 或後端 proxy。
 
 ## 架構
 
@@ -13,8 +13,9 @@ Cloudflare DNS / CDN
   v
 GCP e2-micro VM
   |
-  v
-Caddy web container -> /srv 靜態檔
+  |- Caddy web container -> /srv 靜態檔
+  |
+  `- ratings api container -> ratings_data/ratings.json
 ```
 
 ## 建 VM
@@ -41,6 +42,7 @@ Caddy web container -> /srv 靜態檔
 ## 手動部署方式
 
 如果暫時不做 CI/CD，可以在本機 build 後把 `dist/` 傳到 VM。
+這種方式只會部署靜態前端；若要啟用評分，仍建議使用 Docker Compose，或另外在 VM 上常駐 `npm run api` 並讓 Caddy 的 `/api/*` 指到 `127.0.0.1:3000`。
 
 ```bash
 npm install
@@ -62,4 +64,10 @@ sudo systemctl reload caddy
 curl -I https://你的網域
 ```
 
-應該看到 `200` 或 `304`，且首頁能正常載入題庫與展開答案。
+應該看到 `200` 或 `304`，且首頁能正常載入題庫、展開答案與參考答案評分。
+
+## 評分資料
+
+評分資料存在 Docker volume `ratings_data` 的 `/data/ratings.json`。同一瀏覽器同一題再次評分會覆蓋原本分數，因此不會重複增加人數。
+
+這個檔案式方案適合 e2-micro 和小型題庫網站；若未來評分量成長到幾十萬筆以上，再改 SQLite 會比較適合。

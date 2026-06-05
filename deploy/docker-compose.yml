@@ -6,6 +6,17 @@
 #       DOMAIN=interview.example.com
 
 services:
+  api:
+    image: ${REGISTRY}/bank-interview-api:latest
+    restart: unless-stopped
+    environment:
+      PORT: "3000"
+      RATINGS_FILE: /data/ratings.json
+      MAX_QUESTION_ID: "123"
+    volumes:
+      - ratings_data:/data
+    mem_limit: 80m
+
   web:
     image: ${REGISTRY}/bank-interview-web:latest
     restart: unless-stopped
@@ -18,7 +29,10 @@ services:
       - caddy_data:/data # persists Let's Encrypt certs across restarts
       - caddy_config:/config
     mem_limit: 96m
+    depends_on:
+      - api
 
 volumes:
   caddy_data:
   caddy_config:
+  ratings_data:

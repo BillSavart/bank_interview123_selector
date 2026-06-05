@@ -5,6 +5,10 @@
 {$DOMAIN} {
 	encode zstd gzip
 
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
 	# Static SPA
 	handle {
 		root * /srv

@@ -11,6 +11,7 @@ git push main
 GitHub Actions
   |- npm run build
   |- docker build bank-interview-web
+  |- docker build bank-interview-api
   |- push image to ghcr.io
   |
   v
@@ -19,7 +20,7 @@ SSH 到 GCP VM
   |- docker compose up -d
 ```
 
-VM 上只跑一個 `web` container，Caddy 負責 HTTPS 與靜態檔服務。
+VM 上跑 `web` container 與輕量 `api` container。Caddy 負責 HTTPS、靜態檔服務，並把 `/api/*` 反向代理到評分 API。
 
 ## VM 一次性設定
 
@@ -72,7 +73,7 @@ ghcr push 可用 GitHub Actions 內建 `GITHUB_TOKEN`。
 
 ## ghcr image 權限
 
-第一次 workflow 跑完後，到 GitHub Packages 把 `bank-interview-web` 設成 public，VM 就不用 docker login。
+第一次 workflow 跑完後，到 GitHub Packages 把 `bank-interview-web` 和 `bank-interview-api` 設成 public，VM 就不用 docker login。
 
 如果要 private package，請在 VM 上先登入 ghcr：
 
@@ -86,7 +87,8 @@ echo "$CR_PAT" | docker login ghcr.io -u 你的github帳號 --password-stdin
 cd /opt/bank-interview
 docker compose ps
 docker compose logs -f web
+docker compose logs -f api
 curl -I https://你的網域
 ```
 
-首頁應能載入題庫，題目卡的「展開答案」應在前端直接顯示預製答案。
+首頁應能載入題庫，題目卡的「展開答案」應在前端直接顯示預製答案與評分列。
