@@ -1545,3 +1545,413 @@ select {
   background: #f1f5f4;
   color: #0f172a;
 }
+
+/* --- check-game (支票審查員) --- */
+.checkgame-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 1.25rem;
+  margin-top: 0.75rem;
+  align-items: start;
+}
+
+.checkgame-card {
+  padding: 1.4rem 1.5rem;
+  border: 1px solid #e2e9e8;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px -24px rgba(15, 79, 73, 0.55);
+}
+
+.checkgame-title {
+  font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+  margin-bottom: 0.85rem;
+}
+
+.checkgame-intro-text {
+  white-space: pre-wrap;
+  line-height: 1.75;
+  color: #334155;
+  margin-bottom: 1.25rem;
+}
+
+.checkgame-name-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  max-width: 360px;
+}
+
+.checkgame-label {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #0f4f49;
+}
+
+.checkgame-input {
+  padding: 0.7rem 0.85rem;
+  border: 1px solid #cbd5d4;
+  border-radius: 9px;
+  font-size: 1rem;
+}
+
+.checkgame-input:focus {
+  outline: none;
+  border-color: #0f4f49;
+  box-shadow: 0 0 0 3px rgba(15, 79, 73, 0.15);
+}
+
+.checkgame-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.7rem 1.2rem;
+  border: none;
+  border-radius: 9px;
+  font-size: 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.05s ease;
+}
+
+.checkgame-btn:active {
+  transform: translateY(1px);
+}
+
+.checkgame-btn-primary {
+  background: #0f4f49;
+  color: #fff;
+}
+
+.checkgame-btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+.checkgame-btn-primary:disabled {
+  background: #9fb6b3;
+  cursor: not-allowed;
+}
+
+/* question */
+.checkgame-qhead {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.checkgame-qcount {
+  font-weight: 800;
+  color: #0f4f49;
+}
+
+.checkgame-timer {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #0f4f49;
+}
+
+.checkgame-timer.is-low {
+  color: #dc2626;
+}
+
+.checkgame-progress {
+  height: 8px;
+  border-radius: 999px;
+  background: #e6edec;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.checkgame-progress-bar {
+  height: 100%;
+  background: #0f4f49;
+  border-radius: 999px;
+  transition: width 1s linear;
+}
+
+.checkgame-progress-bar.is-low {
+  background: #dc2626;
+}
+
+.checkgame-desc {
+  font-size: 1.08rem;
+  line-height: 1.7;
+  color: #1f2937;
+  white-space: pre-wrap;
+  margin-bottom: 1rem;
+}
+
+.checkgame-images {
+  display: grid;
+  /* Images are always stacked. They use the full column width so they stay as
+     large/readable as possible; the answer buttons are allowed to sit just below
+     the fold (a small scroll) rather than shrinking the images to fit. */
+  grid-template-columns: 1fr;
+  gap: 0.7rem;
+  margin-bottom: 1rem;
+}
+
+.checkgame-image {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid #e2e9e8;
+  background: #f8fafa;
+  cursor: zoom-in;
+}
+
+/* Desktop only: trim the images just a touch (centered) so they aren't quite
+   full-column width. Phones keep full width within the card padding. */
+@media (min-width: 601px) {
+  .checkgame-image {
+    max-width: 90%;
+    margin: 0 auto;
+  }
+}
+
+/* full-screen image viewer (tap an image to enlarge) */
+.checkgame-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: rgba(8, 17, 23, 0.85);
+  cursor: zoom-out;
+}
+
+.checkgame-lightbox img {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 10px;
+  box-shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.7);
+}
+
+.checkgame-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+}
+
+.checkgame-choice {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 1rem;
+  border: 2px solid #cbd5d4;
+  border-radius: 12px;
+  background: #fff;
+  font-size: 1.15rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.checkgame-choice.is-can {
+  color: #0f766e;
+}
+
+.checkgame-choice.is-cannot {
+  color: #b91c1c;
+}
+
+.checkgame-choice:not(:disabled):hover {
+  border-color: currentColor;
+  background: #f8fafa;
+}
+
+.checkgame-choice:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.checkgame-choice.is-correct {
+  border-color: #16a34a;
+  background: #ecfdf3;
+  color: #15803d;
+  opacity: 1;
+}
+
+.checkgame-choice.is-wrong {
+  border-color: #dc2626;
+  background: #fef2f2;
+  color: #b91c1c;
+  opacity: 1;
+}
+
+.checkgame-reveal {
+  margin-top: 1.2rem;
+  padding: 1.1rem 1.2rem;
+  border-radius: 12px;
+  border: 1px solid #e2e9e8;
+  background: #f8fafa;
+}
+
+.checkgame-reveal.is-correct {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.checkgame-reveal.is-wrong {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+.checkgame-reveal-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.checkgame-reveal-verdict {
+  font-weight: 800;
+  font-size: 1.05rem;
+  color: #0f172a;
+}
+
+.checkgame-reveal-gain {
+  font-weight: 800;
+  color: #0f4f49;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkgame-explanation {
+  white-space: pre-wrap;
+  line-height: 1.75;
+  color: #334155;
+  margin-bottom: 1rem;
+}
+
+/* result */
+.checkgame-result {
+  text-align: center;
+  padding: 2.5rem 1.5rem;
+}
+
+.checkgame-result-icon {
+  color: #f59e0b;
+}
+
+.checkgame-result-title {
+  margin: 0.75rem 0 1rem;
+  font-size: 1.5rem;
+  font-weight: 800;
+}
+
+.checkgame-result-score {
+  font-size: 3.5rem;
+  font-weight: 900;
+  color: #0f4f49;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkgame-result-label {
+  color: #64748b;
+  font-weight: 700;
+  margin-bottom: 1.25rem;
+}
+
+.checkgame-result-note {
+  color: #334155;
+  margin-bottom: 1.25rem;
+}
+
+.checkgame-result-note.is-error {
+  color: #b91c1c;
+}
+
+/* leaderboard */
+.checkgame-side {
+  position: sticky;
+  top: 1rem;
+}
+
+.checkgame-board-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0 0 0.9rem;
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #0f4f49;
+}
+
+.checkgame-board-empty {
+  color: #94a3b8;
+  font-size: 0.92rem;
+}
+
+.checkgame-board-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.checkgame-board-row {
+  display: grid;
+  grid-template-columns: 2rem 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+}
+
+.checkgame-board-row:nth-child(odd) {
+  background: #f7faf9;
+}
+
+.checkgame-board-row.is-me {
+  background: #ecfdf3;
+  outline: 1px solid #bbf7d0;
+}
+
+.checkgame-board-rank {
+  text-align: center;
+  font-weight: 800;
+}
+
+.checkgame-board-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.checkgame-board-score {
+  font-weight: 800;
+  color: #0f4f49;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 860px) {
+  .checkgame-layout {
+    grid-template-columns: 1fr;
+  }
+  .checkgame-side {
+    position: static;
+  }
+}
+
+/* Phones: keep a slim, tidy card padding so the stacked images have a normal
+   margin from the screen edge (no edge-to-edge bleed). */
+@media (max-width: 600px) {
+  .checkgame-card {
+    padding: 1rem 0.85rem;
+  }
+}

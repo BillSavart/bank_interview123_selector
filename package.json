@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "api": "node server/ratings-api.mjs",
+    "api:local": "RATINGS_FILE=.local-ratings.json COMMENTS_FILE=.local-comments.jsonl COMMENT_VOTES_FILE=.local-comment-votes.jsonl CHECKGAME_FILE=.local-checkgame-top.json node server/ratings-api.mjs",
     "extract:questions": "node scripts/extract-questions.mjs",
     "make:answer-prompts": "node scripts/make-answer-prompts.mjs",
     "prebuild": "npm run extract:questions",

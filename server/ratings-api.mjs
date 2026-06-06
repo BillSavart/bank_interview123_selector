@@ -25,6 +25,15 @@ const commentMaxPerWindow = Number(process.env.COMMENT_MAX_PER_WINDOW || 30);
 // Comments at or below this net score are auto-hidden (users can still reveal them).
 const commentHideScore = Number(process.env.COMMENT_HIDE_SCORE || -100);
 
+// --- Check-game leaderboard config -----------------------------------------
+// We deliberately keep ONLY the top-N entries on disk: the store is rewritten on
+// every change (tmp + rename) and truncated to N, so a score that drops out of
+// the top N is discarded rather than logged forever. Disk use is bounded at N
+// rows regardless of how many games are played.
+const checkGameFile = process.env.CHECKGAME_FILE || '/data/checkgame-top.json';
+const checkGameTopN = Number(process.env.CHECKGAME_TOP_N || 10);
+const checkGameMaxScore = Number(process.env.CHECKGAME_MAX_SCORE || 100000);
+
 const emptyStore = () => ({
   version: 1,
   updatedAt: null,
@@ -191,6 +200,80 @@ const publicComment = (comment) => {
   };
 };
 
+// --- Check-game leaderboard store ------------------------------------------
+// In-memory top-N list, highest score first, at most one row per name. Backed by
+// a small JSON file that we rewrite (not append to) on every change, so disk use
+// stays bounded at N rows. Entries that fall out of the top N are dropped.
+let checkGameTop = []; // [{ name, score, createdAt }], sorted desc, length <= N
+let checkGameWriteQueue = Promise.resolve();
+
+// Highest score first; earlier submission wins ties (keeps the original holder).
+const sortLeaderboard = (rows) =>
+  rows.sort((a, b) => b.score - a.score || a.createdAt.localeCompare(b.createdAt));
+
+const loadCheckGame = async () => {
+  checkGameTop = [];
+  let raw = '';
+  try {
+    raw = await readFile(checkGameFile, 'utf8');
+  } catch (error) {
+    if (error?.code !== 'ENOENT') {
+      console.warn(`Could not read ${checkGameFile}; starting with an empty leaderboard.`, error);
+    }
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    const rows = Array.isArray(parsed) ? parsed : parsed?.leaderboard;
+    if (!Array.isArray(rows)) return;
+    const clean = [];
+    for (const entry of rows) {
+      const name = String(entry?.name || '').trim();
+      const score = Number(entry?.score);
+      if (!name || !Number.isInteger(score)) continue;
+      clean.push({ name, score, createdAt: String(entry?.createdAt || '') });
+    }
+    checkGameTop = sortLeaderboard(clean).slice(0, checkGameTopN);
+  } catch (error) {
+    console.warn(`Could not parse ${checkGameFile}; starting with an empty leaderboard.`, error);
+  }
+};
+
+const persistCheckGame = () => {
+  checkGameWriteQueue = checkGameWriteQueue.then(async () => {
+    await mkdir(dirname(checkGameFile), { recursive: true });
+    const tmpFile = `${checkGameFile}.${process.pid}.${randomUUID()}.tmp`;
+    await writeFile(tmpFile, `${JSON.stringify(checkGameTop, null, 2)}\n`);
+    await rename(tmpFile, checkGameFile);
+  });
+  return checkGameWriteQueue;
+};
+
+// Insert a score, keep one (best) row per name, truncate to top N. Returns the
+// 1-based rank if the entry made the board, otherwise null.
+const recordCheckGameScore = (name, score, createdAt) => {
+  const existing = checkGameTop.find((e) => e.name === name);
+  if (existing) {
+    if (score <= existing.score) {
+      // Not a personal best; nothing changes, report their current standing.
+      return checkGameTop.findIndex((e) => e.name === name) + 1;
+    }
+    existing.score = score;
+    existing.createdAt = createdAt;
+  } else {
+    checkGameTop.push({ name, score, createdAt });
+  }
+
+  sortLeaderboard(checkGameTop);
+  checkGameTop = checkGameTop.slice(0, checkGameTopN);
+
+  const idx = checkGameTop.findIndex((e) => e.name === name && e.score === score);
+  return idx >= 0 ? idx + 1 : null;
+};
+
+const checkGameLeaderboard = () => checkGameTop;
+
 // Per-IP rate limiting, in memory only (resets on restart — fine for this use).
 const rateLog = new Map();
 
@@ -306,6 +389,7 @@ const parseCommentVote = (pathname) => {
 await loadStore();
 await loadComments();
 await loadVotes();
+await loadCheckGame();
 
 createServer(async (req, res) => {
   try {
@@ -318,6 +402,53 @@ createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/api/ratings') {
       sendJson(res, 200, { ratings: summarizeAll() });
+      return;
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/checkgame/leaderboard') {
+      sendJson(res, 200, { leaderboard: checkGameLeaderboard() });
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/checkgame/score') {
+      const bodyText = await readBody(req);
+      let body = {};
+      try {
+        body = bodyText ? JSON.parse(bodyText) : {};
+      } catch {
+        sendJson(res, 400, { error: 'request body must be valid JSON' });
+        return;
+      }
+
+      // Honeypot: real players always send `website` empty.
+      if (typeof body.website === 'string' && body.website.trim() !== '') {
+        sendJson(res, 200, { leaderboard: checkGameLeaderboard(), rank: null });
+        return;
+      }
+
+      const name = sanitizeText(body.name ?? '', maxNameLength);
+      const score = Number(body.score);
+
+      if (!name) {
+        sendJson(res, 400, { error: '暱稱不可為空' });
+        return;
+      }
+      if (!Number.isInteger(score) || score < 0 || score > checkGameMaxScore) {
+        sendJson(res, 400, { error: 'score is invalid' });
+        return;
+      }
+
+      const rate = checkRateLimit(getClientIp(req));
+      if (!rate.ok) {
+        sendJson(res, 429, { error: rate.reason });
+        return;
+      }
+
+      const createdAt = new Date().toISOString();
+      const rank = recordCheckGameScore(name, score, createdAt);
+      await persistCheckGame();
+
+      sendJson(res, 200, { leaderboard: checkGameLeaderboard(), rank });
       return;
     }
 
