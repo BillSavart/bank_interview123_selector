@@ -73,6 +73,7 @@ curl -I https://你的網域
 - `/data/ratings.json`：參考答案 1-5 顆星評分。同一瀏覽器同一題再次評分會覆蓋原本分數，因此不會重複增加人數。
 - `/data/comments.jsonl`：匿名留言，append-only JSONL。
 - `/data/comment-votes.jsonl`：留言讚/倒讚紀錄，append-only JSONL，同一瀏覽器同一則留言最後一次投票為準。
+- `/data/checkgame-top.json`：支票審查員遊戲排行榜，只保留前 10 名（每次寫入會重寫並截斷，掉出前 10 的分數直接捨棄），檔案大小固定不會成長。
 
 留言淨分數 `<= COMMENT_HIDE_SCORE` 時會預設隱藏，Docker Compose 目前設定為 `-100`；使用者仍可在前端切換顯示隱藏留言。
 
@@ -82,4 +83,4 @@ curl -I https://你的網域
 
 Docker Compose 已對 `web` 和 `api` container 設定 `json-file` log rotation，每個 container 最多保留 3 個 10MB log 檔。VM 一次性設定也可套用 [docker-daemon.json](docker-daemon.json) 到 `/etc/docker/daemon.json`，讓 Docker daemon 對其他 container 也使用相同上限。
 
-這些設定只處理 Docker 系統 log，不會清理或修改 `ratings_data` 裡的 `/data/ratings.json`、`/data/comments.jsonl`、`/data/comment-votes.jsonl` 使用者資料。
+這些設定只處理 Docker 系統 log，不會清理或修改 `ratings_data` 裡的 `/data/ratings.json`、`/data/comments.jsonl`、`/data/comment-votes.jsonl`、`/data/checkgame-top.json` 使用者資料。
