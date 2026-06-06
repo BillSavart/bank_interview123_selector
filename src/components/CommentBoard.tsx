@@ -16,6 +16,7 @@ interface CommentBoardProps {
 type SortMode = 'votes' | 'time';
 
 const nameStorageKey = 'bank-interview-comment-name';
+const commentRefreshIntervalMs = 60000;
 
 function formatTime(iso: string) {
   const date = new Date(iso);
@@ -44,21 +45,38 @@ export function CommentBoard({ questionId }: CommentBoardProps) {
 
   useEffect(() => {
     let isMounted = true;
-    setLoading(true);
 
-    fetchComments(questionId)
-      .then((next) => {
-        if (isMounted) setComments(next);
-      })
-      .catch(() => {
-        if (isMounted) setComments([]);
-      })
-      .finally(() => {
-        if (isMounted) setLoading(false);
-      });
+    const refreshComments = (showSpinner: boolean) => {
+      if (showSpinner) setLoading(true);
+
+      fetchComments(questionId)
+        .then((next) => {
+          if (isMounted) setComments(next);
+        })
+        .catch(() => {
+          if (isMounted && showSpinner) setComments([]);
+        })
+        .finally(() => {
+          if (isMounted && showSpinner) setLoading(false);
+        });
+    };
+
+    refreshComments(true);
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refreshComments(false);
+    }, commentRefreshIntervalMs);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshComments(false);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       isMounted = false;
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [questionId]);
 
