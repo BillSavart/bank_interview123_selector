@@ -836,6 +836,145 @@ select {
   word-break: break-word;
 }
 
+/* --- per-question comment board --- */
+.comment-board {
+  margin-top: 0.85rem;
+  padding: 0.95rem;
+  border: 1px solid #d9e2e1;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.comment-board-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #17313d;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.comment-board-head small {
+  margin-left: auto;
+  color: #64748b;
+  font-weight: 500;
+  font-size: 0.78rem;
+}
+
+.comment-empty {
+  margin: 0.75rem 0 0;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.comment-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.comment-item {
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #e6edec;
+  border-radius: 8px;
+  background: #f8fbfa;
+}
+
+.comment-item-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+}
+
+.comment-item-head strong {
+  color: #17313d;
+  font-size: 0.85rem;
+}
+
+.comment-item-head time {
+  color: #94a3b8;
+  font-size: 0.72rem;
+  white-space: nowrap;
+}
+
+.comment-item p {
+  margin: 0;
+  color: #17212b;
+  font-size: 0.88rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.comment-form {
+  margin-top: 0.85rem;
+}
+
+.comment-name-input {
+  width: 100%;
+  max-width: 260px;
+  margin-bottom: 0.5rem;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #d9e2e1;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.comment-honeypot {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.comment-form-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: stretch;
+}
+
+.comment-form-row textarea {
+  flex: 1;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #d9e2e1;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  line-height: 1.5;
+  resize: vertical;
+  min-height: 42px;
+}
+
+.comment-submit {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  align-self: flex-end;
+  white-space: nowrap;
+}
+
+.comment-error {
+  margin: 0.5rem 0 0;
+  color: #b91c1c;
+  font-size: 0.82rem;
+}
+
+@media (max-width: 575.98px) {
+  .comment-form-row {
+    flex-direction: column;
+  }
+
+  .comment-submit {
+    align-self: stretch;
+    justify-content: center;
+  }
+}
+
 /* --- mock interview chat modal --- */
 /* --- full-page mock interview chat --- */
 .chat-panel {

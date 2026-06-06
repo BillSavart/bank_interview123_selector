@@ -82,28 +82,7 @@ export function renderStoredAnswer(question: InterviewQuestion, profile: Candida
   const entry = answerBank[String(question.id)];
 
   if (!entry?.answer?.trim()) {
-    return [
-      '這題尚未填入答案。',
-      '',
-      `請到 answer_bank.json 補上題號 "${question.id}" 的內容。`,
-      '',
-      '建議格式：',
-      JSON.stringify(
-        {
-          keyPoints: ['這題第一個答題重點', '這題第二個答題重點'],
-          answer: '這題專屬的完整示範回答。',
-          variants: {
-            ageUnder24: '24 歲以下版本要補充的句子。',
-            workNone: '無正式工作經驗版本要補充的句子。',
-            freshGraduateYes: '應屆畢業生版本要補充的句子。',
-            bankExperienceNo: '無銀行經驗版本要補充的句子。',
-            focusMotivation: '準備重點為報考動機時要補充的句子。',
-          },
-        },
-        null,
-        2,
-      ),
-    ].join('\n');
+    return '這題的參考答案還在準備中，敬請期待。';
   }
 
   const matchedVariants = variantKeysForProfile(profile)

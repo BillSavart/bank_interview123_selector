@@ -11,8 +11,8 @@ import {
 } from 'lucide-react';
 import { hasAnswer, renderStoredAnswer } from '../data/answerBank';
 import { interviewQuestions } from '../data/questions.generated';
-import { AdSlot } from '../AdSlot';
 import { CandidateControls } from '../components/CandidateControls';
+import { CommentBoard } from '../components/CommentBoard';
 import { categorySummary, defaultProfile, isProfileEmpty, scoreQuestion, tagLabels } from '../lib/scoring';
 import { fetchRatings, loadLocalScores, submitRating, type RatingMap } from '../lib/ratings';
 import type { CandidateProfile, InterviewQuestion } from '../data/types';
@@ -294,12 +294,9 @@ export function HomePage() {
                 </div>
               </div>
 
-              <AdSlot slot="0000000000" label="贊助" />
-
               <div className="question-list">
-                {rankedQuestions.map(({ question, score, reasons }, index) => (
+                {rankedQuestions.map(({ question, score, reasons }) => (
                   <Fragment key={question.id}>
-                    {index > 0 && index % 8 === 0 && <AdSlot slot="1111111111" />}
                     <article className="question-card">
                       <div className="question-rank">
                         <span>#{question.id}</span>
@@ -346,6 +343,7 @@ export function HomePage() {
                             <div className="prebuilt-answer">
                               {renderStoredAnswer(question, profile)}
                             </div>
+                            <CommentBoard questionId={question.id} />
                           </div>
                         )}
                       </div>

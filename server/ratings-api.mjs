@@ -1,11 +1,25 @@
 import { createServer } from 'node:http';
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 const port = Number(process.env.PORT || 3000);
 const dataFile = process.env.RATINGS_FILE || '/data/ratings.json';
 const maxQuestionId = Number(process.env.MAX_QUESTION_ID || 123);
+
+// --- Comments config -------------------------------------------------------
+// Comments use an append-only JSONL log (one line per comment) instead of the
+// rewrite-the-whole-file model the ratings store uses. Appending is O(1) per
+// write regardless of how large the log grows, which keeps writes cheap on a
+// tiny VM even as comments accumulate.
+const commentsFile = process.env.COMMENTS_FILE || '/data/comments.jsonl';
+const maxCommentLength = Number(process.env.MAX_COMMENT_LENGTH || 1000);
+const maxNameLength = Number(process.env.MAX_COMMENT_NAME_LENGTH || 24);
+const maxCommentsPerQuestion = Number(process.env.MAX_COMMENTS_PER_QUESTION || 500);
+// Minimal, deliberately loose anti-spam: repeated comments are allowed.
+const commentMinIntervalMs = Number(process.env.COMMENT_MIN_INTERVAL_MS || 5000);
+const commentWindowMs = Number(process.env.COMMENT_WINDOW_MS || 600000); // 10 min
+const commentMaxPerWindow = Number(process.env.COMMENT_MAX_PER_WINDOW || 30);
 
 const emptyStore = () => ({
   version: 1,
@@ -57,6 +71,98 @@ const persistStore = () => {
   return writeQueue;
 };
 
+// --- Comments store --------------------------------------------------------
+// In-memory index: questionId -> array of comments (oldest first). Backed by an
+// append-only JSONL file that we replay on startup.
+const commentsByQuestion = new Map();
+let commentAppendQueue = Promise.resolve();
+
+const loadComments = async () => {
+  commentsByQuestion.clear();
+  let raw = '';
+  try {
+    raw = await readFile(commentsFile, 'utf8');
+  } catch (error) {
+    if (error?.code !== 'ENOENT') {
+      console.warn(`Could not read ${commentsFile}; starting with no comments.`, error);
+    }
+    return;
+  }
+
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const entry = JSON.parse(trimmed);
+      const questionId = Number(entry.questionId);
+      if (!Number.isInteger(questionId)) continue;
+      const list = commentsByQuestion.get(questionId) || [];
+      list.push({
+        id: String(entry.id),
+        name: String(entry.name || '匿名'),
+        text: String(entry.text || ''),
+        createdAt: String(entry.createdAt),
+      });
+      commentsByQuestion.set(questionId, list);
+    } catch {
+      // Skip malformed lines rather than failing the whole load.
+    }
+  }
+};
+
+const appendComment = (entry) => {
+  commentAppendQueue = commentAppendQueue.then(async () => {
+    await mkdir(dirname(commentsFile), { recursive: true });
+    await appendFile(commentsFile, `${JSON.stringify(entry)}\n`);
+  });
+  return commentAppendQueue;
+};
+
+// Per-IP rate limiting, in memory only (resets on restart — fine for this use).
+const rateLog = new Map();
+
+const checkRateLimit = (ip) => {
+  const now = Date.now();
+  const history = (rateLog.get(ip) || []).filter((ts) => now - ts < commentWindowMs);
+
+  if (history.length && now - history[history.length - 1] < commentMinIntervalMs) {
+    return { ok: false, reason: '留言太頻繁，請稍候幾秒再試。' };
+  }
+  if (history.length >= commentMaxPerWindow) {
+    return { ok: false, reason: '短時間內留言次數過多，請稍後再試。' };
+  }
+
+  history.push(now);
+  rateLog.set(ip, history);
+  return { ok: true };
+};
+
+// Occasionally drop stale rate-limit entries so the map can't grow unbounded.
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, history] of rateLog) {
+    const fresh = history.filter((ts) => now - ts < commentWindowMs);
+    if (fresh.length) rateLog.set(ip, fresh);
+    else rateLog.delete(ip);
+  }
+}, commentWindowMs).unref();
+
+const getClientIp = (req) => {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.length) {
+    return forwarded.split(',')[0].trim();
+  }
+  return req.socket?.remoteAddress || 'unknown';
+};
+
+// Strip control chars (keep newline + tab) and clamp length.
+const sanitizeText = (value, maxLength) =>
+  String(value)
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '')
+    .trim()
+    .slice(0, maxLength);
+
 const summarizeQuestion = (questionId) => {
   const votes = Object.values(store.questions[String(questionId)]?.votes || {});
   const count = votes.length;
@@ -88,7 +194,7 @@ const readBody = (req) =>
     req.setEncoding('utf8');
     req.on('data', (chunk) => {
       body += chunk;
-      if (body.length > 4096) {
+      if (body.length > 16384) {
         reject(Object.assign(new Error('Request body too large'), { status: 413 }));
         req.destroy();
       }
@@ -106,7 +212,17 @@ const parseQuestionId = (pathname) => {
   return questionId;
 };
 
+const parseCommentQuestionId = (pathname) => {
+  const match = pathname.match(/^\/api\/comments\/(\d+)$/);
+  if (!match) return null;
+
+  const questionId = Number(match[1]);
+  if (!Number.isInteger(questionId) || questionId < 1 || questionId > maxQuestionId) return null;
+  return questionId;
+};
+
 await loadStore();
+await loadComments();
 
 createServer(async (req, res) => {
   try {
@@ -153,6 +269,57 @@ createServer(async (req, res) => {
       await persistStore();
 
       sendJson(res, 200, { rating: summarizeQuestion(questionId), myScore: score });
+      return;
+    }
+
+    const commentQuestionId = parseCommentQuestionId(url.pathname);
+    if (req.method === 'GET' && commentQuestionId) {
+      const list = commentsByQuestion.get(commentQuestionId) || [];
+      sendJson(res, 200, { comments: list });
+      return;
+    }
+
+    if (req.method === 'POST' && commentQuestionId) {
+      const bodyText = await readBody(req);
+      let body = {};
+      try {
+        body = bodyText ? JSON.parse(bodyText) : {};
+      } catch {
+        sendJson(res, 400, { error: 'request body must be valid JSON' });
+        return;
+      }
+
+      // Honeypot: bots tend to fill every field. Real users never see it, so a
+      // non-empty value means a bot. Pretend success without storing anything.
+      if (typeof body.website === 'string' && body.website.trim() !== '') {
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+
+      const text = sanitizeText(body.text ?? '', maxCommentLength);
+      if (!text) {
+        sendJson(res, 400, { error: '留言內容不可為空' });
+        return;
+      }
+
+      const rawName = sanitizeText(body.name ?? '', maxNameLength);
+      const name = rawName || '匿名';
+
+      const rate = checkRateLimit(getClientIp(req));
+      if (!rate.ok) {
+        sendJson(res, 429, { error: rate.reason });
+        return;
+      }
+
+      const comment = { id: randomUUID(), name, text, createdAt: new Date().toISOString() };
+      const list = commentsByQuestion.get(commentQuestionId) || [];
+      list.push(comment);
+      // Cap in-memory list so memory stays bounded; the full log stays on disk.
+      if (list.length > maxCommentsPerQuestion) list.splice(0, list.length - maxCommentsPerQuestion);
+      commentsByQuestion.set(commentQuestionId, list);
+      await appendComment({ questionId: commentQuestionId, ...comment });
+
+      sendJson(res, 200, { comment });
       return;
     }
 

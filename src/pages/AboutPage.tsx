@@ -1,6 +1,5 @@
 import { Link } from 'react-router-dom';
 import { Banknote, MessageSquare, SlidersHorizontal } from 'lucide-react';
-import { AdSlot } from '../AdSlot';
 
 export function AboutPage() {
   return (
@@ -38,8 +37,6 @@ export function AboutPage() {
       </p>
 
       <p className="about-credit">Credit: 公股銀行招考討論區 Jack/聯合哥</p>
-
-      <AdSlot slot="4444444444" label="贊助" />
     </div>
   );
 }

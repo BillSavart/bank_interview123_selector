@@ -12,6 +12,7 @@ services:
     environment:
       PORT: "3000"
       RATINGS_FILE: /data/ratings.json
+      COMMENTS_FILE: /data/comments.jsonl
       MAX_QUESTION_ID: "123"
     volumes:
       - ratings_data:/data
