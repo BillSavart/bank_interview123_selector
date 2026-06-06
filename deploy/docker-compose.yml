@@ -9,6 +9,11 @@ services:
   api:
     image: ${REGISTRY}/bank-interview-api:latest
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       PORT: "3000"
       RATINGS_FILE: /data/ratings.json
@@ -23,6 +28,11 @@ services:
   web:
     image: ${REGISTRY}/bank-interview-web:latest
     restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       DOMAIN: ${DOMAIN}
     ports:

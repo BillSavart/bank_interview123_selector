@@ -77,3 +77,9 @@ curl -I https://你的網域
 留言淨分數 `<= COMMENT_HIDE_SCORE` 時會預設隱藏，Docker Compose 目前設定為 `-100`；使用者仍可在前端切換顯示隱藏留言。
 
 這個檔案式方案適合 e2-micro 和小型題庫網站；若未來評分量成長到幾十萬筆以上，再改 SQLite 會比較適合。
+
+## 磁碟保護
+
+Docker Compose 已對 `web` 和 `api` container 設定 `json-file` log rotation，每個 container 最多保留 3 個 10MB log 檔。VM 一次性設定也可套用 [docker-daemon.json](docker-daemon.json) 到 `/etc/docker/daemon.json`，讓 Docker daemon 對其他 container 也使用相同上限。
+
+這些設定只處理 Docker 系統 log，不會清理或修改 `ratings_data` 裡的 `/data/ratings.json`、`/data/comments.jsonl`、`/data/comment-votes.jsonl` 使用者資料。

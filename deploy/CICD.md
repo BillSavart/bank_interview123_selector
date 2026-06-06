@@ -29,6 +29,16 @@ curl -fsSL https://get.docker.com | sudo sh
 sudo usermod -aG docker $USER
 ```
 
+設定 Docker daemon 的系統層級 log rotation，避免 30GB 小磁碟被 container stdout/stderr log 長期吃滿：
+
+```bash
+sudo mkdir -p /etc/docker
+sudo cp deploy/docker-daemon.json /etc/docker/daemon.json
+sudo systemctl restart docker
+```
+
+這只限制 Docker container log；不會清理或截斷 `ratings_data` volume 裡的評分、留言、留言投票檔案。
+
 e2-micro 建議加 swap，避免容器更新時記憶體太緊：
 
 ```bash
