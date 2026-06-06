@@ -1,10 +1,19 @@
-import { useEffect, useRef, useState } from 'react';
-import { MessageSquare, Send } from 'lucide-react';
-import { fetchComments, submitComment, type Comment } from '../lib/comments';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { MessageSquare, Send, ThumbsDown, ThumbsUp } from 'lucide-react';
+import {
+  fetchComments,
+  loadMyCommentVotes,
+  submitComment,
+  voteComment,
+  type Comment,
+  type CommentVote,
+} from '../lib/comments';
 
 interface CommentBoardProps {
   questionId: number;
 }
+
+type SortMode = 'votes' | 'time';
 
 const nameStorageKey = 'bank-interview-comment-name';
 
@@ -19,8 +28,8 @@ function formatTime(iso: string) {
   });
 }
 
-// Anonymous, per-question comment board. Mounts only when a question's answer
-// panel is expanded, so comments are fetched lazily on demand.
+// Anonymous, per-question comment board with up/down voting. Mounts only when a
+// question's answer panel is expanded, so comments are fetched lazily on demand.
 export function CommentBoard({ questionId }: CommentBoardProps) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,6 +37,9 @@ export function CommentBoard({ questionId }: CommentBoardProps) {
   const [name, setName] = useState(() => localStorage.getItem(nameStorageKey) || '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortMode>('votes');
+  const [showHidden, setShowHidden] = useState(false);
+  const [myVotes, setMyVotes] = useState<Record<string, CommentVote>>(() => loadMyCommentVotes());
   const honeypotRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -49,6 +61,18 @@ export function CommentBoard({ questionId }: CommentBoardProps) {
       isMounted = false;
     };
   }, [questionId]);
+
+  const sortedComments = useMemo(() => {
+    const list = [...comments];
+    if (sort === 'votes') {
+      list.sort((a, b) => b.score - a.score || b.createdAt.localeCompare(a.createdAt));
+    } else {
+      list.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    }
+    return list;
+  }, [comments, sort]);
+  const hiddenCount = comments.filter((comment) => comment.hidden).length;
+  const displayedComments = showHidden ? sortedComments : sortedComments.filter((comment) => !comment.hidden);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -75,29 +99,99 @@ export function CommentBoard({ questionId }: CommentBoardProps) {
     setSubmitting(false);
   };
 
+  const handleVote = async (comment: Comment, choice: CommentVote) => {
+    // Clicking your current vote again clears it; otherwise switch to it.
+    const nextValue: CommentVote | 0 = myVotes[comment.id] === choice ? 0 : choice;
+
+    const updated = await voteComment(questionId, comment.id, nextValue);
+    if (!updated) return;
+
+    setComments((current) => current.map((c) => (c.id === updated.id ? updated : c)));
+    setMyVotes((current) => {
+      const next = { ...current };
+      if (nextValue === 0) delete next[comment.id];
+      else next[comment.id] = nextValue;
+      return next;
+    });
+  };
+
   return (
     <section className="comment-board" aria-label={`第 ${questionId} 題留言板`}>
       <div className="comment-board-head">
         <MessageSquare size={16} />
         <span>留言板</span>
         <small>{comments.length} 則留言</small>
+        {comments.length > 0 && (
+          <select
+            className="comment-sort"
+            value={sort}
+            onChange={(event) => setSort(event.target.value as SortMode)}
+            aria-label="留言排序方式"
+          >
+            <option value="votes">依讚數排序</option>
+            <option value="time">依時間排序</option>
+          </select>
+        )}
+        {hiddenCount > 0 && (
+          <label className="comment-hidden-toggle">
+            <input
+              type="checkbox"
+              checked={showHidden}
+              onChange={(event) => setShowHidden(event.target.checked)}
+            />
+            <span>顯示隱藏留言</span>
+          </label>
+        )}
       </div>
 
       {loading ? (
         <p className="comment-empty">載入中…</p>
       ) : comments.length === 0 ? (
         <p className="comment-empty">還沒有留言，留下第一則吧。</p>
+      ) : displayedComments.length === 0 ? (
+        <p className="comment-empty">有 {hiddenCount} 則留言因評分過低被隱藏。</p>
       ) : (
         <ul className="comment-list">
-          {comments.map((comment) => (
-            <li key={comment.id} className="comment-item">
-              <div className="comment-item-head">
-                <strong>{comment.name}</strong>
-                <time dateTime={comment.createdAt}>{formatTime(comment.createdAt)}</time>
-              </div>
-              <p>{comment.text}</p>
-            </li>
-          ))}
+          {displayedComments.map((comment) => {
+            const myVote = myVotes[comment.id];
+            return (
+              <li key={comment.id} className={`comment-item${comment.hidden ? ' is-hidden' : ''}`}>
+                <div className="comment-votes">
+                  <button
+                    type="button"
+                    className={`comment-vote-btn${myVote === 1 ? ' is-active up' : ''}`}
+                    onClick={() => handleVote(comment, 1)}
+                    aria-label="讚"
+                    aria-pressed={myVote === 1}
+                  >
+                    <ThumbsUp size={15} />
+                    <span>{comment.up}</span>
+                  </button>
+                  <span className="comment-score" aria-label={`分數 ${comment.score}`}>
+                    {comment.score}
+                  </span>
+                  <button
+                    type="button"
+                    className={`comment-vote-btn${myVote === -1 ? ' is-active down' : ''}`}
+                    onClick={() => handleVote(comment, -1)}
+                    aria-label="倒讚"
+                    aria-pressed={myVote === -1}
+                  >
+                    <ThumbsDown size={15} />
+                    <span>{comment.down}</span>
+                  </button>
+                </div>
+                <div className="comment-body">
+                  <div className="comment-item-head">
+                    <strong>{comment.name}</strong>
+                    {comment.hidden && <span className="comment-hidden-badge">已隱藏</span>}
+                    <time dateTime={comment.createdAt}>{formatTime(comment.createdAt)}</time>
+                  </div>
+                  <p>{comment.text}</p>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
 

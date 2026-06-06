@@ -1,6 +1,6 @@
 # 部署到 GCP e2-micro + Cloudflare 網域
 
-這個專案主體是靜態 SPA。答案在 build 後由前端規則與題庫標籤產生；參考答案評分另外用一個輕量 Node API 儲存在 VM 本機 Docker volume，不需要 Firebase、外部資料庫、LLM key、Vercel 或後端 proxy。
+這個專案主體是靜態 SPA。答案在 build 後由前端規則與題庫標籤產生；參考答案評分、匿名留言與留言投票另外用一個輕量 Node API 儲存在 VM 本機 Docker volume，不需要 Firebase、外部資料庫、LLM key、Vercel 或後端 proxy。
 
 ## 架構
 
@@ -15,7 +15,7 @@ GCP e2-micro VM
   |
   |- Caddy web container -> /srv 靜態檔
   |
-  `- ratings api container -> ratings_data/ratings.json
+  `- ratings api container -> ratings_data/{ratings.json,comments.jsonl,comment-votes.jsonl}
 ```
 
 ## 建 VM
@@ -64,10 +64,16 @@ sudo systemctl reload caddy
 curl -I https://你的網域
 ```
 
-應該看到 `200` 或 `304`，且首頁能正常載入題庫、展開答案與參考答案評分。
+應該看到 `200` 或 `304`，且首頁能正常載入題庫、展開答案、參考答案評分與留言板。
 
-## 評分資料
+## 使用者資料
 
-評分資料存在 Docker volume `ratings_data` 的 `/data/ratings.json`。同一瀏覽器同一題再次評分會覆蓋原本分數，因此不會重複增加人數。
+使用者互動資料存在 Docker volume `ratings_data`：
+
+- `/data/ratings.json`：參考答案 1-5 顆星評分。同一瀏覽器同一題再次評分會覆蓋原本分數，因此不會重複增加人數。
+- `/data/comments.jsonl`：匿名留言，append-only JSONL。
+- `/data/comment-votes.jsonl`：留言讚/倒讚紀錄，append-only JSONL，同一瀏覽器同一則留言最後一次投票為準。
+
+留言淨分數 `<= COMMENT_HIDE_SCORE` 時會預設隱藏，Docker Compose 目前設定為 `-100`；使用者仍可在前端切換顯示隱藏留言。
 
 這個檔案式方案適合 e2-micro 和小型題庫網站；若未來評分量成長到幾十萬筆以上，再改 SQLite 會比較適合。

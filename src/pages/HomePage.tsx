@@ -210,6 +210,7 @@ export function HomePage() {
               <p className="hero-copy mb-0">
                 依照考生背景排序 123 題常見口試題，快速抓出最該優先練的動機題、情境題、業務題與時事題。
                 選好條件後可直接展開每題的答題方向與示範回答。
+                <span className="hero-credit">Credit: 公股銀行招考討論區 Jack/聯合哥</span>
               </p>
             </div>
             <div className="col-lg-5">

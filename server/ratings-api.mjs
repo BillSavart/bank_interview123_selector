@@ -13,6 +13,8 @@ const maxQuestionId = Number(process.env.MAX_QUESTION_ID || 123);
 // write regardless of how large the log grows, which keeps writes cheap on a
 // tiny VM even as comments accumulate.
 const commentsFile = process.env.COMMENTS_FILE || '/data/comments.jsonl';
+// Upvote/downvote log for comments (append-only; last write per voter wins).
+const commentVotesFile = process.env.COMMENT_VOTES_FILE || '/data/comment-votes.jsonl';
 const maxCommentLength = Number(process.env.MAX_COMMENT_LENGTH || 1000);
 const maxNameLength = Number(process.env.MAX_COMMENT_NAME_LENGTH || 24);
 const maxCommentsPerQuestion = Number(process.env.MAX_COMMENTS_PER_QUESTION || 500);
@@ -20,6 +22,8 @@ const maxCommentsPerQuestion = Number(process.env.MAX_COMMENTS_PER_QUESTION || 5
 const commentMinIntervalMs = Number(process.env.COMMENT_MIN_INTERVAL_MS || 5000);
 const commentWindowMs = Number(process.env.COMMENT_WINDOW_MS || 600000); // 10 min
 const commentMaxPerWindow = Number(process.env.COMMENT_MAX_PER_WINDOW || 30);
+// Comments at or below this net score are auto-hidden (users can still reveal them).
+const commentHideScore = Number(process.env.COMMENT_HIDE_SCORE || -100);
 
 const emptyStore = () => ({
   version: 1,
@@ -73,12 +77,16 @@ const persistStore = () => {
 
 // --- Comments store --------------------------------------------------------
 // In-memory index: questionId -> array of comments (oldest first). Backed by an
-// append-only JSONL file that we replay on startup.
+// append-only JSONL file that we replay on startup. Each comment also carries a
+// `votes` map (voterId -> 1 | -1); commentById gives O(1) lookup for voting.
 const commentsByQuestion = new Map();
+const commentById = new Map();
 let commentAppendQueue = Promise.resolve();
+let voteAppendQueue = Promise.resolve();
 
 const loadComments = async () => {
   commentsByQuestion.clear();
+  commentById.clear();
   let raw = '';
   try {
     raw = await readFile(commentsFile, 'utf8');
@@ -97,15 +105,46 @@ const loadComments = async () => {
       const questionId = Number(entry.questionId);
       if (!Number.isInteger(questionId)) continue;
       const list = commentsByQuestion.get(questionId) || [];
-      list.push({
+      const comment = {
         id: String(entry.id),
         name: String(entry.name || '匿名'),
         text: String(entry.text || ''),
         createdAt: String(entry.createdAt),
-      });
+        votes: {},
+      };
+      list.push(comment);
+      commentById.set(comment.id, comment);
       commentsByQuestion.set(questionId, list);
     } catch {
       // Skip malformed lines rather than failing the whole load.
+    }
+  }
+};
+
+// Replay the vote log onto the loaded comments (last write per voter wins).
+const loadVotes = async () => {
+  let raw = '';
+  try {
+    raw = await readFile(commentVotesFile, 'utf8');
+  } catch (error) {
+    if (error?.code !== 'ENOENT') {
+      console.warn(`Could not read ${commentVotesFile}; starting with no votes.`, error);
+    }
+    return;
+  }
+
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const entry = JSON.parse(trimmed);
+      const comment = commentById.get(String(entry.commentId));
+      if (!comment) continue;
+      const value = Number(entry.value);
+      if (value === 0) delete comment.votes[entry.voterId];
+      else if (value === 1 || value === -1) comment.votes[entry.voterId] = value;
+    } catch {
+      // Skip malformed lines.
     }
   }
 };
@@ -116,6 +155,40 @@ const appendComment = (entry) => {
     await appendFile(commentsFile, `${JSON.stringify(entry)}\n`);
   });
   return commentAppendQueue;
+};
+
+const appendVote = (entry) => {
+  voteAppendQueue = voteAppendQueue.then(async () => {
+    await mkdir(dirname(commentVotesFile), { recursive: true });
+    await appendFile(commentVotesFile, `${JSON.stringify(entry)}\n`);
+  });
+  return voteAppendQueue;
+};
+
+// up/down counts and net score from a votes map.
+const tallyVotes = (votes) => {
+  let up = 0;
+  let down = 0;
+  for (const v of Object.values(votes || {})) {
+    if (v === 1) up += 1;
+    else if (v === -1) down += 1;
+  }
+  return { up, down, score: up - down };
+};
+
+// Shape returned to clients (no raw voter map).
+const publicComment = (comment) => {
+  const { up, down, score } = tallyVotes(comment.votes);
+  return {
+    id: comment.id,
+    name: comment.name,
+    text: comment.text,
+    createdAt: comment.createdAt,
+    up,
+    down,
+    score,
+    hidden: score <= commentHideScore,
+  };
 };
 
 // Per-IP rate limiting, in memory only (resets on restart — fine for this use).
@@ -221,8 +294,18 @@ const parseCommentQuestionId = (pathname) => {
   return questionId;
 };
 
+const parseCommentVote = (pathname) => {
+  const match = pathname.match(/^\/api\/comments\/(\d+)\/([a-f0-9-]{36})\/vote$/);
+  if (!match) return null;
+
+  const questionId = Number(match[1]);
+  if (!Number.isInteger(questionId) || questionId < 1 || questionId > maxQuestionId) return null;
+  return { questionId, commentId: match[2] };
+};
+
 await loadStore();
 await loadComments();
+await loadVotes();
 
 createServer(async (req, res) => {
   try {
@@ -275,7 +358,7 @@ createServer(async (req, res) => {
     const commentQuestionId = parseCommentQuestionId(url.pathname);
     if (req.method === 'GET' && commentQuestionId) {
       const list = commentsByQuestion.get(commentQuestionId) || [];
-      sendJson(res, 200, { comments: list });
+      sendJson(res, 200, { comments: list.map(publicComment) });
       return;
     }
 
@@ -311,15 +394,56 @@ createServer(async (req, res) => {
         return;
       }
 
-      const comment = { id: randomUUID(), name, text, createdAt: new Date().toISOString() };
+      const comment = { id: randomUUID(), name, text, createdAt: new Date().toISOString(), votes: {} };
       const list = commentsByQuestion.get(commentQuestionId) || [];
       list.push(comment);
       // Cap in-memory list so memory stays bounded; the full log stays on disk.
-      if (list.length > maxCommentsPerQuestion) list.splice(0, list.length - maxCommentsPerQuestion);
+      if (list.length > maxCommentsPerQuestion) {
+        const removed = list.splice(0, list.length - maxCommentsPerQuestion);
+        for (const old of removed) commentById.delete(old.id);
+      }
       commentsByQuestion.set(commentQuestionId, list);
-      await appendComment({ questionId: commentQuestionId, ...comment });
+      commentById.set(comment.id, comment);
+      await appendComment({ questionId: commentQuestionId, id: comment.id, name, text, createdAt: comment.createdAt });
 
-      sendJson(res, 200, { comment });
+      sendJson(res, 200, { comment: publicComment(comment) });
+      return;
+    }
+
+    const voteTarget = parseCommentVote(url.pathname);
+    if (req.method === 'POST' && voteTarget) {
+      const bodyText = await readBody(req);
+      let body = {};
+      try {
+        body = bodyText ? JSON.parse(bodyText) : {};
+      } catch {
+        sendJson(res, 400, { error: 'request body must be valid JSON' });
+        return;
+      }
+
+      const voterId = typeof body.voterId === 'string' ? body.voterId.trim() : '';
+      const value = Number(body.value);
+
+      if (!/^[a-zA-Z0-9_-]{12,80}$/.test(voterId)) {
+        sendJson(res, 400, { error: 'voterId is invalid' });
+        return;
+      }
+      if (![1, 0, -1].includes(value)) {
+        sendJson(res, 400, { error: 'value must be 1, 0, or -1' });
+        return;
+      }
+
+      const comment = commentById.get(voteTarget.commentId);
+      if (!comment) {
+        sendJson(res, 404, { error: 'comment not found' });
+        return;
+      }
+
+      if (value === 0) delete comment.votes[voterId];
+      else comment.votes[voterId] = value;
+      await appendVote({ commentId: comment.id, voterId, value });
+
+      sendJson(res, 200, { comment: publicComment(comment) });
       return;
     }
 

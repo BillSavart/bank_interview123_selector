@@ -13,6 +13,8 @@ services:
       PORT: "3000"
       RATINGS_FILE: /data/ratings.json
       COMMENTS_FILE: /data/comments.jsonl
+      COMMENT_VOTES_FILE: /data/comment-votes.jsonl
+      COMMENT_HIDE_SCORE: "-100"
       MAX_QUESTION_ID: "123"
     volumes:
       - ratings_data:/data
