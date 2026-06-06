@@ -93,7 +93,7 @@ export function renderStoredAnswer(question: InterviewQuestion, profile: Candida
     '答題重點：',
     ...entry.keyPoints.map((point) => `- ${point}`),
     '',
-    '示範回答：',
+    'ChatGPT 5.5 Thinking 示範回答：',
     entry.answer,
     ...(matchedVariants.length
       ? [
