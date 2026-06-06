@@ -76,7 +76,7 @@
       "description": "這張票可以收嗎？",
       "images": ["/checkgame/21.jpg", "/checkgame/22.jpg"],
       "answer": "can",
-      "explanation": "可以收，多蓋負責人印是沒關係的。"
+      "explanation": "可以收，沒有禁背的情況下，多蓋負責人印是沒關係的。如果有禁背的話要註明是負責人才不會有爭議。"
     },
     {
       "id": 12,
