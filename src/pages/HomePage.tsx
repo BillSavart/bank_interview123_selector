@@ -65,6 +65,8 @@ export function HomePage() {
   const [ratings, setRatings] = useState<RatingMap>({});
   const [myScores, setMyScores] = useState<Record<number, number>>(() => loadLocalScores());
   const [savingRatings, setSavingRatings] = useState<Set<number>>(() => new Set());
+  // Once the user drags the 顯示題數 slider, stop auto-adjusting it.
+  const [practiceSizeTouched, setPracticeSizeTouched] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -132,6 +134,7 @@ export function HomePage() {
 
   const handleResetFilters = () => {
     setProfile(defaultProfile);
+    setPracticeSizeTouched(false);
     setKeyword('');
     setActiveCategory('全部');
     setActiveDifficulty('全部');
@@ -174,12 +177,22 @@ export function HomePage() {
   };
 
   const updateProfile = <K extends keyof CandidateProfile>(key: K, value: CandidateProfile[K]) => {
+    if (key === 'practiceSize') setPracticeSizeTouched(true);
+
     setProfile((current) => {
+      const next: CandidateProfile = { ...current, [key]: value };
+
       if (key === 'hasBankExperience' && value !== 'yes') {
-        return { ...current, hasBankExperience: value as CandidateProfile['hasBankExperience'], bankYears: defaultProfile.bankYears };
+        next.bankYears = defaultProfile.bankYears;
       }
 
-      return { ...current, [key]: value };
+      // Auto display-count until the user drags the slider:
+      // nothing selected → all 123, any condition selected → 20.
+      if (key !== 'practiceSize' && !practiceSizeTouched) {
+        next.practiceSize = isProfileEmpty(next) ? interviewQuestions.length : 20;
+      }
+
+      return next;
     });
   };
 
