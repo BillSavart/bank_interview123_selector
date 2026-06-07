@@ -213,7 +213,11 @@ function parseSheet(file) {
   for (const rm of xml.matchAll(/<row[^>]*r="(\d+)"[^>]*>([\s\S]*?)<\/row>/g)) {
     const rn = rm[1];
     const cells = {};
-    for (const cm of rm[2].matchAll(/<c r="([A-Z]+)\d+"(?: s="(\d+)")?(?: t="(\w+)")?[^>]*>(?:<v>([\s\S]*?)<\/v>)?<\/c>/g)) {
+    // Match BOTH <c .../> (self-closing, blank-but-styled — these carry the fill
+    // colour of a combined-district cell whose score sits in a partner cell) and
+    // the full <c>…<v>…</v></c> form. Missing the self-closing form was dropping
+    // shared-district scores and showing them as 未開缺.
+    for (const cm of rm[2].matchAll(/<c r="([A-Z]+)\d+"(?: s="(\d+)")?(?: t="(\w+)")?[^>]*?(?:\/>|>(?:<v>([\s\S]*?)<\/v>)?<\/c>)/g)) {
       const col = colToNum(cm[1]);
       const s = cm[2] ? Number(cm[2]) : 0;
       const raw = cm[3] === "s" && cm[4] !== undefined ? strs[Number(cm[4])] : cm[4];
@@ -238,22 +242,26 @@ function parseSheet(file) {
   return { rounds, rows: parsed };
 }
 
-// Combined-district sharing: regions sharing a fill colour form a group; in any
-// round where exactly one group member has a numeric value, the blank members
-// inherit it (years where members ran separately keep their own values).
+// Combined-district sharing, evaluated PER YEAR by cell fill colour: in a given
+// round, all cells sharing a fill colour are one exam district and share its one
+// score, so blank-but-coloured cells inherit the valued cell of the same colour.
+// Uncoloured cells (incl. 不詳) are NOT part of any district and keep their own
+// value. Done per-column so a region only shares in the years it's actually
+// coloured (e.g. 南投 shares with 彰化 in 105–107一招, runs alone afterwards).
 function applySharing(rounds, rows) {
-  const groups = {}; // color -> Set(region index)
-  rows.forEach((r, ri) => {
-    for (const c of r.colors) if (c) (groups[c] ||= new Set()).add(ri);
-  });
-  for (const set of Object.values(groups)) {
-    if (set.size < 2) continue;
-    const members = [...set];
-    for (let k = 0; k < rounds.length; k++) {
-      const present = members.map((ri) => rows[ri].vals[k]).filter((v) => v != null);
-      const distinct = [...new Set(present)];
-      if (distinct.length === 1) {
-        for (const ri of members) if (rows[ri].vals[k] == null) rows[ri].vals[k] = distinct[0];
+  for (let k = 0; k < rounds.length; k++) {
+    const byColor = {}; // color -> { values:Set, blanks:[rowIdx] }
+    rows.forEach((r, ri) => {
+      const c = r.colors[k];
+      if (!c) return;
+      const g = (byColor[c] ||= { values: new Set(), blanks: [] });
+      if (r.vals[k] != null) g.values.add(r.vals[k]);
+      else g.blanks.push(ri);
+    });
+    for (const g of Object.values(byColor)) {
+      if (g.values.size === 1) {
+        const v = [...g.values][0];
+        for (const ri of g.blanks) rows[ri].vals[k] = v;
       }
     }
   }
