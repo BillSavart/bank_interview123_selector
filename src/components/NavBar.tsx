@@ -1,22 +1,34 @@
 import { useState } from 'react';
-import { NavLink } from 'react-router-dom';
-import { Banknote, Download, Mail, Menu, X } from 'lucide-react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { Banknote, ChevronDown, Download, Mail, Menu, X } from 'lucide-react';
 
 const navItems = [
   { to: '/', label: '面試題目篩選', end: true },
   { to: '/calendar', label: '招考行事曆' },
+  { to: '/scores-map', label: '筆試門檻' },
+  { to: '/about', label: '使用說明' },
+];
+
+const gameItems = [
   { to: '/number-trainer', label: '大寫數字訓練器' },
   { to: '/check-game', label: '支票審查員' },
-  { to: '/about', label: '使用說明' },
 ];
 
 export function NavBar() {
   const [open, setOpen] = useState(false);
+  const [gameOpen, setGameOpen] = useState(false);
+  const location = useLocation();
+  const isGameActive = gameItems.some((item) => location.pathname.startsWith(item.to));
+
+  const closeNav = () => {
+    setOpen(false);
+    setGameOpen(false);
+  };
 
   return (
     <header className="site-nav">
       <div className="container site-nav-inner">
-        <NavLink to="/" className="nav-brand" onClick={() => setOpen(false)}>
+        <NavLink to="/" className="nav-brand" onClick={closeNav}>
           <Banknote size={20} />
           <span>公股銀行新手村</span>
         </NavLink>
@@ -38,22 +50,45 @@ export function NavBar() {
               to={item.to}
               end={item.end}
               className={({ isActive }) => (isActive ? 'is-active' : '')}
-              onClick={() => setOpen(false)}
+              onClick={closeNav}
             >
               {item.label}
             </NavLink>
           ))}
+          <div className={`nav-game ${gameOpen ? 'is-open' : ''}`}>
+            <button
+              className={`nav-game-toggle ${isGameActive ? 'is-active' : ''}`}
+              type="button"
+              aria-expanded={gameOpen}
+              onClick={() => setGameOpen((v) => !v)}
+            >
+              遊戲專區
+              <ChevronDown size={15} />
+            </button>
+            <div className="nav-game-menu">
+              {gameItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) => (isActive ? 'is-active' : '')}
+                  onClick={closeNav}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
           <a
             className="nav-pdf"
             href="https://forms.gle/2Yw4mvY91sj1uKcU8"
             target="_blank"
             rel="noreferrer"
-            onClick={() => setOpen(false)}
+            onClick={closeNav}
           >
             <Mail size={16} />
             聯絡我們
           </a>
-          <a className="nav-pdf" href="/20260515bank123.pdf" target="_blank" rel="noreferrer" onClick={() => setOpen(false)}>
+          <a className="nav-pdf" href="/20260515bank123.pdf" target="_blank" rel="noreferrer" onClick={closeNav}>
             <Download size={16} />
             題庫 PDF
           </a>
