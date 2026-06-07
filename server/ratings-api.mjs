@@ -596,10 +596,21 @@ const summarizeAll = () =>
     .filter((summary) => summary.count > 0)
     .sort((a, b) => a.questionId - b.questionId);
 
-const sendJson = (res, status, payload) => {
+// Short edge-cache TTLs for PUBLIC reads only. `max-age=0` keeps browsers
+// revalidating (so a user's own writes, which update from POST responses, never
+// look stale), while `s-maxage` lets Cloudflare's shared cache absorb repeat
+// reads for a few seconds — that's what keeps the e2-micro origin idle under
+// load. Everything else (POST results, admin reads, health) keeps the default
+// no-store so writes are always immediate.
+// NOTE: Cloudflare treats /api/* as dynamic by default — add a Cache Rule for
+// "/api/*" (method GET) set to "Eligible for cache / respect origin TTL" for
+// these headers to take effect at the edge. Browser revalidation works regardless.
+const cacheRead = 'public, max-age=0, s-maxage=10';
+
+const sendJson = (res, status, payload, cacheControl = 'no-store') => {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
-    'Cache-Control': 'no-store',
+    'Cache-Control': cacheControl,
   });
   res.end(JSON.stringify(payload));
 };
@@ -663,7 +674,7 @@ createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname === '/api/ratings') {
-      sendJson(res, 200, { ratings: summarizeAll() });
+      sendJson(res, 200, { ratings: summarizeAll() }, cacheRead);
       return;
     }
 
@@ -671,7 +682,7 @@ createServer(async (req, res) => {
     // Public read.
     if (req.method === 'GET' && url.pathname === '/api/calendar') {
       // Filter by the current window in case it shifted since the last write.
-      sendJson(res, 200, { events: calendarEvents.filter(eventInWindow) });
+      sendJson(res, 200, { events: calendarEvents.filter(eventInWindow) }, cacheRead);
       return;
     }
 
@@ -817,7 +828,7 @@ createServer(async (req, res) => {
 
     const leaderboardMatch = url.pathname.match(/^\/api\/([a-z]+)\/leaderboard$/);
     if (req.method === 'GET' && leaderboardMatch && leaderboards[leaderboardMatch[1]]) {
-      sendJson(res, 200, { leaderboard: leaderboards[leaderboardMatch[1]].leaderboard() });
+      sendJson(res, 200, { leaderboard: leaderboards[leaderboardMatch[1]].leaderboard() }, cacheRead);
       return;
     }
 
@@ -902,7 +913,7 @@ createServer(async (req, res) => {
     const commentQuestionId = parseCommentQuestionId(url.pathname);
     if (req.method === 'GET' && commentQuestionId) {
       const list = commentsByQuestion.get(commentQuestionId) || [];
-      sendJson(res, 200, { comments: list.map(publicComment) });
+      sendJson(res, 200, { comments: list.map(publicComment) }, cacheRead);
       return;
     }
 

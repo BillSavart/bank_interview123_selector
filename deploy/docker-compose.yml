@@ -50,6 +50,13 @@ services:
     volumes:
       - caddy_data:/data # persists Let's Encrypt certs across restarts
       - caddy_config:/config
+      # Cloudflare Origin Certificate (15-yr). Place origin.pem + origin.key in
+      # ./certs next to this file; Caddy serves them instead of doing ACME, so
+      # cert renewal no longer needs inbound 80/443 — safe to firewall the origin
+      # down to Cloudflare's IP ranges only. Requires Cloudflare SSL/TLS mode
+      # "Full (strict)". For local HTTP-only testing (DOMAIN=:80) this mount is
+      # harmless as long as the Caddyfile's `tls` lines aren't hit on :80.
+      - ./certs:/certs:ro
     mem_limit: 96m
     depends_on:
       - api

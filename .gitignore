@@ -1,6 +1,13 @@
 # macOS
 .DS_Store
 
+# Cloudflare Origin Certificate — secret, never commit
+deploy/certs/
+origin.pem
+origin.key
+*.pem
+*.key
+
 # Node / Vite
 node_modules/
 npm-debug.log*

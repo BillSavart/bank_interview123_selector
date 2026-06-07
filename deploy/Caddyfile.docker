@@ -13,6 +13,14 @@
 {$DOMAIN} {
 	encode zstd gzip
 
+	# Serve the Cloudflare Origin Certificate (mounted at /certs) instead of
+	# provisioning Let's Encrypt. This removes the ACME inbound dependency, so
+	# the GCP firewall can be locked to Cloudflare's IP ranges only. Pair with
+	# Cloudflare SSL/TLS mode "Full (strict)".
+	# NOTE: incompatible with DOMAIN=:80 plain-HTTP local testing — comment this
+	# line out (or use the host deploy/Caddyfile) for that.
+	tls /certs/origin.pem /certs/origin.key
+
 	handle /api/* {
 		reverse_proxy api:3000
 	}
@@ -32,6 +40,10 @@
 
 {$ADMIN_DOMAIN:admin.localhost} {
 	encode zstd gzip
+
+	# Same Cloudflare Origin Certificate as the main site (it covers the apex +
+	# a wildcard, or add the admin host when generating it). See note above.
+	tls /certs/origin.pem /certs/origin.key
 
 	# Optional edge auth — uncomment to require a browser login on top of the
 	# in-app ADMIN_TOKEN. Generate the hash with: caddy hash-password
