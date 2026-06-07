@@ -70,7 +70,10 @@ const NON_GEO = new Set([
   "櫃台組雙北", "櫃台組台北", "金融組台北", "不分區", "專業人員（一）", "專業人員（二）",
 ]);
 // per-bank round (column) labels to drop entirely from the dataset
-const ROUND_EXCLUDE = { "土地銀行": new Set(["114總行"]) };
+const ROUND_EXCLUDE = {
+  "土地銀行": new Set(["114總行"]),
+  "第一銀行": new Set(["114一招業務菁英"]), // empty column (no scores)
+};
 
 // ---------- geometry: Douglas-Peucker + equirectangular projection ----------
 function perpDist(p, a, b) {
