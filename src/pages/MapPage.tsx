@@ -398,7 +398,6 @@ export function MapPage() {
             </div>
           </div>
         </div>
-        <span className="map-toolbar-note">{bank.rounds.length} 個梯次 · {bank.regions.length} 個職缺地區</span>
       </div>
 
       <div className="map-layout">

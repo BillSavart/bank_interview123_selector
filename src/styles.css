@@ -2887,12 +2887,6 @@ select {
   margin-bottom: 1rem;
 }
 
-.map-toolbar-note {
-  color: #94a3b8;
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
 .map-round-picker {
   position: relative;
   min-width: min(100%, 320px);

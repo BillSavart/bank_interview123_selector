@@ -41,6 +41,15 @@ export function AboutPage() {
       </p>
 
       <h2 className="about-h2">
+        <MessageSquare size={18} /> 關於內容與免責聲明
+      </h2>
+      <p className="about-text">
+        本站答題內容僅供準備方向參考，不會即時呼叫外部 AI；實際面試仍應以自身經歷、報考銀行與職缺內容為主。
+        行事曆日期請以各招考單位的正式公告為準。本站為非官方學習工具，與任何銀行或招考單位無關，
+        題庫內容整理自公開資源，著作權仍屬原作者。
+      </p>
+
+      <h2 className="about-h2">
         <SlidersHorizontal size={18} /> 面試題目篩選
       </h2>
       <p className="about-text">
@@ -104,15 +113,6 @@ export function AboutPage() {
         <li>答對得分，作答越快分數越高；答錯或逾時不得分。每題會附上正解說明。</li>
         <li>結束後成績會上傳排行榜，看看你排第幾名。</li>
       </ol>
-
-      <h2 className="about-h2">
-        <MessageSquare size={18} /> 關於內容與免責聲明
-      </h2>
-      <p className="about-text">
-        本站答題內容僅供準備方向參考，不會即時呼叫外部 AI；實際面試仍應以自身經歷、報考銀行與職缺內容為主。
-        行事曆日期請以各招考單位的正式公告為準。本站為非官方學習工具，與任何銀行或招考單位無關，
-        題庫內容整理自公開資源，著作權仍屬原作者。
-      </p>
 
       <h2 className="about-h2">
         <Mail size={18} /> 聯絡我們
