@@ -16,6 +16,10 @@ import { CommentBoard } from '../components/CommentBoard';
 import { categorySummary, defaultProfile, isProfileEmpty, scoreQuestion, tagLabels } from '../lib/scoring';
 import { fetchRatings, loadLocalScores, submitRating, type RatingMap } from '../lib/ratings';
 import type { CandidateProfile, InterviewQuestion } from '../data/types';
+import { AdSlot, AD_ENABLED } from '../AdSlot';
+
+// One ad before the first question, then one after every 8 questions.
+const AD_EVERY = 8;
 
 interface AnswerRatingProps {
   questionId: number;
@@ -309,8 +313,13 @@ export function HomePage() {
               </div>
 
               <div className="question-list">
-                {rankedQuestions.map(({ question, score, reasons }) => (
+                {rankedQuestions.map(({ question, score, reasons }, index) => (
                   <Fragment key={question.id}>
+                    {AD_ENABLED && index % AD_EVERY === 0 && (
+                      <div className="question-ad">
+                        <AdSlot slot="home-feed" label="贊助" />
+                      </div>
+                    )}
                     <article className="question-card">
                       <div className="question-rank">
                         <span>#{question.id}</span>
