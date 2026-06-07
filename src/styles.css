@@ -1183,6 +1183,18 @@ select {
   min-height: 90px;
 }
 
+.site-ad {
+  margin: 1.5rem auto 0.5rem;
+}
+
+.site-ad-top {
+  margin: 1rem auto 0;
+}
+
+.question-ad {
+  margin: 0.25rem 0 1rem;
+}
+
 .ad-slot-placeholder {
   display: flex;
   align-items: center;
@@ -1407,6 +1419,12 @@ select {
   color: #17212b;
   font-size: 0.85rem;
   font-weight: 750;
+}
+
+.about-updated {
+  margin-top: 0.4rem;
+  color: #94a3b8;
+  font-size: 0.8rem;
 }
 
 /* --- mobile nav --- */
@@ -1834,6 +1852,123 @@ select {
   margin-bottom: 1rem;
 }
 
+/* --- 大寫數字訓練器 ------------------------------------------------------- */
+.numbergame-prompt-label {
+  margin: 1.1rem 0 0.6rem;
+  color: #64748b;
+  font-size: 0.92rem;
+}
+
+/* 支票題：整串大寫金額，仿支票橫書。 */
+.numbergame-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  padding: 1.1rem 1.2rem;
+  border: 2px solid #cbd5e1;
+  border-radius: 12px;
+  background: #fbfdfc;
+  font-size: clamp(1.5rem, 5.5vw, 2.3rem);
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #0f172a;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.numbergame-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.3rem;
+  justify-content: center;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.numbergame-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  flex: 0 0 auto;
+}
+
+.numbergame-head {
+  font-size: clamp(0.7rem, 2.6vw, 0.85rem);
+  color: #64748b;
+  font-weight: 700;
+}
+
+/* The grid cells now DISPLAY the question (大寫 / 零 / 打叉), not user input. */
+.numbergame-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(1.9rem, 8vw, 2.8rem);
+  height: clamp(2.4rem, 9vw, 3.2rem);
+  font-size: clamp(1.1rem, 4vw, 1.6rem);
+  font-weight: 800;
+  border: 2px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #0f172a;
+}
+
+.numbergame-cell.is-zero {
+  color: #0f172a;
+}
+
+.numbergame-cell.is-cross {
+  color: #cbd5e1;
+  background: #f8fafc;
+}
+
+/* Answer box with thousands separators. */
+.numbergame-answer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.numbergame-answer-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 3rem;
+  padding: 0 0.9rem;
+  font-size: clamp(1.2rem, 4vw, 1.6rem);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  letter-spacing: 0.02em;
+  border: 2px solid #cbd5e1;
+  border-radius: 11px;
+  background: #fff;
+  color: #0f172a;
+}
+
+.numbergame-answer-input:focus {
+  outline: none;
+  border-color: #0f4f49;
+  box-shadow: 0 0 0 3px rgba(15, 79, 73, 0.15);
+}
+
+.numbergame-answer-input:disabled {
+  background: #f8fafc;
+}
+
+.numbergame-answer-unit {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #475569;
+}
+
+.numbergame-submit {
+  margin-top: 1.1rem;
+  width: 100%;
+}
+
 /* result */
 .checkgame-result {
   text-align: center;
@@ -1953,5 +2088,634 @@ select {
 @media (max-width: 600px) {
   .checkgame-card {
     padding: 1rem 0.85rem;
+  }
+}
+
+/* === 招考行事曆（月曆） ===================================================== */
+.calendar-page {
+  max-width: 980px;
+}
+
+.calendar-empty {
+  color: #64748b;
+  padding: 2rem 0;
+  text-align: center;
+}
+
+.cal-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin: 0.6rem 0 0.5rem;
+}
+
+.cal-month-title {
+  font-size: clamp(1.4rem, 4vw, 1.9rem);
+  font-weight: 800;
+  margin: 0;
+  color: #0f172a;
+}
+
+.cal-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cal-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 1px solid #d7e0df;
+  border-radius: 8px;
+  background: #fff;
+  color: #17313d;
+  cursor: pointer;
+}
+
+.cal-nav-btn:hover:not(:disabled) {
+  background: #eef5f4;
+}
+
+.cal-nav-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.cal-today-btn {
+  border: 1px solid #d7e0df;
+  border-radius: 8px;
+  background: #fff;
+  color: #17313d;
+  font-weight: 700;
+  padding: 0 0.85rem;
+  height: 2.2rem;
+  cursor: pointer;
+}
+
+.cal-today-btn:hover {
+  background: #eef5f4;
+}
+
+.cal-legend {
+  display: flex;
+  gap: 1.2rem;
+  margin-bottom: 0.75rem;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.cal-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.cal-legend-swatch {
+  width: 1.1rem;
+  height: 0.7rem;
+  border-radius: 3px;
+}
+
+.cal-legend-swatch.is-signup {
+  background: #cdeae5;
+}
+
+.cal-legend-swatch.is-written {
+  background: #0f4f49;
+}
+
+.cal-legend-swatch.is-writtenResult {
+  background: #fde68a;
+}
+
+.cal-legend-swatch.is-interview {
+  background: #bfdbfe;
+}
+
+.cal-legend-swatch.is-interview2 {
+  background: #ddd6fe;
+}
+
+.cal-legend-swatch.is-final {
+  background: #fecdd3;
+}
+
+/* Grid */
+.cal-grid {
+  border: 1px solid #dce3e2;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.cal-weekday-row {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  background: #f4f6f7;
+  border-bottom: 1px solid #dce3e2;
+}
+
+.cal-weekday {
+  text-align: center;
+  padding: 0.45rem 0;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #64748b;
+}
+
+.cal-week {
+  position: relative;
+  border-bottom: 1px solid #eef2f1;
+}
+
+.cal-week:last-child {
+  border-bottom: 0;
+}
+
+.cal-week-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  height: 100%;
+}
+
+.cal-day {
+  min-height: 100%;
+  border-right: 1px solid #eef2f1;
+  padding: 0.25rem;
+}
+
+.cal-day:last-child {
+  border-right: 0;
+}
+
+.cal-day.is-other {
+  background: #fafbfb;
+}
+
+.cal-day-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.6rem;
+  height: 1.6rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.cal-day.is-other .cal-day-num {
+  color: #b6c2c0;
+}
+
+.cal-day-num.is-today {
+  background: #0f4f49;
+  color: #fff;
+  border-radius: 999px;
+}
+
+/* Event bars overlaid on the week */
+.cal-week-bars {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.cal-bar {
+  position: absolute;
+  height: 19px;
+  padding: 0 0.4rem;
+  border: 0;
+  border-radius: 5px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 19px;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.cal-bar.is-signup {
+  background: #cdeae5;
+  color: #0f4f49;
+}
+
+.cal-bar.is-written {
+  background: #0f4f49;
+  color: #fff;
+}
+
+.cal-bar.is-answerKey {
+  background: #e2e8f0;
+  color: #334155;
+}
+
+.cal-bar.is-writtenResult {
+  background: #fde68a;
+  color: #92400e;
+}
+
+.cal-bar.is-interview {
+  background: #bfdbfe;
+  color: #1e3a8a;
+}
+
+.cal-bar.is-interview2 {
+  background: #ddd6fe;
+  color: #5b21b6;
+}
+
+.cal-bar.is-final {
+  background: #fecdd3;
+  color: #9f1239;
+}
+
+.cal-bar:hover {
+  filter: brightness(0.96);
+}
+
+.calendar-card-category {
+  display: inline-block;
+  margin-top: 0.3rem;
+  font-size: 0.82rem;
+  color: #0f4f49;
+  background: #e7f3f1;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+}
+
+.calendar-card-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 700;
+  color: #0f4f49;
+  text-decoration: none;
+}
+
+.calendar-card-link:hover {
+  text-decoration: underline;
+}
+
+/* Event detail modal */
+.cal-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(12, 23, 31, 0.5);
+}
+
+.cal-modal {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 14px;
+  padding: 1.5rem;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.25);
+}
+
+.cal-modal-close {
+  position: absolute;
+  top: 0.8rem;
+  right: 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #475569;
+  cursor: pointer;
+}
+
+.cal-modal-org {
+  font-size: 1.2rem;
+  font-weight: 800;
+  margin: 0 2rem 0.3rem 0;
+  color: #0f172a;
+}
+
+.cal-modal-rows {
+  margin: 1rem 0 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.cal-modal-rows dt {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.cal-modal-rows dd {
+  margin: 0.1rem 0 0;
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.cal-modal-note {
+  color: #475569;
+  font-size: 0.92rem;
+  white-space: pre-wrap;
+  margin: 0.5rem 0 0.8rem;
+}
+
+@media (max-width: 640px) {
+  .cal-day {
+    padding: 0.15rem;
+  }
+  .cal-day-num {
+    min-width: 1.3rem;
+    height: 1.3rem;
+    font-size: 0.75rem;
+  }
+  .cal-bar {
+    font-size: 0.62rem;
+    padding: 0 0.2rem;
+  }
+}
+
+/* === 管理後台 ============================================================== */
+.admin-page {
+  max-width: 820px;
+}
+
+.admin-topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.admin-tab {
+  border: 0;
+  background: none;
+  padding: 0.5rem 0.9rem;
+  font-weight: 700;
+  color: #64748b;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+}
+
+.admin-tab.is-active {
+  color: #0f4f49;
+  border-bottom-color: #0f4f49;
+}
+
+.admin-comment-text {
+  color: #334155;
+  font-size: 0.95rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.admin-row.is-hidden {
+  opacity: 0.6;
+}
+
+.admin-tag-hidden {
+  margin-left: 0.5rem;
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #92400e;
+  background: #fef3c7;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+}
+
+.admin-login {
+  max-width: 360px;
+  margin: 2rem auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  border: 1px solid #e2e9e8;
+  border-radius: 14px;
+  padding: 1.5rem;
+  background: #fff;
+}
+
+.admin-login-title {
+  font-size: 1.3rem;
+  font-weight: 800;
+  margin: 0 0 0.5rem;
+}
+
+.admin-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.admin-input {
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 9px;
+  font-size: 1rem;
+}
+
+.admin-input:focus {
+  outline: none;
+  border-color: #0f4f49;
+  box-shadow: 0 0 0 3px rgba(15, 79, 73, 0.13);
+}
+
+.admin-error {
+  color: #b91c1c;
+  font-size: 0.9rem;
+  margin: 0.2rem 0;
+}
+
+.admin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: none;
+  border-radius: 9px;
+  padding: 0.55rem 1rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.admin-btn-primary {
+  background: #0f4f49;
+  color: #fff;
+}
+
+.admin-btn-primary:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.admin-btn-ghost {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+.admin-add {
+  margin-bottom: 1.25rem;
+}
+
+.admin-form {
+  border: 1px solid #e2e9e8;
+  border-radius: 14px;
+  background: #fff;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.admin-form-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  margin: 0 0 1rem;
+}
+
+.admin-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.9rem;
+}
+
+.admin-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.admin-field-wide {
+  grid-column: 1 / -1;
+}
+
+.admin-datetime {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.admin-datetime input[type='date'] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.admin-time {
+  flex: 0 0 auto;
+  width: 6.5rem;
+}
+
+.admin-input:disabled {
+  background: #f1f5f9;
+  opacity: 0.7;
+}
+
+.admin-form-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1.1rem;
+}
+
+.admin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.admin-empty {
+  color: #64748b;
+  text-align: center;
+  padding: 1.5rem 0;
+}
+
+.admin-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  border: 1px solid #e2e9e8;
+  border-radius: 11px;
+  background: #fff;
+  padding: 0.75rem 1rem;
+}
+
+.admin-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.admin-row-org {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.admin-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem 0.9rem;
+  font-size: 0.83rem;
+  color: #64748b;
+}
+
+.admin-row-meta em {
+  font-style: normal;
+  color: #0f4f49;
+  font-weight: 600;
+}
+
+.admin-row-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.admin-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #475569;
+  cursor: pointer;
+}
+
+.admin-icon-btn.is-danger:hover {
+  color: #b91c1c;
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+
+@media (max-width: 600px) {
+  .admin-form-grid {
+    grid-template-columns: 1fr;
   }
 }
