@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 
 const port = Number(process.env.PORT || 3000);
 const dataFile = process.env.RATINGS_FILE || '/data/ratings.json';
@@ -15,6 +15,9 @@ const maxQuestionId = Number(process.env.MAX_QUESTION_ID || 123);
 const commentsFile = process.env.COMMENTS_FILE || '/data/comments.jsonl';
 // Upvote/downvote log for comments (append-only; last write per voter wins).
 const commentVotesFile = process.env.COMMENT_VOTES_FILE || '/data/comment-votes.jsonl';
+// Admin moderation log for comments (append-only): hide / show / delete actions,
+// replayed on startup. Keeps moderation out of the main append-only comment log.
+const commentModFile = process.env.COMMENT_MOD_FILE || '/data/comment-mods.jsonl';
 const maxCommentLength = Number(process.env.MAX_COMMENT_LENGTH || 1000);
 const maxNameLength = Number(process.env.MAX_COMMENT_NAME_LENGTH || 24);
 const maxCommentsPerQuestion = Number(process.env.MAX_COMMENTS_PER_QUESTION || 500);
@@ -25,14 +28,30 @@ const commentMaxPerWindow = Number(process.env.COMMENT_MAX_PER_WINDOW || 30);
 // Comments at or below this net score are auto-hidden (users can still reveal them).
 const commentHideScore = Number(process.env.COMMENT_HIDE_SCORE || -100);
 
-// --- Check-game leaderboard config -----------------------------------------
+// --- Mini-game leaderboard config ------------------------------------------
 // We deliberately keep ONLY the top-N entries on disk: the store is rewritten on
 // every change (tmp + rename) and truncated to N, so a score that drops out of
 // the top N is discarded rather than logged forever. Disk use is bounded at N
 // rows regardless of how many games are played.
+//
+// Each mini-game gets its own independent leaderboard (its own file). Reached at
+// `/api/<game>/leaderboard` (GET) and `/api/<game>/score` (POST).
 const checkGameFile = process.env.CHECKGAME_FILE || '/data/checkgame-top.json';
 const checkGameTopN = Number(process.env.CHECKGAME_TOP_N || 10);
 const checkGameMaxScore = Number(process.env.CHECKGAME_MAX_SCORE || 100000);
+
+const numberGameFile = process.env.NUMBERGAME_FILE || '/data/numbergame-top.json';
+const numberGameTopN = Number(process.env.NUMBERGAME_TOP_N || 10);
+const numberGameMaxScore = Number(process.env.NUMBERGAME_MAX_SCORE || 100000);
+
+// --- 招考行事曆 (calendar) config ------------------------------------------
+// Events are managed through the admin API and stored as a single JSON file in
+// the persisted data volume, so editing the calendar never requires a redeploy.
+const calendarFile = process.env.CALENDAR_FILE || '/data/calendar.json';
+const maxCalendarEvents = Number(process.env.MAX_CALENDAR_EVENTS || 500);
+// Shared secret for the admin API. If unset, all admin writes are rejected
+// (the calendar stays read-only) — set ADMIN_TOKEN in the VM's .env to enable.
+const adminToken = process.env.ADMIN_TOKEN || '';
 
 const emptyStore = () => ({
   version: 1,
@@ -116,10 +135,12 @@ const loadComments = async () => {
       const list = commentsByQuestion.get(questionId) || [];
       const comment = {
         id: String(entry.id),
+        questionId,
         name: String(entry.name || '匿名'),
         text: String(entry.text || ''),
         createdAt: String(entry.createdAt),
         votes: {},
+        adminHidden: false,
       };
       list.push(comment);
       commentById.set(comment.id, comment);
@@ -174,6 +195,96 @@ const appendVote = (entry) => {
   return voteAppendQueue;
 };
 
+// --- Comment moderation (admin) --------------------------------------------
+let modAppendQueue = Promise.resolve();
+
+const removeComment = (comment) => {
+  const list = commentsByQuestion.get(comment.questionId);
+  if (list) {
+    const i = list.indexOf(comment);
+    if (i >= 0) list.splice(i, 1);
+  }
+  commentById.delete(comment.id);
+};
+
+// Apply one moderation action to in-memory state.
+const applyCommentMod = (commentId, action) => {
+  const comment = commentById.get(String(commentId));
+  if (!comment) return false;
+  if (action === 'delete') removeComment(comment);
+  else if (action === 'hide') comment.adminHidden = true;
+  else if (action === 'show') comment.adminHidden = false;
+  else return false;
+  return true;
+};
+
+// Replay the moderation log onto loaded comments (run after loadComments/loadVotes).
+const loadCommentMods = async () => {
+  let raw = '';
+  try {
+    raw = await readFile(commentModFile, 'utf8');
+  } catch (error) {
+    if (error?.code !== 'ENOENT') {
+      console.warn(`Could not read ${commentModFile}; starting with no moderation.`, error);
+    }
+    return;
+  }
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const entry = JSON.parse(trimmed);
+      applyCommentMod(entry.commentId, entry.action);
+    } catch {
+      // Skip malformed lines.
+    }
+  }
+};
+
+const appendCommentMod = (entry) => {
+  modAppendQueue = modAppendQueue.then(async () => {
+    await mkdir(dirname(commentModFile), { recursive: true });
+    await appendFile(commentModFile, `${JSON.stringify(entry)}\n`);
+  });
+  return modAppendQueue;
+};
+
+// Compact a JSONL file in place, dropping lines whose parsed `key` equals id.
+// Used to PHYSICALLY remove a deleted comment (and its votes) so the content
+// truly leaves disk and reclaims space — not just a tombstone.
+const compactJsonl = (file, queueRef, key, id) =>
+  queueRef.then(async () => {
+    let raw = '';
+    try {
+      raw = await readFile(file, 'utf8');
+    } catch {
+      return; // nothing on disk yet
+    }
+    const kept = raw.split('\n').filter((line) => {
+      const t = line.trim();
+      if (!t) return false;
+      try {
+        return String(JSON.parse(t)[key]) !== String(id);
+      } catch {
+        return true; // keep unparseable lines untouched
+      }
+    });
+    await mkdir(dirname(file), { recursive: true });
+    const tmp = `${file}.${process.pid}.${randomUUID()}.tmp`;
+    await writeFile(tmp, kept.length ? `${kept.join('\n')}\n` : '');
+    await rename(tmp, file);
+  });
+
+const removeCommentFromLog = (commentId) => {
+  commentAppendQueue = compactJsonl(commentsFile, commentAppendQueue, 'id', commentId);
+  return commentAppendQueue;
+};
+
+const removeVotesFromLog = (commentId) => {
+  voteAppendQueue = compactJsonl(commentVotesFile, voteAppendQueue, 'commentId', commentId);
+  return voteAppendQueue;
+};
+
 // up/down counts and net score from a votes map.
 const tallyVotes = (votes) => {
   let up = 0;
@@ -196,83 +307,232 @@ const publicComment = (comment) => {
     up,
     down,
     score,
-    hidden: score <= commentHideScore,
+    hidden: score <= commentHideScore || !!comment.adminHidden,
   };
 };
 
-// --- Check-game leaderboard store ------------------------------------------
+// Admin view of a comment — same as public plus its questionId and moderation flags.
+const adminComment = (comment) => ({
+  ...publicComment(comment),
+  questionId: comment.questionId,
+  adminHidden: !!comment.adminHidden,
+});
+
+// --- Mini-game leaderboard store -------------------------------------------
 // In-memory top-N list, highest score first, at most one row per name. Backed by
 // a small JSON file that we rewrite (not append to) on every change, so disk use
 // stays bounded at N rows. Entries that fall out of the top N are dropped.
-let checkGameTop = []; // [{ name, score, createdAt }], sorted desc, length <= N
-let checkGameWriteQueue = Promise.resolve();
+//
+// Each mini-game gets its own isolated instance via makeLeaderboard(); they share
+// no state, so scores never bleed between games.
 
 // Highest score first; earlier submission wins ties (keeps the original holder).
 const sortLeaderboard = (rows) =>
   rows.sort((a, b) => b.score - a.score || a.createdAt.localeCompare(b.createdAt));
 
-const loadCheckGame = async () => {
-  checkGameTop = [];
+const makeLeaderboard = ({ file, topN, maxScore }) => {
+  let top = []; // [{ name, score, createdAt }], sorted desc, length <= topN
+  let writeQueue = Promise.resolve();
+
+  const load = async () => {
+    top = [];
+    let raw = '';
+    try {
+      raw = await readFile(file, 'utf8');
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        console.warn(`Could not read ${file}; starting with an empty leaderboard.`, error);
+      }
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      const rows = Array.isArray(parsed) ? parsed : parsed?.leaderboard;
+      if (!Array.isArray(rows)) return;
+      const clean = [];
+      for (const entry of rows) {
+        const name = String(entry?.name || '').trim();
+        const score = Number(entry?.score);
+        if (!name || !Number.isInteger(score)) continue;
+        clean.push({ name, score, createdAt: String(entry?.createdAt || '') });
+      }
+      top = sortLeaderboard(clean).slice(0, topN);
+    } catch (error) {
+      console.warn(`Could not parse ${file}; starting with an empty leaderboard.`, error);
+    }
+  };
+
+  const persist = () => {
+    writeQueue = writeQueue.then(async () => {
+      await mkdir(dirname(file), { recursive: true });
+      const tmpFile = `${file}.${process.pid}.${randomUUID()}.tmp`;
+      await writeFile(tmpFile, `${JSON.stringify(top, null, 2)}\n`);
+      await rename(tmpFile, file);
+    });
+    return writeQueue;
+  };
+
+  // Insert a score, keep one (best) row per name, truncate to top N. Returns the
+  // 1-based rank if the entry made the board, otherwise null.
+  const record = (name, score, createdAt) => {
+    const existing = top.find((e) => e.name === name);
+    if (existing) {
+      if (score <= existing.score) {
+        // Not a personal best; nothing changes, report their current standing.
+        return top.findIndex((e) => e.name === name) + 1;
+      }
+      existing.score = score;
+      existing.createdAt = createdAt;
+    } else {
+      top.push({ name, score, createdAt });
+    }
+
+    sortLeaderboard(top);
+    top = top.slice(0, topN);
+
+    const idx = top.findIndex((e) => e.name === name && e.score === score);
+    return idx >= 0 ? idx + 1 : null;
+  };
+
+  return { load, persist, record, leaderboard: () => top, maxScore };
+};
+
+// One leaderboard per mini-game, keyed by the URL slug used in /api/<game>/*.
+const leaderboards = {
+  checkgame: makeLeaderboard({ file: checkGameFile, topN: checkGameTopN, maxScore: checkGameMaxScore }),
+  numbergame: makeLeaderboard({ file: numberGameFile, topN: numberGameTopN, maxScore: numberGameMaxScore }),
+};
+
+// --- 招考行事曆 (calendar) store -------------------------------------------
+// In-memory array of events, rewritten to disk (tmp + rename) on every change.
+// Fields follow the admin form: org（機關/名稱）, signupStart / signupEnd（報名起訖）,
+// writtenExam（筆試）, writtenResult（筆試結果公佈）, interview（面試/一面）,
+// interview2（二面）, finalResult（放榜）, link（簡章連結）, note（備註）.
+let calendarEvents = [];
+let calendarWriteQueue = Promise.resolve();
+
+const calendarFields = [
+  'org',
+  'signupStart',
+  'signupEnd',
+  'writtenExam',
+  'answerKey',
+  'writtenResult',
+  'interview',
+  'interview2',
+  'finalResult',
+  'link',
+  'note',
+];
+// The date fields, used for sorting and window pruning. May carry a trailing
+// " HH:MM" time; lexical comparison still works because the date prefix is fixed.
+const calendarDateFields = [
+  'signupStart',
+  'signupEnd',
+  'writtenExam',
+  'answerKey',
+  'writtenResult',
+  'interview',
+  'interview2',
+  'finalResult',
+];
+const maxCalendarFieldLength = 300;
+
+// Date-only prefix (drops any " HH:MM"), for comparisons.
+const dateOnly = (s) => (s || '').slice(0, 10);
+
+// Earliest relevant date of an event ('9999' when undated → sinks to the bottom).
+const earliestDate = (e) =>
+  calendarDateFields.map((f) => dateOnly(e[f])).filter(Boolean).sort()[0] || '9999';
+
+// Sort by the earliest relevant date.
+const sortCalendar = (rows) => rows.sort((a, b) => earliestDate(a).localeCompare(earliestDate(b)));
+
+const cleanCalendarInput = (raw) => {
+  const event = {};
+  for (const key of calendarFields) {
+    event[key] = sanitizeText(raw?.[key] ?? '', maxCalendarFieldLength);
+  }
+  return event;
+};
+
+// Visible window: 上個月 ~ 下下下個月 (current month −1 ~ +3). Events whose dates
+// fall entirely outside this window are discarded to keep the data file small.
+// Dates are 'YYYY-MM-DD' strings, which compare correctly lexically.
+const pad2 = (n) => String(n).padStart(2, '0');
+const ymd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const calendarWindow = () => {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const end = new Date(now.getFullYear(), now.getMonth() + 4, 0); // last day of +3 month
+  return { start: ymd(start), end: ymd(end) };
+};
+
+const eventInWindow = (e) => {
+  const dates = calendarDateFields.map((f) => dateOnly(e[f])).filter(Boolean);
+  if (!dates.length) return true; // keep dateless drafts (can't be placed yet)
+  const min = dates.reduce((a, b) => (a < b ? a : b));
+  const max = dates.reduce((a, b) => (a > b ? a : b));
+  const { start, end } = calendarWindow();
+  return min <= end && max >= start;
+};
+
+// Drop out-of-window events from memory. Returns how many were removed.
+const pruneCalendar = () => {
+  const before = calendarEvents.length;
+  calendarEvents = calendarEvents.filter(eventInWindow);
+  return before - calendarEvents.length;
+};
+
+const loadCalendar = async () => {
+  calendarEvents = [];
   let raw = '';
   try {
-    raw = await readFile(checkGameFile, 'utf8');
+    raw = await readFile(calendarFile, 'utf8');
   } catch (error) {
     if (error?.code !== 'ENOENT') {
-      console.warn(`Could not read ${checkGameFile}; starting with an empty leaderboard.`, error);
+      console.warn(`Could not read ${calendarFile}; starting with an empty calendar.`, error);
     }
     return;
   }
-
   try {
     const parsed = JSON.parse(raw);
-    const rows = Array.isArray(parsed) ? parsed : parsed?.leaderboard;
+    const rows = Array.isArray(parsed) ? parsed : parsed?.events;
     if (!Array.isArray(rows)) return;
-    const clean = [];
-    for (const entry of rows) {
-      const name = String(entry?.name || '').trim();
-      const score = Number(entry?.score);
-      if (!name || !Number.isInteger(score)) continue;
-      clean.push({ name, score, createdAt: String(entry?.createdAt || '') });
-    }
-    checkGameTop = sortLeaderboard(clean).slice(0, checkGameTopN);
+    calendarEvents = sortCalendar(
+      rows
+        .filter((e) => e && typeof e === 'object' && e.id)
+        .map((e) => ({ id: String(e.id), ...cleanCalendarInput(e), createdAt: String(e.createdAt || ''), updatedAt: String(e.updatedAt || '') })),
+    );
+    // Rewrite the file if startup pruning dropped anything (reclaims disk).
+    if (pruneCalendar() > 0) await persistCalendar();
   } catch (error) {
-    console.warn(`Could not parse ${checkGameFile}; starting with an empty leaderboard.`, error);
+    console.warn(`Could not parse ${calendarFile}; starting with an empty calendar.`, error);
   }
 };
 
-const persistCheckGame = () => {
-  checkGameWriteQueue = checkGameWriteQueue.then(async () => {
-    await mkdir(dirname(checkGameFile), { recursive: true });
-    const tmpFile = `${checkGameFile}.${process.pid}.${randomUUID()}.tmp`;
-    await writeFile(tmpFile, `${JSON.stringify(checkGameTop, null, 2)}\n`);
-    await rename(tmpFile, checkGameFile);
+const persistCalendar = () => {
+  calendarWriteQueue = calendarWriteQueue.then(async () => {
+    await mkdir(dirname(calendarFile), { recursive: true });
+    const tmpFile = `${calendarFile}.${process.pid}.${randomUUID()}.tmp`;
+    await writeFile(tmpFile, `${JSON.stringify(calendarEvents, null, 2)}\n`);
+    await rename(tmpFile, calendarFile);
   });
-  return checkGameWriteQueue;
+  return calendarWriteQueue;
 };
 
-// Insert a score, keep one (best) row per name, truncate to top N. Returns the
-// 1-based rank if the entry made the board, otherwise null.
-const recordCheckGameScore = (name, score, createdAt) => {
-  const existing = checkGameTop.find((e) => e.name === name);
-  if (existing) {
-    if (score <= existing.score) {
-      // Not a personal best; nothing changes, report their current standing.
-      return checkGameTop.findIndex((e) => e.name === name) + 1;
-    }
-    existing.score = score;
-    existing.createdAt = createdAt;
-  } else {
-    checkGameTop.push({ name, score, createdAt });
-  }
-
-  sortLeaderboard(checkGameTop);
-  checkGameTop = checkGameTop.slice(0, checkGameTopN);
-
-  const idx = checkGameTop.findIndex((e) => e.name === name && e.score === score);
-  return idx >= 0 ? idx + 1 : null;
+// Constant-time check of the admin bearer token. Returns false when ADMIN_TOKEN
+// is unset, so the admin API is disabled-by-default rather than open.
+const isAdmin = (req) => {
+  if (!adminToken) return false;
+  const header = req.headers['authorization'] || '';
+  const provided = header.startsWith('Bearer ') ? header.slice(7) : '';
+  if (!provided) return false;
+  const a = Buffer.from(provided);
+  const b = Buffer.from(adminToken);
+  return a.length === b.length && timingSafeEqual(a, b);
 };
-
-const checkGameLeaderboard = () => checkGameTop;
 
 // Per-IP rate limiting, in memory only (resets on restart — fine for this use).
 const rateLog = new Map();
@@ -389,7 +649,9 @@ const parseCommentVote = (pathname) => {
 await loadStore();
 await loadComments();
 await loadVotes();
-await loadCheckGame();
+await loadCommentMods();
+await Promise.all(Object.values(leaderboards).map((lb) => lb.load()));
+await loadCalendar();
 
 createServer(async (req, res) => {
   try {
@@ -405,12 +667,163 @@ createServer(async (req, res) => {
       return;
     }
 
-    if (req.method === 'GET' && url.pathname === '/api/checkgame/leaderboard') {
-      sendJson(res, 200, { leaderboard: checkGameLeaderboard() });
+    // --- 招考行事曆 -------------------------------------------------------
+    // Public read.
+    if (req.method === 'GET' && url.pathname === '/api/calendar') {
+      // Filter by the current window in case it shifted since the last write.
+      sendJson(res, 200, { events: calendarEvents.filter(eventInWindow) });
       return;
     }
 
-    if (req.method === 'POST' && url.pathname === '/api/checkgame/score') {
+    // Admin: verify the token (lets the admin UI confirm login before editing).
+    if (req.method === 'GET' && url.pathname === '/api/admin/calendar') {
+      if (!isAdmin(req)) {
+        sendJson(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      sendJson(res, 200, { events: calendarEvents });
+      return;
+    }
+
+    // Admin: create an event.
+    if (req.method === 'POST' && url.pathname === '/api/admin/calendar') {
+      if (!isAdmin(req)) {
+        sendJson(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      if (calendarEvents.length >= maxCalendarEvents) {
+        sendJson(res, 400, { error: '行事曆事件數量已達上限' });
+        return;
+      }
+      const bodyText = await readBody(req);
+      let body = {};
+      try {
+        body = bodyText ? JSON.parse(bodyText) : {};
+      } catch {
+        sendJson(res, 400, { error: 'request body must be valid JSON' });
+        return;
+      }
+      const fields = cleanCalendarInput(body);
+      if (!fields.org) {
+        sendJson(res, 400, { error: '機關/名稱不可為空' });
+        return;
+      }
+      const now = new Date().toISOString();
+      const event = { id: randomUUID(), ...fields, createdAt: now, updatedAt: now };
+      calendarEvents.push(event);
+      sortCalendar(calendarEvents);
+      pruneCalendar(); // drop any events that have since aged out of the window
+      await persistCalendar();
+      sendJson(res, 200, { event, events: calendarEvents });
+      return;
+    }
+
+    // Admin: update or delete a single event by id.
+    const adminEventMatch = url.pathname.match(/^\/api\/admin\/calendar\/([a-f0-9-]{36})$/);
+    if (adminEventMatch && (req.method === 'PUT' || req.method === 'DELETE')) {
+      if (!isAdmin(req)) {
+        sendJson(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      const id = adminEventMatch[1];
+      const idx = calendarEvents.findIndex((e) => e.id === id);
+      if (idx === -1) {
+        sendJson(res, 404, { error: 'event not found' });
+        return;
+      }
+
+      if (req.method === 'DELETE') {
+        calendarEvents.splice(idx, 1);
+        await persistCalendar();
+        sendJson(res, 200, { events: calendarEvents });
+        return;
+      }
+
+      const bodyText = await readBody(req);
+      let body = {};
+      try {
+        body = bodyText ? JSON.parse(bodyText) : {};
+      } catch {
+        sendJson(res, 400, { error: 'request body must be valid JSON' });
+        return;
+      }
+      const fields = cleanCalendarInput(body);
+      if (!fields.org) {
+        sendJson(res, 400, { error: '機關/名稱不可為空' });
+        return;
+      }
+      calendarEvents[idx] = { ...calendarEvents[idx], ...fields, updatedAt: new Date().toISOString() };
+      sortCalendar(calendarEvents);
+      pruneCalendar(); // drop any events that have since aged out of the window
+      await persistCalendar();
+      sendJson(res, 200, { event: calendarEvents.find((e) => e.id === id), events: calendarEvents });
+      return;
+    }
+
+    // --- 留言板管理 (admin) ----------------------------------------------
+    // List every comment across all questions for moderation.
+    if (req.method === 'GET' && url.pathname === '/api/admin/comments') {
+      if (!isAdmin(req)) {
+        sendJson(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      const all = [];
+      for (const comment of commentById.values()) all.push(adminComment(comment));
+      all.sort((a, b) => b.createdAt.localeCompare(a.createdAt)); // newest first
+      sendJson(res, 200, { comments: all });
+      return;
+    }
+
+    // Hide / show / delete a single comment.
+    const adminCommentMatch = url.pathname.match(/^\/api\/admin\/comments\/([a-f0-9-]{36})\/moderate$/);
+    if (req.method === 'POST' && adminCommentMatch) {
+      if (!isAdmin(req)) {
+        sendJson(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      const bodyText = await readBody(req);
+      let body = {};
+      try {
+        body = bodyText ? JSON.parse(bodyText) : {};
+      } catch {
+        sendJson(res, 400, { error: 'request body must be valid JSON' });
+        return;
+      }
+      const action = body.action;
+      if (!['hide', 'show', 'delete'].includes(action)) {
+        sendJson(res, 400, { error: 'action must be hide, show or delete' });
+        return;
+      }
+      const id = adminCommentMatch[1];
+      const target = commentById.get(id);
+      if (!target) {
+        sendJson(res, 404, { error: 'comment not found' });
+        return;
+      }
+      if (action === 'delete') {
+        // True permanent delete: remove from memory AND compact it out of the
+        // on-disk logs so the content no longer occupies space.
+        removeComment(target);
+        await removeCommentFromLog(id);
+        await removeVotesFromLog(id);
+      } else {
+        // hide / show are flags → record in the append-only moderation log.
+        applyCommentMod(id, action);
+        await appendCommentMod({ commentId: id, action, at: new Date().toISOString() });
+      }
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    const leaderboardMatch = url.pathname.match(/^\/api\/([a-z]+)\/leaderboard$/);
+    if (req.method === 'GET' && leaderboardMatch && leaderboards[leaderboardMatch[1]]) {
+      sendJson(res, 200, { leaderboard: leaderboards[leaderboardMatch[1]].leaderboard() });
+      return;
+    }
+
+    const scoreMatch = url.pathname.match(/^\/api\/([a-z]+)\/score$/);
+    if (req.method === 'POST' && scoreMatch && leaderboards[scoreMatch[1]]) {
+      const board = leaderboards[scoreMatch[1]];
       const bodyText = await readBody(req);
       let body = {};
       try {
@@ -422,7 +835,7 @@ createServer(async (req, res) => {
 
       // Honeypot: real players always send `website` empty.
       if (typeof body.website === 'string' && body.website.trim() !== '') {
-        sendJson(res, 200, { leaderboard: checkGameLeaderboard(), rank: null });
+        sendJson(res, 200, { leaderboard: board.leaderboard(), rank: null });
         return;
       }
 
@@ -433,7 +846,7 @@ createServer(async (req, res) => {
         sendJson(res, 400, { error: '暱稱不可為空' });
         return;
       }
-      if (!Number.isInteger(score) || score < 0 || score > checkGameMaxScore) {
+      if (!Number.isInteger(score) || score < 0 || score > board.maxScore) {
         sendJson(res, 400, { error: 'score is invalid' });
         return;
       }
@@ -445,10 +858,10 @@ createServer(async (req, res) => {
       }
 
       const createdAt = new Date().toISOString();
-      const rank = recordCheckGameScore(name, score, createdAt);
-      await persistCheckGame();
+      const rank = board.record(name, score, createdAt);
+      await board.persist();
 
-      sendJson(res, 200, { leaderboard: checkGameLeaderboard(), rank });
+      sendJson(res, 200, { leaderboard: board.leaderboard(), rank });
       return;
     }
 
@@ -525,7 +938,15 @@ createServer(async (req, res) => {
         return;
       }
 
-      const comment = { id: randomUUID(), name, text, createdAt: new Date().toISOString(), votes: {} };
+      const comment = {
+        id: randomUUID(),
+        questionId: commentQuestionId,
+        name,
+        text,
+        createdAt: new Date().toISOString(),
+        votes: {},
+        adminHidden: false,
+      };
       const list = commentsByQuestion.get(commentQuestionId) || [];
       list.push(comment);
       // Cap in-memory list so memory stays bounded; the full log stays on disk.
