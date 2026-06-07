@@ -2624,9 +2624,15 @@ select {
   min-width: 0;
 }
 
-.admin-time {
+.admin-time-select {
   flex: 0 0 auto;
-  width: 6.5rem;
+  width: 4.2rem;
+  padding: 0.55rem 0.4rem;
+}
+
+.admin-time-colon {
+  font-weight: 800;
+  color: #475569;
 }
 
 .admin-input:disabled {

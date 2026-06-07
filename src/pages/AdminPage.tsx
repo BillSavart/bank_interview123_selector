@@ -39,6 +39,11 @@ const splitDT = (v: string): { date: string; time: string } => {
 };
 const joinDT = (date: string, time: string): string => (date ? (time ? `${date} ${time}` : date) : '');
 
+// 24-hour options for the custom time picker (native <input type=time> can render
+// as AM/PM depending on the browser locale, so we use our own selects instead).
+const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
+
 export function AdminPage() {
   const [token, setToken] = useState(loadAdminToken());
   const [authed, setAuthed] = useState(false);
@@ -233,6 +238,7 @@ function AdminDashboard({
             {FIELD_LABELS.map((f) => {
               if (f.type === 'datetime') {
                 const { date, time } = splitDT(draft[f.key]);
+                const [hh = '', mm = ''] = time ? time.split(':') : ['', ''];
                 return (
                   <label key={f.key} className="admin-field">
                     <span className="admin-label">{f.label}</span>
@@ -249,15 +255,34 @@ function AdminDashboard({
                           })
                         }
                       />
-                      <input
-                        className="admin-input admin-time"
-                        type="time"
-                        step={60}
-                        value={time}
-                        // time alone is meaningless without a date
+                      {/* 24-hour time pickers (時 / 分) */}
+                      <select
+                        className="admin-input admin-time-select"
+                        value={hh}
                         disabled={!date}
-                        onChange={(e) => setDraft({ ...draft, [f.key]: joinDT(date, e.target.value) })}
-                      />
+                        aria-label={`${f.label} 時`}
+                        onChange={(e) => setDraft({ ...draft, [f.key]: joinDT(date, `${e.target.value}:${mm || '00'}`) })}
+                      >
+                        {HOURS.map((h) => (
+                          <option key={h} value={h}>
+                            {h}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="admin-time-colon">:</span>
+                      <select
+                        className="admin-input admin-time-select"
+                        value={mm}
+                        disabled={!date}
+                        aria-label={`${f.label} 分`}
+                        onChange={(e) => setDraft({ ...draft, [f.key]: joinDT(date, `${hh || '00'}:${e.target.value}`) })}
+                      >
+                        {MINUTES.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </label>
                 );
