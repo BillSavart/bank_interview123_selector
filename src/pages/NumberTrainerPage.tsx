@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Check, X, Trophy, Timer, ClipboardCheck, RotateCcw } from 'lucide-react';
+import { Trophy, Timer, Hash, RotateCcw, X } from 'lucide-react';
 import {
   buildRound,
-  checkGameData,
+  numberGameIntro,
   scoreForAnswer,
   SECONDS_PER_QUESTION,
-  type CheckAnswer,
-  type CheckQuestion,
-} from '../data/checkGame';
+  type NumberQuestion,
+} from '../data/numberGame';
+import { PLACE_HEADERS } from '../lib/chineseNumerals';
 import {
   fetchLeaderboard,
   loadPlayerName,
@@ -18,17 +18,15 @@ import {
 
 type Phase = 'intro' | 'playing' | 'result';
 
-const ANSWER_LABEL: Record<CheckAnswer, string> = { can: '可以', cannot: '不可以' };
-
-export function CheckGamePage() {
+export function NumberTrainerPage() {
   const [phase, setPhase] = useState<Phase>('intro');
   const [name, setName] = useState(loadPlayerName());
 
   // Per-round state
-  const [round, setRound] = useState<CheckQuestion[]>([]);
+  const [round, setRound] = useState<NumberQuestion[]>([]);
   const [index, setIndex] = useState(0);
   const [secondsLeft, setSecondsLeft] = useState(SECONDS_PER_QUESTION);
-  const [picked, setPicked] = useState<CheckAnswer | null>(null);
+  const [answer, setAnswer] = useState(''); // raw digits the user typed (no commas)
   const [revealed, setRevealed] = useState(false);
   const [secondsAtAnswer, setSecondsAtAnswer] = useState(0);
   const [totalScore, setTotalScore] = useState(0);
@@ -42,8 +40,11 @@ export function CheckGamePage() {
   const current = round[index];
   const isLast = index === round.length - 1;
 
+  const enteredValue = answer ? Number(answer) : NaN;
+  const correct = revealed && current ? enteredValue === current.value : false;
+
   const refreshLeaderboard = useCallback(() => {
-    fetchLeaderboard()
+    fetchLeaderboard('numbergame')
       .then(setLeaderboard)
       .catch(() => {
         /* leaderboard is best-effort; ignore network errors */
@@ -75,8 +76,7 @@ export function CheckGamePage() {
   // Award score once when an answer is revealed.
   useEffect(() => {
     if (!revealed || !current) return;
-    const correct = picked === current.answer;
-    const gain = scoreForAnswer(correct, secondsAtAnswer);
+    const gain = scoreForAnswer(enteredValue === current.value, secondsAtAnswer);
     setLastGain(gain);
     setTotalScore((prev) => prev + gain);
   }, [revealed]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -88,7 +88,7 @@ export function CheckGamePage() {
     setRound(buildRound());
     setIndex(0);
     setSecondsLeft(SECONDS_PER_QUESTION);
-    setPicked(null);
+    setAnswer('');
     setRevealed(false);
     setSecondsAtAnswer(0);
     setTotalScore(0);
@@ -98,9 +98,8 @@ export function CheckGamePage() {
     setPhase('playing');
   };
 
-  const pick = (answer: CheckAnswer) => {
+  const submitAnswer = () => {
     if (revealed) return;
-    setPicked(answer);
     revealAnswer(secondsLeft);
   };
 
@@ -111,7 +110,7 @@ export function CheckGamePage() {
     }
     setIndex((i) => i + 1);
     setSecondsLeft(SECONDS_PER_QUESTION);
-    setPicked(null);
+    setAnswer('');
     setRevealed(false);
     setSecondsAtAnswer(0);
   };
@@ -119,7 +118,7 @@ export function CheckGamePage() {
   const finishGame = () => {
     setPhase('result');
     setSubmitState('submitting');
-    submitScore('checkgame', name.trim(), totalScore)
+    submitScore('numbergame', name.trim(), totalScore)
       .then((res) => {
         if (res.error) {
           setSubmitState('error');
@@ -132,24 +131,17 @@ export function CheckGamePage() {
       .catch(() => setSubmitState('error'));
   };
 
-  const correct = revealed && current ? picked === current.answer : false;
-
   return (
     <div className="container py-4 checkgame-page">
       <div className="interview-kicker">
-        <ClipboardCheck size={18} />
-        支票審查員
+        <Hash size={18} />
+        大寫數字訓練器
       </div>
 
       <div className="checkgame-layout">
         <div className="checkgame-main">
           {phase === 'intro' && (
-            <IntroCard
-              name={name}
-              onNameChange={setName}
-              onStart={startGame}
-              intro={checkGameData.intro}
-            />
+            <IntroCard name={name} onNameChange={setName} onStart={startGame} intro={numberGameIntro} />
           )}
 
           {phase === 'playing' && current && (
@@ -158,12 +150,13 @@ export function CheckGamePage() {
               index={index}
               total={round.length}
               secondsLeft={secondsLeft}
-              picked={picked}
+              answer={answer}
+              onAnswerChange={setAnswer}
               revealed={revealed}
               correct={correct}
               lastGain={lastGain}
               isLast={isLast}
-              onPick={pick}
+              onSubmit={submitAnswer}
               onNext={next}
             />
           )}
@@ -202,7 +195,7 @@ function IntroCard({
 }) {
   return (
     <div className="checkgame-card checkgame-intro">
-      <h1 className="display-title checkgame-title">支票審查員</h1>
+      <h1 className="display-title checkgame-title">大寫數字訓練器</h1>
       <p className="checkgame-intro-text">{intro}</p>
 
       <form
@@ -212,11 +205,11 @@ function IntroCard({
           onStart();
         }}
       >
-        <label htmlFor="checkgame-name" className="checkgame-label">
+        <label htmlFor="numbergame-name" className="checkgame-label">
           你的暱稱
         </label>
         <input
-          id="checkgame-name"
+          id="numbergame-name"
           className="checkgame-input"
           type="text"
           value={name}
@@ -239,29 +232,45 @@ function QuestionCard({
   index,
   total,
   secondsLeft,
-  picked,
+  answer,
+  onAnswerChange,
   revealed,
   correct,
   lastGain,
   isLast,
-  onPick,
+  onSubmit,
   onNext,
 }: {
-  question: CheckQuestion;
+  question: NumberQuestion;
   index: number;
   total: number;
   secondsLeft: number;
-  picked: CheckAnswer | null;
+  answer: string;
+  onAnswerChange: (next: string) => void;
   revealed: boolean;
   correct: boolean;
   lastGain: number;
   isLast: boolean;
-  onPick: (a: CheckAnswer) => void;
+  onSubmit: () => void;
   onNext: () => void;
 }) {
   const pct = (secondsLeft / SECONDS_PER_QUESTION) * 100;
-  const low = secondsLeft <= 5;
-  const [zoomed, setZoomed] = useState<string | null>(null);
+  const low = secondsLeft <= 3;
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  // Focus the answer box when a new question appears.
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [question.id]);
+
+  // Show the typed digits with thousands separators; strip non-digits and clamp
+  // to 9 digits (max 999,999,999) when reading them back.
+  const display = answer ? Number(answer).toLocaleString('en-US') : '';
+
+  const onChange = (raw: string) => {
+    const digits = raw.replace(/\D/g, '').slice(0, 9);
+    onAnswerChange(digits);
+  };
 
   return (
     <div className="checkgame-card">
@@ -282,58 +291,69 @@ function QuestionCard({
         />
       </div>
 
-      <p className="checkgame-desc">{question.description}</p>
-
-      <div className="checkgame-images">
-        {question.images.map((src, i) => (
-          <img
-            key={i}
-            className="checkgame-image"
-            src={src}
-            alt={`支票圖片 ${i + 1}`}
-            loading="lazy"
-            onClick={() => setZoomed(src)}
-          />
-        ))}
-      </div>
-
-      {zoomed && (
-        <div className="checkgame-lightbox" onClick={() => setZoomed(null)} role="presentation">
-          <img src={zoomed} alt="放大檢視" />
-        </div>
+      {question.kind === 'grid' ? (
+        <>
+          <p className="numbergame-prompt-label">把方格裡的大寫金額填回阿拉伯數字（✗ 代表該位是 0）</p>
+          <div className="numbergame-grid" role="group" aria-label="大寫金額方格">
+            {PLACE_HEADERS.map((header, i) => {
+              const cell = question.cells[i];
+              return (
+                <div key={i} className="numbergame-col">
+                  <span className="numbergame-head">{header}</span>
+                  <div className={`numbergame-cell is-${cell.kind}`}>
+                    {cell.kind === 'digit' && cell.char}
+                    {cell.kind === 'zero' && '零'}
+                    {cell.kind === 'cross' && <X size={20} strokeWidth={2.5} />}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      ) : (
+        <>
+          <p className="numbergame-prompt-label">把這張支票的大寫金額填回阿拉伯數字</p>
+          <div className="numbergame-check">新臺幣 {question.capital}</div>
+        </>
       )}
 
-      <div className="checkgame-choices">
-        {(['can', 'cannot'] as CheckAnswer[]).map((value) => {
-          const isAnswer = revealed && question.answer === value;
-          const isWrongPick = revealed && picked === value && picked !== question.answer;
-          return (
-            <button
-              key={value}
-              type="button"
-              className={`checkgame-choice ${value === 'can' ? 'is-can' : 'is-cannot'} ${
-                isAnswer ? 'is-correct' : ''
-              } ${isWrongPick ? 'is-wrong' : ''}`}
-              disabled={revealed}
-              onClick={() => onPick(value)}
-            >
-              {value === 'can' ? <Check size={20} /> : <X size={20} />}
-              {ANSWER_LABEL[value]}
-            </button>
-          );
-        })}
+      <div className="numbergame-answer">
+        <input
+          ref={inputRef}
+          className="numbergame-answer-input"
+          type="text"
+          inputMode="numeric"
+          aria-label="你的答案（阿拉伯數字）"
+          placeholder="輸入金額"
+          value={display}
+          disabled={revealed}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            // Enter 送出答案（與「送出答案」按鈕相同）。
+            if (e.key === 'Enter' && !revealed) {
+              e.preventDefault();
+              onSubmit();
+            }
+          }}
+        />
+        <span className="numbergame-answer-unit">元</span>
       </div>
+
+      {!revealed && (
+        <button type="button" className="checkgame-btn checkgame-btn-primary numbergame-submit" onClick={onSubmit}>
+          送出答案
+        </button>
+      )}
 
       {revealed && (
         <div className={`checkgame-reveal ${correct ? 'is-correct' : 'is-wrong'}`}>
           <div className="checkgame-reveal-head">
             <span className="checkgame-reveal-verdict">
-              {picked === null ? '時間到！' : correct ? '答對了！' : '答錯了'}
-              　正解：{ANSWER_LABEL[question.answer]}
+              {correct ? '答對了！' : '答錯了'}
+              　正解：{question.value.toLocaleString('en-US')} 元
             </span>
             <span className="checkgame-reveal-gain">+{lastGain} 分</span>
           </div>
-          <p className="checkgame-explanation">{question.explanation}</p>
           <button type="button" className="checkgame-btn checkgame-btn-primary" onClick={onNext}>
             {isLast ? '看結算' : '下一題'}
           </button>

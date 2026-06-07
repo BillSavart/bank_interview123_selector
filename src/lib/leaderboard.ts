@@ -10,6 +10,11 @@ export interface SubmitScoreResult {
   error?: string;
 }
 
+// Each mini-game has its own leaderboard, keyed by this slug. The API exposes
+// `/api/<game>/leaderboard` and `/api/<game>/score` per game (see ratings-api.mjs).
+export type GameKey = 'checkgame' | 'numbergame';
+
+// Players share one nickname across games — only store it once.
 const nameStorageKey = 'check-game-player-name';
 
 export function loadPlayerName(): string {
@@ -28,16 +33,16 @@ export function savePlayerName(name: string) {
   }
 }
 
-export async function fetchLeaderboard(): Promise<LeaderboardEntry[]> {
-  const response = await fetch('/api/checkgame/leaderboard', { headers: { Accept: 'application/json' } });
+export async function fetchLeaderboard(game: GameKey = 'checkgame'): Promise<LeaderboardEntry[]> {
+  const response = await fetch(`/api/${game}/leaderboard`, { headers: { Accept: 'application/json' } });
   if (!response.ok) throw new Error('leaderboard fetch failed');
 
   const payload = (await response.json()) as { leaderboard?: LeaderboardEntry[] };
   return payload.leaderboard || [];
 }
 
-export async function submitScore(name: string, score: number): Promise<SubmitScoreResult> {
-  const response = await fetch('/api/checkgame/score', {
+export async function submitScore(game: GameKey, name: string, score: number): Promise<SubmitScoreResult> {
+  const response = await fetch(`/api/${game}/score`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
