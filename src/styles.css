@@ -2725,3 +2725,379 @@ select {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── 錄取分數地圖 ───────────────────────────────────────── */
+.map-page {
+  max-width: 1100px;
+}
+
+.map-page-head {
+  margin: 0.5rem 0 1rem;
+}
+
+.map-page-title {
+  margin: 0.35rem 0 0.3rem;
+  font-size: clamp(1.4rem, 4vw, 1.9rem);
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.map-page-sub {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.map-banks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.9rem;
+}
+
+.map-bank {
+  padding: 0.45rem 0.9rem;
+  border: 1px solid #d7e0df;
+  border-radius: 999px;
+  background: #fff;
+  color: #475569;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.map-bank:hover {
+  background: #eef5f4;
+  color: #17313d;
+}
+
+.map-bank.is-active {
+  background: #0f4f49;
+  border-color: #0f4f49;
+  color: #fff;
+}
+
+.map-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.map-select {
+  border: 1px solid #d7e0df;
+  border-radius: 8px;
+  background: #fff;
+  color: #17313d;
+  font-weight: 600;
+  padding: 0.45rem 0.7rem;
+  height: 2.3rem;
+}
+
+.map-toolbar-note {
+  color: #94a3b8;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.map-layout {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.map-card {
+  border: 1px solid #dce3e2;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 14px 40px rgba(22, 33, 45, 0.08);
+  padding: 1.1rem 1.2rem;
+}
+
+.map-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.5rem;
+}
+
+.map-card-head h2 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.map-card-head .round {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.map-svg {
+  display: block;
+  height: min(72vh, 660px);
+  width: auto;
+  max-width: 100%;
+  margin: 0 auto;
+  overflow: visible;
+}
+
+.map-county {
+  stroke: #fff;
+  stroke-width: 1.1;
+  transition: fill 0.4s ease, opacity 0.15s;
+  cursor: pointer;
+}
+
+.map-county:hover {
+  opacity: 0.82;
+}
+
+.map-county.is-sel {
+  stroke: #0f172a;
+  stroke-width: 2;
+}
+
+.map-vlbl {
+  font-size: 9.5px;
+  font-weight: 800;
+  fill: #1c2430;
+  pointer-events: none;
+  paint-order: stroke;
+  stroke: #fff;
+  stroke-width: 2px;
+  stroke-linejoin: round;
+}
+
+.map-islands {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.map-island {
+  flex: 1;
+  border: 1px solid #e6e9f0;
+  border-radius: 9px;
+  background: #f8fafb;
+  padding: 0.45rem 0.5rem 0.5rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s;
+}
+
+.map-island:hover {
+  border-color: #cbd5e1;
+}
+
+.map-island.is-sel {
+  border-color: #0f4f49;
+}
+
+.map-island svg {
+  display: block;
+  width: 100%;
+  height: 46px;
+}
+
+.map-island .nm {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.map-island .vv {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.map-island .vv.empty {
+  color: #cbd5e1;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.map-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.9rem;
+  font-size: 0.75rem;
+  color: #64748b;
+  flex-wrap: wrap;
+}
+
+.map-legend i {
+  width: 24px;
+  height: 11px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.map-side .sel-name {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.map-side .sel-score {
+  font-size: 2.6rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-top: 0.3rem;
+  color: #0f4f49;
+}
+
+.map-side .sel-score small {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.map-side .sel-meta {
+  font-size: 0.8rem;
+  color: #94a3b8;
+  margin-top: 0.25rem;
+}
+
+.map-spark {
+  margin: 0.8rem 0 0.2rem;
+}
+
+.map-spark .ends {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.72rem;
+  color: #94a3b8;
+}
+
+.map-rank-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #64748b;
+  margin: 1rem 0 0.5rem;
+}
+
+.map-rank {
+  max-height: 460px;
+  overflow: auto;
+  margin: 0 -0.4rem;
+  padding: 0 0.4rem;
+}
+
+.map-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.map-row:hover {
+  background: #f4f6f7;
+}
+
+.map-row.is-sel {
+  background: #e6f2f0;
+}
+
+.map-row .rk {
+  width: 1.1rem;
+  font-size: 0.72rem;
+  color: #94a3b8;
+  text-align: right;
+}
+
+.map-row .nm {
+  width: 3.6rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #1c2430;
+  white-space: nowrap;
+}
+
+.map-row .track {
+  flex: 1;
+  height: 9px;
+  background: #eef1f6;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+.map-row .fill {
+  height: 100%;
+  border-radius: 5px;
+}
+
+.map-row .v {
+  width: 2.4rem;
+  text-align: right;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.map-row .delta {
+  width: 1.7rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-align: right;
+}
+
+.map-row .delta.up {
+  color: #d75f47;
+}
+
+.map-row .delta.down {
+  color: #2f9e7e;
+}
+
+.map-row .delta.flat {
+  color: #cbd5e1;
+}
+
+.map-row.is-empty {
+  cursor: default;
+}
+
+.map-row.is-empty .nm {
+  color: #94a3b8;
+  font-weight: 600;
+}
+
+.map-row.is-empty .v {
+  color: #cbd5e1;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.map-tip {
+  position: fixed;
+  pointer-events: none;
+  background: #0f172a;
+  color: #fff;
+  border-radius: 8px;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.78rem;
+  opacity: 0;
+  transition: opacity 0.08s;
+  z-index: 60;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+  .map-layout {
+    grid-template-columns: 1fr;
+  }
+}

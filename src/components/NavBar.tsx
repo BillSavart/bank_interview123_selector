@@ -5,6 +5,7 @@ import { Banknote, Download, Mail, Menu, X } from 'lucide-react';
 const navItems = [
   { to: '/', label: '面試題目篩選', end: true },
   { to: '/calendar', label: '招考行事曆' },
+  { to: '/scores-map', label: '錄取分數地圖' },
   { to: '/number-trainer', label: '大寫數字訓練器' },
   { to: '/check-game', label: '支票審查員' },
   { to: '/about', label: '使用說明' },
