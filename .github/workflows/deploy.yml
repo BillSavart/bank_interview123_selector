@@ -13,7 +13,24 @@ permissions:
   packages: write # push images to ghcr.io
 
 jobs:
+  # Gate: nothing builds or deploys unless typecheck, unit tests, and the
+  # banks-data validation all pass. `build` (and therefore `deploy`) needs this,
+  # so a red test blocks CD instead of shipping alongside it.
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci || npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run check:banks-data
+
   build:
+    needs: checks
     runs-on: ubuntu-latest
     outputs:
       owner: ${{ steps.meta.outputs.owner }}

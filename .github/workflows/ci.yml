@@ -1,13 +1,11 @@
 name: CI
 
-# Fast checks for pull requests and pushes. Separate from deploy.yml: this never
-# pulls the Google Sheet or touches the VM — it just typechecks, runs unit tests,
-# and validates the committed banks-data.json. The data scrape + deploy stay in
-# deploy.yml (push to main / daily cron).
+# Fast checks for pull requests. Pushes to main are gated by the `checks` job in
+# deploy.yml (which `build` → `deploy` depend on), so we only run here on PRs to
+# avoid duplicate runs. Never pulls the Google Sheet or touches the VM — just
+# typecheck, unit tests, and validation of the committed banks-data.json.
 on:
   pull_request:
-  push:
-    branches: [main]
 
 jobs:
   check:
