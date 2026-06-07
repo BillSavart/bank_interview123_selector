@@ -88,7 +88,13 @@ npm run make:answer-prompts -- 5
 
 ## GCP e2-micro 部署
 
-目前不使用 Vercel、Firebase 或外部資料庫。推薦用 Cloudflare 託管 DNS，A record 指向 GCP e2-micro static IP，VM 上用 Docker Compose 跑 Caddy 靜態前端與輕量 Node API；API 只負責參考答案評分、留言與留言投票資料。
+目前不使用 Vercel、Firebase 或外部資料庫。網域在 Cloudflare 託管並開橘雲（Proxied），A record 指向 GCP e2-micro 的外部 IP，VM 上用 Docker Compose 跑 Caddy 靜態前端與輕量 Node API；API 只負責參考答案評分、留言、留言投票與招考行事曆資料。
+
+正式環境的幾個重點：
+
+- **TLS**：Caddy 用 Cloudflare **Origin Certificate**（15 年）終止 TLS，不跑 Let's Encrypt；Cloudflare SSL/TLS 模式為 **Full (strict)**。
+- **邊緣快取**：公開 GET API 帶 `s-maxage=10`，搭配 Cloudflare `/api/*` Cache Rule，由邊緣吸收重複讀取，e2-micro 在高流量下幾乎閒置。
+- **防火牆**：GCP 80/443 只允許 Cloudflare 網段，外人無法繞過 Cloudflare 直連 VM（取代 Cloudflare Tunnel，單機 e2-micro 用 Tunnel 並不省錢）。
 
 部署細節見：
 

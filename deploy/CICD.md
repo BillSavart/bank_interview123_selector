@@ -71,6 +71,27 @@ EOF
   產生方式例如：`openssl rand -hex 24`。**未設定時後台寫入一律拒絕**（行事曆變唯讀）。
 - 改完 `.env` 後 `docker compose up -d` 讓 api / web 重新讀取環境變數。
 
+### Origin Certificate（首次部署前必放）
+
+web 容器的 Caddyfile 會讀 `/certs/origin.pem`、`/certs/origin.key`（compose 由 `./certs`
+唯讀掛載）。**憑證必須在 image rollout 之前就放好**，否則 Caddy 找不到檔會起不來。
+
+```bash
+# 在 compose 所在目錄（GitHub Actions 是 repo 的 deploy/）旁建立 certs/
+mkdir -p deploy/certs
+# 把 Cloudflare Origin Certificate 貼進去（沒 SSH 也可用 GCP Console 瀏覽器 SSH 上傳）
+#   deploy/certs/origin.pem   ← 憑證
+#   deploy/certs/origin.key   ← 私鑰
+chmod 600 deploy/certs/origin.key
+```
+
+> `deploy/certs/`、`*.pem`、`*.key` 已在 `.gitignore`，私鑰不會被 commit。
+
+> 注意:GitHub Actions（[deploy.yml](../.github/workflows/deploy.yml)）會自動 SSH 到 VM
+> `git pull` 並 `docker compose -f deploy/docker-compose.yml ... pull && up -d`，
+> 也就是 **push 後會自動部署**。所以新增/改 Caddyfile 這類烤進 image 的變更時，
+> 要先確保 VM 上的 `deploy/certs/` 已就位，再 push。
+
 ## 招考行事曆後台
 
 - 部署後到 `https://admin.你的網域`（子網域根目錄即後台），輸入 `ADMIN_TOKEN` 即可新增/編輯/刪除招考。
@@ -88,11 +109,18 @@ EOF
 
 ## Cloudflare
 
-- A record `@` 或子網域指到 VM static IP。
-- **另外加一筆 `admin` 的 A record（或 CNAME 指到主網域）也指到同一個 VM static IP**，
+- A record `@` 或子網域指到 VM external IP。
+- **另外加一筆 `admin` 的 A record（或 CNAME 指到主網域）也指到同一個 VM external IP**，
   讓 `admin.你的網域` 能解析。
-- Proxy 開啟，橘色雲。
-- SSL/TLS mode 設 `Full`。
+- 兩筆都開 Proxy（橘色雲）。
+- **SSL/TLS → Origin Server → Create Certificate**：產一張涵蓋 `你的網域` + `*.你的網域`
+  的 Origin Certificate，存成 `origin.pem` / `origin.key` 放到 VM 的 `deploy/certs/`
+  （compose 會唯讀掛載到 web 容器 `/certs`，Caddy 用它終止 TLS，免 Let's Encrypt 續期）。
+- **SSL/TLS encryption mode 設 `Full (strict)`**。
+- **Caching → Cache Rules** 加一條：`/api/*` → `Eligible for cache`、Edge TTL 尊重 origin，
+  讓公開 GET API（帶 `s-maxage=10`）被邊緣快取吸收。
+- 上線並確認憑證生效後，把防火牆 80/443 收緊成只允許 Cloudflare 網段，詳見
+  [README.md](README.md) 的「安全性收尾」。
 
 ## GitHub Secrets
 

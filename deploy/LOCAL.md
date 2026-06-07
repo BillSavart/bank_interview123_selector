@@ -20,9 +20,15 @@ npm run dev
 
 ## 本機測 production image
 
+> 注意:web image 烤進的 `Caddyfile.docker` 現在帶 `tls /certs/origin.pem ...`（正式環境用
+> Cloudflare Origin Certificate），所以**不能**再直接用 `DOMAIN=:80` 純 HTTP 跑——Caddy 會因為
+> 在 `:80` 站台上設 `tls` 而報錯。本機要驗證畫面,直接用上面的 `npm run dev` 最簡單。
+
+若真的要在本機跑 production image,把 `deploy/Caddyfile.docker` 兩個 block 的 `tls` 行先註解掉再 build:
+
 ```bash
 docker build -t local/bank-interview-web -f Dockerfile .
 docker run --rm -p 8080:80 -e DOMAIN=:80 local/bank-interview-web
 ```
 
-然後開 `http://localhost:8080`。
+然後開 `http://localhost:8080`。（記得別把註解掉 `tls` 的版本 commit 上去。）
