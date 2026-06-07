@@ -3,6 +3,7 @@
 
 FROM node:20-alpine AS build
 WORKDIR /app
+RUN apk add --no-cache curl unzip
 COPY package*.json ./
 # `npm ci` is the fast/reproducible path; fall back to `npm install` if the
 # lockfile is missing Linux-only optional deps (happens when it was last
