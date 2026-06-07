@@ -1,6 +1,14 @@
 # Caddyfile baked into the web container.
 # DOMAIN is injected via the compose env (e.g. DOMAIN=interview.example.com).
 # For local HTTP-only testing, set DOMAIN=:80 (Caddy then serves plain HTTP, no certs).
+#
+# ADMIN_DOMAIN is the admin subdomain (e.g. admin.interview.example.com). It serves
+# the same SPA + API; on this subdomain the site root IS the admin panel. Writes are
+# always gated by ADMIN_TOKEN in the API, so the subdomain is just a tidy, separate
+# entry point. Defaults to admin.localhost when unset (harmless for local testing).
+#
+# OPTIONAL extra hardening — HTTP Basic Auth at the edge: uncomment the basic_auth
+# block below and set ADMIN_BASIC_HASH to a bcrypt hash from `caddy hash-password`.
 
 {$DOMAIN} {
 	encode zstd gzip
@@ -10,6 +18,31 @@
 	}
 
 	# Static SPA
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable"
+	@html path /index.html /
+	header @html Cache-Control "no-cache"
+}
+
+{$ADMIN_DOMAIN:admin.localhost} {
+	encode zstd gzip
+
+	# Optional edge auth — uncomment to require a browser login on top of the
+	# in-app ADMIN_TOKEN. Generate the hash with: caddy hash-password
+	# basic_auth {
+	# 	admin {$ADMIN_BASIC_HASH}
+	# }
+
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
 	handle {
 		root * /srv
 		try_files {path} /index.html

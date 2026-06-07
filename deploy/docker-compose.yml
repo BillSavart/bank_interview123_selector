@@ -1,9 +1,11 @@
 # Runs on the GCP VM. Pulls pre-built images from ghcr — never builds here.
 #
-# Needs two env files alongside / referenced:
-#   ./.env                      → REGISTRY + DOMAIN (compose variable substitution)
-#       REGISTRY=ghcr.io/your-github-username
-#       DOMAIN=interview.example.com
+# Needs an .env alongside this file (compose variable substitution):
+#   REGISTRY=ghcr.io/your-github-username
+#   DOMAIN=interview.example.com
+#   ADMIN_DOMAIN=admin.interview.example.com   # admin subdomain (add DNS record)
+#   ADMIN_TOKEN=a-long-random-secret           # gates the calendar admin API
+#   ADMIN_BASIC_HASH=                          # optional Caddy basic_auth bcrypt hash
 
 services:
   api:
@@ -19,7 +21,11 @@ services:
       RATINGS_FILE: /data/ratings.json
       COMMENTS_FILE: /data/comments.jsonl
       COMMENT_VOTES_FILE: /data/comment-votes.jsonl
+      COMMENT_MOD_FILE: /data/comment-mods.jsonl
       CHECKGAME_FILE: /data/checkgame-top.json
+      NUMBERGAME_FILE: /data/numbergame-top.json
+      CALENDAR_FILE: /data/calendar.json
+      ADMIN_TOKEN: ${ADMIN_TOKEN}
       COMMENT_HIDE_SCORE: "-100"
       MAX_QUESTION_ID: "123"
     volumes:
@@ -36,6 +42,8 @@ services:
         max-file: "3"
     environment:
       DOMAIN: ${DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:-admin.localhost}
+      ADMIN_BASIC_HASH: ${ADMIN_BASIC_HASH:-}
     ports:
       - "80:80"
       - "443:443"

@@ -58,14 +58,39 @@ sudo cp deploy/docker-compose.yml /opt/bank-interview/docker-compose.yml
 sudo tee /opt/bank-interview/.env >/dev/null <<'EOF'
 REGISTRY=ghcr.io/你的github帳號
 DOMAIN=你的網域
+ADMIN_DOMAIN=admin.你的網域
+ADMIN_TOKEN=用一段夠長的隨機字串
+# 選用：邊界 Basic Auth 的 bcrypt hash（caddy hash-password 產生）
+ADMIN_BASIC_HASH=
 EOF
 ```
 
-`DOMAIN` 是 Cloudflare 上的正式網域，例如 `example.com` 或 `interview.example.com`。
+- `DOMAIN` 是 Cloudflare 上的正式網域，例如 `example.com` 或 `interview.example.com`。
+- `ADMIN_DOMAIN` 是管理後台子網域，例如 `admin.interview.example.com`。
+- `ADMIN_TOKEN` 是招考行事曆後台的管理金鑰，保護 `/api/admin/*` 寫入。
+  產生方式例如：`openssl rand -hex 24`。**未設定時後台寫入一律拒絕**（行事曆變唯讀）。
+- 改完 `.env` 後 `docker compose up -d` 讓 api / web 重新讀取環境變數。
+
+## 招考行事曆後台
+
+- 部署後到 `https://admin.你的網域`（子網域根目錄即後台），輸入 `ADMIN_TOKEN` 即可新增/編輯/刪除招考。
+  （本地測試沒有子網域，改用 `http://localhost:5173/admin`。）
+- 事件存在 `ratings_data` volume 的 `calendar.json`，**改內容不需要重新 deploy**。
+- 想再加一層瀏覽器登入：在 `deploy/Caddyfile.docker` 的 admin block 取消 `basic_auth`
+  註解，用 `docker run --rm caddy:2-alpine caddy hash-password` 產生 hash 填到 `ADMIN_BASIC_HASH`。
+
+## 廣告
+
+- 每個前台頁面都已預留廣告版位（首頁題目間每 8 題一則、其他頁在 navbar 與內容之間 + 最下方）。
+- **本地 `npm run dev` 會顯示佔位框；正式上線預設「不顯示」任何廣告。**
+- 想正式啟用廣告時，需同時：build 時設 `VITE_ADSENSE_CLIENT`（AdSense 發佈商 id）**且**
+  `VITE_ADS_ENABLED=true`。只設其中一個都不會顯示，確保不會誤開。
 
 ## Cloudflare
 
 - A record `@` 或子網域指到 VM static IP。
+- **另外加一筆 `admin` 的 A record（或 CNAME 指到主網域）也指到同一個 VM static IP**，
+  讓 `admin.你的網域` 能解析。
 - Proxy 開啟，橘色雲。
 - SSL/TLS mode 設 `Full`。
 
