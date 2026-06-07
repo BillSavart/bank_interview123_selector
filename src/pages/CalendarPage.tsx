@@ -266,15 +266,15 @@ const fmtRange = (start: string, end: string) => {
 };
 
 function EventModal({ event, onClose }: { event: CalendarEvent; onClose: () => void }) {
-  const rows: Array<[string, string]> = [
-    ['報名期間', fmtRange(event.signupStart, event.signupEnd)],
-    ['筆試日期', event.writtenExam || '—'],
-    ['試題與解答公告', event.answerKey || '—'],
-    ['筆試結果公佈', event.writtenResult || '—'],
-    ['面試（一面）', event.interview || '—'],
-    ['二面', event.interview2 || '—'],
-    ['放榜', event.finalResult || '—'],
-  ];
+  // Only show rows the admin actually filled in.
+  const rows: Array<[string, string]> = [];
+  if (event.signupStart || event.signupEnd) rows.push(['報名期間', fmtRange(event.signupStart, event.signupEnd)]);
+  if (event.writtenExam) rows.push(['筆試日期', event.writtenExam]);
+  if (event.answerKey) rows.push(['試題與解答公告', event.answerKey]);
+  if (event.writtenResult) rows.push(['筆試結果公佈', event.writtenResult]);
+  if (event.interview) rows.push(['面試', event.interview]);
+  if (event.interview2) rows.push(['二面', event.interview2]);
+  if (event.finalResult) rows.push(['放榜', event.finalResult]);
   return (
     <div className="cal-modal-backdrop" onClick={onClose} role="presentation">
       <div className="cal-modal" onClick={(e) => e.stopPropagation()}>

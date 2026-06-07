@@ -25,7 +25,7 @@ const FIELD_LABELS: Array<{ key: keyof CalendarEventInput; label: string; type: 
   { key: 'writtenExam', label: '筆試日期', type: 'datetime' },
   { key: 'answerKey', label: '試題與解答公告', type: 'datetime' },
   { key: 'writtenResult', label: '筆試結果公佈', type: 'datetime' },
-  { key: 'interview', label: '面試（一面）', type: 'datetime' },
+  { key: 'interview', label: '面試', type: 'datetime' },
   { key: 'interview2', label: '二面', type: 'datetime' },
   { key: 'finalResult', label: '放榜', type: 'datetime' },
   { key: 'link', label: '簡章連結', type: 'text', placeholder: 'https://…' },
@@ -241,11 +241,18 @@ function AdminDashboard({
                         className="admin-input"
                         type="date"
                         value={date}
-                        onChange={(e) => setDraft({ ...draft, [f.key]: joinDT(e.target.value, time) })}
+                        // When a date is first picked, default the time to 14:00 (24h).
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            [f.key]: joinDT(e.target.value, e.target.value ? time || '14:00' : ''),
+                          })
+                        }
                       />
                       <input
                         className="admin-input admin-time"
                         type="time"
+                        step={60}
                         value={time}
                         // time alone is meaningless without a date
                         disabled={!date}
