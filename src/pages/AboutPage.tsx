@@ -56,31 +56,6 @@ export function AboutPage() {
       </ol>
 
       <h2 className="about-h2">
-        <ClipboardCheck size={18} /> 支票審查員
-      </h2>
-      <p className="about-text">
-        <Link to="/check-game">支票審查員</Link>是一款限時小遊戲：看一張支票圖片，判斷它「可以」或「不可以」受理。
-      </p>
-      <ol className="about-list">
-        <li>輸入暱稱後開始，每題限時 15 秒。</li>
-        <li>答對得分，作答越快分數越高；答錯或逾時不得分。每題會附上正解說明。</li>
-        <li>結束後成績會上傳排行榜，看看你排第幾名。</li>
-      </ol>
-
-      <h2 className="about-h2">
-        <Hash size={18} /> 大寫數字訓練器
-      </h2>
-      <p className="about-text">
-        <Link to="/number-trainer">大寫數字訓練器</Link>練習把國字大寫金額快速轉成阿拉伯數字。
-      </p>
-      <ol className="about-list">
-        <li>共 12 題，每題限時 10 秒，把大寫金額填回阿拉伯數字。</li>
-        <li>前 6 題是方格題：對齊「億仟佰拾萬仟佰拾元」表頭，✗ 代表該位是 0。</li>
-        <li>後 6 題是支票寫法：整串大寫金額（如「貳拾捌萬零參佰元整」）。</li>
-        <li>計分與排行榜方式同支票審查員，答得越快越高分。</li>
-      </ol>
-
-      <h2 className="about-h2">
         <CalendarDays size={18} /> 招考行事曆
       </h2>
       <p className="about-text">
@@ -103,6 +78,31 @@ export function AboutPage() {
         <li>點任一考區，右側會顯示該區分數、與上一梯的升降，以及最近幾梯的分數折線。</li>
         <li>右側「難度排行」依分數高低列出當梯各考區；同色同分的相鄰考區會合併顯示。</li>
         <li>資料整理自公開招考結果，僅供落點參考，實際門檻仍以各行庫正式公告為準。</li>
+      </ol>
+
+      <h2 className="about-h2">
+        <Hash size={18} /> 大寫數字訓練器
+      </h2>
+      <p className="about-text">
+        <Link to="/number-trainer">大寫數字訓練器</Link>練習把國字大寫金額快速轉成阿拉伯數字。
+      </p>
+      <ol className="about-list">
+        <li>共 12 題，每題限時 10 秒，把大寫金額填回阿拉伯數字。</li>
+        <li>前 6 題是方格題：對齊「億仟佰拾萬仟佰拾元」表頭，✗ 代表該位是 0。</li>
+        <li>後 6 題是支票寫法：整串大寫金額（如「貳拾捌萬零參佰元整」）。</li>
+        <li>計分與排行榜方式同支票審查員，答得越快越高分。</li>
+      </ol>
+
+      <h2 className="about-h2">
+        <ClipboardCheck size={18} /> 支票審查員
+      </h2>
+      <p className="about-text">
+        <Link to="/check-game">支票審查員</Link>是一款限時小遊戲：看一張支票圖片，判斷它「可以」或「不可以」受理。
+      </p>
+      <ol className="about-list">
+        <li>輸入暱稱後開始，每題限時 15 秒。</li>
+        <li>答對得分，作答越快分數越高；答錯或逾時不得分。每題會附上正解說明。</li>
+        <li>結束後成績會上傳排行榜，看看你排第幾名。</li>
       </ol>
 
       <h2 className="about-h2">
