@@ -6,7 +6,6 @@ const navItems = [
   { to: '/', label: '面試題目篩選', end: true },
   { to: '/calendar', label: '招考行事曆' },
   { to: '/scores-map', label: '筆試門檻' },
-  { to: '/about', label: '使用說明' },
 ];
 
 const gameItems = [
@@ -78,6 +77,13 @@ export function NavBar() {
               ))}
             </div>
           </div>
+          <NavLink
+            to="/about"
+            className={({ isActive }) => (isActive ? 'is-active' : '')}
+            onClick={closeNav}
+          >
+            使用說明
+          </NavLink>
           <a
             className="nav-pdf"
             href="https://forms.gle/2Yw4mvY91sj1uKcU8"

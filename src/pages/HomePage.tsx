@@ -210,7 +210,7 @@ export function HomePage() {
                 <Banknote size={18} />
                 公股銀行面試題庫
               </div>
-              <h1 className="display-title mb-3">公股銀行面試123小幫手</h1>
+              <h1 className="display-title mb-3">公股銀行面試題目篩選器</h1>
               <p className="hero-copy mb-0">
                 依照考生背景排序 123 題常見口試題，快速抓出最該優先練的動機題、情境題、業務題與時事題。
                 選好條件後可直接展開每題的答題方向與示範回答。

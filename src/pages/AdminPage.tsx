@@ -17,6 +17,12 @@ import {
   type AdminComment,
   type ModerateAction,
 } from '../lib/adminComments';
+import {
+  LEADERBOARD_GAMES,
+  fetchLeaderboard,
+  deleteLeaderboardEntry,
+  type LeaderboardEntry,
+} from '../lib/adminLeaderboard';
 
 const FIELD_LABELS: Array<{ key: keyof CalendarEventInput; label: string; type: 'text' | 'datetime'; placeholder?: string }> = [
   { key: 'org', label: '機關 / 名稱', type: 'text', placeholder: '台灣銀行 一般金融人員' },
@@ -128,7 +134,7 @@ function AdminDashboard({
   setEvents: (e: CalendarEvent[]) => void;
   onLogout: () => void;
 }) {
-  const [tab, setTab] = useState<'calendar' | 'comments'>('calendar');
+  const [tab, setTab] = useState<'calendar' | 'comments' | 'leaderboard'>('calendar');
   // `null` = no form open; '' draft for new; an id for editing.
   const [editingId, setEditingId] = useState<string | 'new' | null>(null);
   const [draft, setDraft] = useState<CalendarEventInput>(emptyEventInput());
@@ -219,10 +225,19 @@ function AdminDashboard({
         >
           留言板管理
         </button>
+        <button
+          type="button"
+          className={`admin-tab ${tab === 'leaderboard' ? 'is-active' : ''}`}
+          onClick={() => setTab('leaderboard')}
+        >
+          排行榜管理
+        </button>
       </div>
 
       {tab === 'comments' ? (
         <CommentsAdmin token={token} />
+      ) : tab === 'leaderboard' ? (
+        <LeaderboardAdmin token={token} />
       ) : (
         <>
           {error && <p className="admin-error">{error}</p>}
@@ -444,6 +459,86 @@ function CommentsAdmin({ token }: { token: string }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function LeaderboardAdmin({ token }: { token: string }) {
+  // One board per game, loaded together; null until its fetch resolves.
+  const [boards, setBoards] = useState<Record<string, LeaderboardEntry[] | null>>({});
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState('');
+  const [busyKey, setBusyKey] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    setState('loading');
+    Promise.all(LEADERBOARD_GAMES.map((g) => fetchLeaderboard(g.slug).then((rows) => [g.slug, rows] as const)))
+      .then((pairs) => {
+        if (!alive) return;
+        setBoards(Object.fromEntries(pairs));
+        setState('ready');
+      })
+      .catch(() => alive && setState('error'));
+    return () => {
+      alive = false;
+    };
+  }, [token]);
+
+  const remove = (slug: string, entry: LeaderboardEntry) => {
+    if (!window.confirm(`確定刪除「${entry.name}」（${entry.score} 分）的排行榜紀錄？`)) return;
+    setBusyKey(`${slug}:${entry.name}`);
+    setError('');
+    deleteLeaderboardEntry(token, slug, entry.name)
+      .then((rows) => setBoards((prev) => ({ ...prev, [slug]: rows })))
+      .catch((err) => setError(err.message || '刪除失敗。'))
+      .finally(() => setBusyKey(''));
+  };
+
+  if (state === 'loading') return <p className="admin-empty">載入中…</p>;
+  if (state === 'error') return <p className="admin-error">排行榜載入失敗，請重新登入或稍後再試。</p>;
+
+  return (
+    <div>
+      {error && <p className="admin-error">{error}</p>}
+      {LEADERBOARD_GAMES.map((g) => {
+        const rows = boards[g.slug] ?? [];
+        return (
+          <section key={g.slug} className="admin-lb-section">
+            <h2 className="admin-form-title">{g.label}</h2>
+            <div className="admin-list">
+              {rows.length === 0 && <p className="admin-empty">目前沒有任何紀錄。</p>}
+              {rows.map((entry, i) => (
+                <div key={`${entry.name}-${entry.createdAt}`} className="admin-row">
+                  <div className="admin-row-main">
+                    <span className="admin-row-org">
+                      <span className="admin-lb-rank">#{i + 1}</span> {entry.name}
+                    </span>
+                    <span className="admin-row-meta">
+                      <span>{entry.score} 分</span>
+                      {entry.createdAt && (
+                        <span>{new Date(entry.createdAt).toLocaleString('zh-TW', { hour12: false })}</span>
+                      )}
+                    </span>
+                  </div>
+                  <div className="admin-row-actions">
+                    <button
+                      type="button"
+                      className="admin-icon-btn is-danger"
+                      disabled={busyKey === `${g.slug}:${entry.name}`}
+                      onClick={() => remove(g.slug, entry)}
+                      aria-label="刪除"
+                      title="刪除這筆紀錄"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }

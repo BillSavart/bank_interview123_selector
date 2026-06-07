@@ -5,6 +5,7 @@ import {
   ClipboardCheck,
   Hash,
   CalendarDays,
+  MapPinned,
   MessageSquare,
   Mail,
 } from 'lucide-react';
@@ -89,6 +90,19 @@ export function AboutPage() {
         <li>橫條為報名期間，其餘色塊為筆試、試題與解答公告、筆試結果、面試、二面、放榜等日期。</li>
         <li>點任一筆事件即可看到完整資訊與簡章連結。</li>
         <li>可瀏覽上個月到三個月後的範圍；過期太久的場次會自動移除。</li>
+      </ol>
+
+      <h2 className="about-h2">
+        <MapPinned size={18} /> 筆試門檻
+      </h2>
+      <p className="about-text">
+        <Link to="/scores-map">筆試門檻</Link>以台灣地圖呈現八大公股行庫歷年各考區的筆試錄取分數，快速看出哪些地區競爭較激烈。
+      </p>
+      <ol className="about-list">
+        <li>先選上方的銀行與招考梯次，地圖會用顏色深淺標出各考區的門檻分數，顏色越深代表分數越高、越難。</li>
+        <li>點任一考區，右側會顯示該區分數、與上一梯的升降，以及最近幾梯的分數折線。</li>
+        <li>右側「難度排行」依分數高低列出當梯各考區；同色同分的相鄰考區會合併顯示。</li>
+        <li>資料整理自公開招考結果，僅供落點參考，實際門檻仍以各行庫正式公告為準。</li>
       </ol>
 
       <h2 className="about-h2">

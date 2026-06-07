@@ -395,7 +395,14 @@ const makeLeaderboard = ({ file, topN, maxScore }) => {
     return idx >= 0 ? idx + 1 : null;
   };
 
-  return { load, persist, record, leaderboard: () => top, maxScore };
+  // Admin: drop the entry for a name. Returns true if a row was removed.
+  const remove = (name) => {
+    const before = top.length;
+    top = top.filter((e) => e.name !== name);
+    return top.length < before;
+  };
+
+  return { load, persist, record, remove, leaderboard: () => top, maxScore };
 };
 
 // One leaderboard per mini-game, keyed by the URL slug used in /api/<game>/*.
@@ -829,6 +836,36 @@ createServer(async (req, res) => {
     const leaderboardMatch = url.pathname.match(/^\/api\/([a-z]+)\/leaderboard$/);
     if (req.method === 'GET' && leaderboardMatch && leaderboards[leaderboardMatch[1]]) {
       sendJson(res, 200, { leaderboard: leaderboards[leaderboardMatch[1]].leaderboard() }, cacheRead);
+      return;
+    }
+
+    // --- 排行榜管理 (admin): delete a leaderboard entry by name ----------------
+    const adminLbMatch = url.pathname.match(/^\/api\/admin\/([a-z]+)\/leaderboard$/);
+    if (req.method === 'DELETE' && adminLbMatch && leaderboards[adminLbMatch[1]]) {
+      if (!isAdmin(req)) {
+        sendJson(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      const board = leaderboards[adminLbMatch[1]];
+      const bodyText = await readBody(req);
+      let body = {};
+      try {
+        body = bodyText ? JSON.parse(bodyText) : {};
+      } catch {
+        sendJson(res, 400, { error: 'request body must be valid JSON' });
+        return;
+      }
+      const name = String(body.name ?? '').trim();
+      if (!name) {
+        sendJson(res, 400, { error: '缺少要刪除的暱稱' });
+        return;
+      }
+      if (!board.remove(name)) {
+        sendJson(res, 404, { error: 'entry not found' });
+        return;
+      }
+      await board.persist();
+      sendJson(res, 200, { leaderboard: board.leaderboard() });
       return;
     }
 

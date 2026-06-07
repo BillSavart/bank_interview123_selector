@@ -69,6 +69,8 @@ const SUBREGION_PARENT = {
 const NON_GEO = new Set([
   "櫃台組雙北", "櫃台組台北", "金融組台北", "不分區", "專業人員（一）", "專業人員（二）",
 ]);
+// per-bank round (column) labels to drop entirely from the dataset
+const ROUND_EXCLUDE = { "土地銀行": new Set(["114總行"]) };
 
 // ---------- geometry: Douglas-Peucker + equirectangular projection ----------
 function perpDist(p, a, b) {
@@ -271,7 +273,13 @@ const banksOut = [];
 for (const name of BANK_SHEETS) {
   const file = files[name];
   if (!file) { console.warn(`!! sheet not found: ${name}`); continue; }
-  const { rounds, rows } = parseSheet(file);
+  let { rounds, rows } = parseSheet(file);
+  const drop = ROUND_EXCLUDE[name];
+  if (drop) {
+    const keep = rounds.map((r, i) => (drop.has(r) ? -1 : i)).filter((i) => i >= 0);
+    rounds = keep.map((i) => rounds[i]);
+    rows = rows.map((r) => ({ ...r, vals: keep.map((i) => r.vals[i]), colors: keep.map((i) => r.colors[i]) }));
+  }
   applySharing(rounds, rows);
   // Per-round combined districts: regions sharing a fill colour that year (≥2
   // members), so the UI can show "these are the same exam district".
@@ -299,7 +307,12 @@ for (const name of BANK_SHEETS) {
 }
 
 const out = {
-  meta: { generated: new Date().toISOString().slice(0, 10), source: "user Google Sheet" },
+  meta: {
+    generated: new Date().toISOString().slice(0, 10),
+    source: "user Google Sheet",
+    // Single source of truth for the "view spreadsheet" button on the map page.
+    sheetUrl: `https://docs.google.com/spreadsheets/d/${SHEET_ID}/edit`,
+  },
   map: { width: +W.toFixed(1), height: +H.toFixed(1), counties, centroids, polys: polysJson },
   regionToCounty: REGION_TO_COUNTY,
   banks: banksOut,

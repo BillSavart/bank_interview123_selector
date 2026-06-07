@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { MapPinned } from 'lucide-react';
+import { MapPinned, FileSpreadsheet } from 'lucide-react';
+import { seriesOf } from '../series';
 
 // Easy → hard. Keep the easy end saturated enough to stay distinct from grey "無資料".
 const PAL = ['#16b8a6', '#10936b', '#82b936', '#f2c12e', '#f57a1f', '#d9362f', '#8f1029'];
@@ -27,6 +28,7 @@ interface MapData {
   polys: Record<string, [number, number][][]>;
 }
 interface Dataset {
+  meta?: { sheetUrl?: string };
   map: MapData;
   regionToCounty: Record<string, string[]>;
   banks: Bank[];
@@ -79,10 +81,12 @@ export function MapPage() {
   const [bankIdx, setBankIdx] = useState(0);
   const [roundIdx, setRoundIdx] = useState(-1);
   const [selRegion, setSelRegion] = useState<string | null>(null);
-  const [tip, setTip] = useState<{ x: number; y: number; html: string } | null>(null);
   const [roundMenuOpen, setRoundMenuOpen] = useState(false);
   const [roundYear, setRoundYear] = useState<string | null>(null);
   const roundPickerRef = useRef<HTMLDivElement | null>(null);
+  // Tooltip is positioned imperatively via this ref instead of React state, so
+  // moving the mouse over the map doesn't re-render the (heavy) county SVG.
+  const tipRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     fetch('/banks-data.json')
@@ -136,14 +140,19 @@ export function MapPage() {
         if (present.length) {
           [ri, val] = present[present.length - 1];
           rd = bank.rounds[ri];
-          if (present.length >= 2) prev = present[present.length - 2][1];
+          // Previous value of the SAME exam series, not just the prior round.
+          const series = seriesOf(bank.name, rd);
+          const same = present.filter(([i]) => seriesOf(bank.name, bank.rounds[i]) === series);
+          if (same.length >= 2) prev = same[same.length - 2][1];
         }
       } else {
         val = r.vals[roundIdx];
         rd = bank.rounds[roundIdx];
         ri = val != null ? roundIdx : -1;
-        const pos = present.findIndex(([i]) => i === roundIdx);
-        if (pos > 0) prev = present[pos - 1][1];
+        // Latest earlier round of the same series as the selected round.
+        const series = seriesOf(bank.name, rd);
+        const same = present.filter(([i]) => i < roundIdx && seriesOf(bank.name, bank.rounds[i]) === series);
+        if (same.length) prev = same[same.length - 1][1];
       }
       out[r.region] = { val, rd, ri, prev, isCore: r.isCore, parent: r.parent };
     }
@@ -224,7 +233,17 @@ export function MapPage() {
   const roundLabel = bank && roundIdx >= 0 ? bank.rounds[roundIdx] : '選擇梯次';
 
   const selectRegion = (r: string) => setSelRegion(r);
-  const moveTip = (e: React.MouseEvent, html: string) => setTip({ x: e.clientX + 14, y: e.clientY + 14, html });
+  const moveTip = (e: React.MouseEvent, html: string) => {
+    const el = tipRef.current;
+    if (!el) return;
+    el.innerHTML = html;
+    el.style.left = `${e.clientX + 14}px`;
+    el.style.top = `${e.clientY + 14}px`;
+    el.style.opacity = '1';
+  };
+  const hideTip = () => {
+    if (tipRef.current) tipRef.current.style.opacity = '0';
+  };
 
   if (state === 'loading') return <div className="container py-4 map-page"><p className="calendar-empty">載入中…</p></div>;
   if (state === 'error' || !data || !bank)
@@ -233,14 +252,22 @@ export function MapPage() {
   // ranking
   const core = Object.entries(rv).filter(([, x]) => x.isCore);
   const open = core.filter(([, x]) => x.val != null).sort((a, b) => (b[1].val as number) - (a[1].val as number));
-  const closed = core.filter(([, x]) => x.val == null);
 
   const selRow = selRegion ? bank.regions.find((r) => r.region === selRegion) : null;
   const selRec = selRegion ? rv[selRegion] : null;
-  const present = selRow ? (selRow.vals.map((v, i) => (v == null ? null : [i, v])).filter(Boolean) as [number, number][]) : [];
+  const currentRound = roundIdx >= 0 ? roundIdx : Math.max(0, bank.rounds.length - 1);
+
+  // The trend line compares like-with-like: only rounds of the same exam series
+  // as the selected round, and at most the most recent six (oldest→newest order).
+  const currentSeries = seriesOf(bank.name, bank.rounds[currentRound] ?? '');
+  const present = (selRow
+    ? (selRow.vals
+        .map((v, i) => (v == null || seriesOf(bank.name, bank.rounds[i]) !== currentSeries ? null : [i, v]))
+        .filter(Boolean) as [number, number][])
+    : []
+  ).slice(-6);
 
   // Same-district mates of the selected region, for the selected round.
-  const currentRound = roundIdx >= 0 ? roundIdx : Math.max(0, bank.rounds.length - 1);
   const activeDistricts = bank.districts[currentRound] ?? [];
   const regionDistrict = new Map<string, string[]>();
   for (const group of activeDistricts) for (const reg of group) regionDistrict.set(reg, group);
@@ -259,6 +286,11 @@ export function MapPage() {
     };
   });
   const districtRegionSet = new Set(activeDistricts.flat());
+
+  // When the selected region is part of a merged district, show the whole
+  // group's label (e.g. 「台中、彰化」) above the score, matching the ranking row.
+  const selGroup = selRegion ? regionDistrict.get(selRegion) : null;
+  const selLabel = selGroup ? selGroup.join('、') : selRegion;
 
   const rankRows = open.flatMap(([reg, x]) => {
     const group = regionDistrict.get(reg);
@@ -283,6 +315,12 @@ export function MapPage() {
           筆試門檻
         </span>
         <h1 className="map-page-title">八大公股行庫 · 歷年筆試門檻</h1>
+        {data.meta?.sheetUrl && (
+          <a className="map-sheet-link" href={data.meta.sheetUrl} target="_blank" rel="noreferrer">
+            <FileSpreadsheet size={16} />
+            資料來源試算表
+          </a>
+        )}
       </div>
 
       <div className="map-banks">
@@ -386,7 +424,7 @@ export function MapPage() {
                   d={d}
                   fill={colorOf(v, colorScale)}
                   onMouseMove={(e) => moveTip(e, `<b>${reg ?? cty}</b>　${v != null ? `${v} 分` : '無資料'}${groupNote}`)}
-                  onMouseLeave={() => setTip(null)}
+                  onMouseLeave={hideTip}
                   onClick={reg && v != null ? () => selectRegion(reg) : undefined}
                 />
               );
@@ -438,7 +476,7 @@ export function MapPage() {
                   className={`map-island ${selRegion === reg ? 'is-sel' : ''}`}
                   onClick={v != null ? () => selectRegion(reg) : undefined}
                   onMouseMove={(e) => moveTip(e, `<b>${reg}</b>　${v != null ? `${v} 分` : '無資料'}`)}
-                  onMouseLeave={() => setTip(null)}
+                  onMouseLeave={hideTip}
                 >
                   <svg viewBox={vb}>
                     <path className="map-county" d={dPath} fill={colorOf(v, colorScale)} />
@@ -462,10 +500,10 @@ export function MapPage() {
         <div className="map-card map-side">
           {selRec && (
             <>
-              <div className="sel-name">{selRegion}</div>
+              <div className="sel-name">{selLabel}</div>
               <div className="sel-score">{selRec.val != null ? selRec.val : '—'}<small> 分</small></div>
               <div className="sel-meta">{selRec.val != null ? `${selRec.rd} 筆試門檻` : '本梯無資料'}</div>
-              {present.length >= 2 && <Sparkline bank={bank} present={present} onTip={moveTip} clearTip={() => setTip(null)} />}
+              {present.length >= 2 && <Sparkline bank={bank} present={present} onTip={moveTip} clearTip={hideTip} />}
             </>
           )}
 
@@ -489,22 +527,11 @@ export function MapPage() {
                 <span className="v">{row.value}</span>
               </div>
             ))}
-            {closed.map(([reg]) => (
-              <div key={reg} className="map-row is-empty">
-                <span className="rk" />
-                <span className="nm">{reg}</span>
-                <span className="track" />
-                <span className="delta flat" />
-                <span className="v">無資料</span>
-              </div>
-            ))}
           </div>
         </div>
       </div>
 
-      {tip && (
-        <div className="map-tip" style={{ left: tip.x, top: tip.y, opacity: 1 }} dangerouslySetInnerHTML={{ __html: tip.html }} />
-      )}
+      <div ref={tipRef} className="map-tip" style={{ opacity: 0 }} />
     </div>
   );
 }
@@ -544,10 +571,12 @@ function Sparkline({
           const labelAbove = k % 2 === 0;
           const labelY = labelAbove ? Math.max(14, y - 14) : Math.min(H - 8, y + 22);
           const labelText = String(p[1]);
-          const labelWidth = Math.max(25, labelText.length * 5.2 + 10);
+          const labelWidth = Math.max(34, labelText.length * 7 + 12);
+          // Keep the label box inside the chart so it never spills past the edge.
+          const lx = Math.min(W - labelWidth / 2, Math.max(labelWidth / 2, x));
           return (
             <g key={p[0]} onMouseMove={(e) => onTip(e, `${bank.rounds[p[0]]}<br><b>${p[1]}</b> 分`)} onMouseLeave={clearTip}>
-              <line x1={x.toFixed(1)} y1={y.toFixed(1)} x2={x.toFixed(1)} y2={labelY.toFixed(1)} className="map-spark-stem" />
+              <line x1={x.toFixed(1)} y1={y.toFixed(1)} x2={lx.toFixed(1)} y2={labelY.toFixed(1)} className="map-spark-stem" />
               <circle
                 cx={x.toFixed(1)}
                 cy={y.toFixed(1)}
@@ -558,15 +587,15 @@ function Sparkline({
               />
               <rect
                 className={`map-spark-label-bg ${k === highIdx || k === lowIdx || k === present.length - 1 ? 'is-key' : ''}`}
-                x={(x - labelWidth / 2).toFixed(1)}
-                y={(labelY - 10).toFixed(1)}
+                x={(lx - labelWidth / 2).toFixed(1)}
+                y={(labelY - 11).toFixed(1)}
                 width={labelWidth.toFixed(1)}
-                height={14}
-                rx={5}
+                height={22}
+                rx={7}
               />
               <text
                 className={`map-spark-value ${k === highIdx || k === lowIdx || k === present.length - 1 ? 'is-key' : ''}`}
-                x={x.toFixed(1)}
+                x={lx.toFixed(1)}
                 y={(labelY + 0.5).toFixed(1)}
                 textAnchor="middle"
                 dominantBaseline="middle"

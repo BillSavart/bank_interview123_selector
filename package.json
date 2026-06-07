@@ -9,9 +9,12 @@
     "api:local": "RATINGS_FILE=.local-ratings.json COMMENTS_FILE=.local-comments.jsonl COMMENT_VOTES_FILE=.local-comment-votes.jsonl COMMENT_MOD_FILE=.local-comment-mods.jsonl CHECKGAME_FILE=.local-checkgame-top.json NUMBERGAME_FILE=.local-numbergame-top.json CALENDAR_FILE=.local-calendar.json node server/ratings-api.mjs",
     "extract:questions": "node scripts/extract-questions.mjs",
     "make:answer-prompts": "node scripts/make-answer-prompts.mjs",
-    "prebuild": "npm run extract:questions && npm run build:banks-data",
+    "prebuild": "npm run extract:questions && npm run build:banks-data && npm run check:banks-data",
     "build": "tsc -b && vite build",
     "build:banks-data": "node scripts/build-banks-data.mjs",
+    "check:banks-data": "node scripts/check-banks-data.mjs",
+    "typecheck": "tsc -b",
+    "test": "vitest run",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -27,6 +30,7 @@
     "@vitejs/plugin-react": "^6.0.2",
     "pdf-parse": "^2.4.5",
     "typescript": "^6.0.3",
-    "vite": "^8.0.13"
+    "vite": "^8.0.13",
+    "vitest": "^2.1.9"
   }
 }

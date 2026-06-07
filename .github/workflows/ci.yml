@@ -1,0 +1,33 @@
+name: CI
+
+# Fast checks for pull requests and pushes. Separate from deploy.yml: this never
+# pulls the Google Sheet or touches the VM — it just typechecks, runs unit tests,
+# and validates the committed banks-data.json. The data scrape + deploy stay in
+# deploy.yml (push to main / daily cron).
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install deps
+        run: npm ci || npm install
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Validate committed banks-data.json
+        run: npm run check:banks-data
