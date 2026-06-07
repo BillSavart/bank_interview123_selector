@@ -273,6 +273,17 @@ for (const name of BANK_SHEETS) {
   if (!file) { console.warn(`!! sheet not found: ${name}`); continue; }
   const { rounds, rows } = parseSheet(file);
   applySharing(rounds, rows);
+  // Per-round combined districts: regions sharing a fill colour that year (≥2
+  // members), so the UI can show "these are the same exam district".
+  const districts = rounds.map((_, k) => {
+    const byColor = {};
+    for (const r of rows) {
+      const c = r.colors[k];
+      if (!c || r.vals[k] == null) continue;
+      (byColor[c] ||= []).push(r.region);
+    }
+    return Object.values(byColor).filter((g) => g.length >= 2);
+  });
   const regions = [];
   for (const { region, vals } of rows) {
     if (!vals.some((v) => v !== null)) continue; // all-empty / all-不詳 row
@@ -284,7 +295,7 @@ for (const name of BANK_SHEETS) {
       nonGeo: NON_GEO.has(region),
     });
   }
-  banksOut.push({ name, rounds, regions });
+  banksOut.push({ name, rounds, regions, districts });
 }
 
 const out = {
