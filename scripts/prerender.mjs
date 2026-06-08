@@ -6,6 +6,9 @@
 //
 // Runs in `npm run build` after `vite build`. Real users still get the full
 // SPA (the body is identical to index.html); only <head> differs per route.
+//
+// Only the map and calendar pages carry a share image (public/og/*.jpg);
+// the rest get title + description text only, no thumbnail.
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -15,13 +18,13 @@ const BASE = 'https://bank-interview-advisor.com';
 const SITE = '公股銀行新手村';
 
 // Home is already correct in dist/index.html (the source index.html defaults),
-// so it's not regenerated here. slug → public/og/<slug>.png must exist.
+// so it's not regenerated here. `image` (optional) → public/og/<file>.
 const ROUTES = [
-  { path: '/calendar',       slug: 'calendar',       title: '招考行事曆',     desc: '八大公股銀行報名、筆試、面試與放榜日期，一頁掌握。' },
-  { path: '/scores-map',     slug: 'scores-map',     title: '筆試門檻',       desc: '以台灣地圖呈現八大公股行庫歷年各考區的筆試錄取分數。' },
-  { path: '/number-trainer', slug: 'number-trainer', title: '大寫數字訓練器', desc: '練習壹貳參…金融大寫數字，銀行櫃檯與支票必備技能。' },
-  { path: '/check-game',     slug: 'check-game',     title: '支票審查員',     desc: '模擬支票審查小遊戲，練習辨識票據填寫錯誤。' },
-  { path: '/about',          slug: 'about',          title: '使用說明',       desc: '公股銀行新手村的各功能介紹與使用教學。' },
+  { path: '/calendar',       title: '招考行事曆',     desc: '八大公股銀行報名、筆試、面試與放榜日期，一頁掌握。',     image: { file: 'calendar.jpg',   w: 1200, h: 938 } },
+  { path: '/scores-map',     title: '筆試門檻',       desc: '以台灣地圖呈現八大公股行庫歷年各考區的筆試錄取分數。', image: { file: 'scores-map.jpg', w: 1200, h: 1200 } },
+  { path: '/number-trainer', title: '大寫數字訓練器', desc: '練習壹貳參…金融大寫數字，銀行櫃檯與支票必備技能。' },
+  { path: '/check-game',     title: '支票審查員',     desc: '模擬支票審查小遊戲，練習辨識票據填寫錯誤。' },
+  { path: '/about',          title: '使用說明',       desc: '公股銀行新手村的各功能介紹與使用教學。' },
 ];
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -38,20 +41,34 @@ const template = await readFile(join(DIST, 'index.html'), 'utf8');
 for (const r of ROUTES) {
   const fullTitle = `${r.title} | ${SITE}`;
   const url = `${BASE}${r.path}`;
-  const image = `${BASE}/og/${r.slug}.png`;
 
   let html = template.replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(fullTitle)}</title>`);
   html = setMeta(html, 'description', r.desc);
   html = setMeta(html, 'og:url', url);
   html = setMeta(html, 'og:title', fullTitle);
   html = setMeta(html, 'og:description', r.desc);
-  html = setMeta(html, 'og:image', image);
   html = setMeta(html, 'twitter:title', fullTitle);
   html = setMeta(html, 'twitter:description', r.desc);
-  html = setMeta(html, 'twitter:image', image);
+
+  if (r.image) {
+    const img = `${BASE}/og/${r.image.file}`;
+    // Upgrade the Twitter card to a large image and inject the image tags right
+    // after og:description (the template ships none, so this adds them).
+    html = setMeta(html, 'twitter:card', 'summary_large_image');
+    const tags =
+      `    <meta property="og:description" content="${esc(r.desc)}" />\n` +
+      `    <meta property="og:image" content="${img}" />\n` +
+      `    <meta property="og:image:width" content="${r.image.w}" />\n` +
+      `    <meta property="og:image:height" content="${r.image.h}" />\n` +
+      `    <meta name="twitter:image" content="${img}" />`;
+    html = html.replace(
+      new RegExp(`<meta property="og:description" content="[^"]*" />`),
+      tags,
+    );
+  }
 
   const out = join(DIST, r.path, 'index.html');
   await mkdir(dirname(out), { recursive: true });
   await writeFile(out, html);
-  console.log(`prerendered ${r.path}/index.html — ${fullTitle}`);
+  console.log(`prerendered ${r.path}/index.html — ${fullTitle}${r.image ? ' [+og image]' : ''}`);
 }
