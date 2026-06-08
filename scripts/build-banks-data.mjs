@@ -71,7 +71,6 @@ const NON_GEO = new Set([
 ]);
 // per-bank round (column) labels to drop entirely from the dataset
 const ROUND_EXCLUDE = {
-  "土地銀行": new Set(["114總行"]),
   "第一銀行": new Set(["114一招業務菁英"]), // empty column (no scores)
 };
 
@@ -120,22 +119,32 @@ const proj = ([lon, lat]) => [
 ];
 const EPS = 0.004; // ~ degrees tolerance for simplification
 
+// Offshore archipelagos shown as zoomed insets, not on the main island. Their
+// islands are all tiny in absolute area (馬祖's biggest is ~9.5e-4, below the
+// normal 8e-4 islet cutoff), so the default rule would strip everything but one
+// island and leave a lone sliver. Keep the main islands and simplify gently so
+// the inset reads as the real archipelago.
+const ISLAND_COUNTIES = new Set(["金門縣", "連江縣", "澎湖縣"]);
+
 const counties = {};
 const centroids = {};
 const polysJson = {}; // name -> array of rings (each ring = array of [x,y]) for 3D extrusion
 for (const f of geo.features) {
   const name = f.properties.COUNTYNAME || f.properties.name;
   const polys = f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates;
+  const isIsland = ISLAND_COUNTIES.has(name);
+  const minArea = isIsland ? 1e-4 : 0.0008;
+  const eps = (isIsland ? EPS * 0.25 : EPS) * scale;
   let d = "", cx = 0, cy = 0, cn = 0, biggest = 0;
   const rings = [];
   for (const poly of polys) {
     const ring = poly[0];
     // drop tiny islets to cut size, but keep the largest ring always
     const area = Math.abs(ringArea(ring));
-    if (area < 0.0008 && area < biggest) continue;
+    if (area < minArea && area < biggest) continue;
     biggest = Math.max(biggest, area);
     let pts = ring.map(proj);
-    pts = rdp(pts, EPS * scale);
+    pts = rdp(pts, eps);
     if (pts.length < 3) continue;
     d += "M" + pts.map((p) => p.join(" ")).join("L") + "Z";
     rings.push(pts);

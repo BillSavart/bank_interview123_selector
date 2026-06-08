@@ -14,7 +14,7 @@ const PATH = new URL('../public/banks-data.json', import.meta.url);
 // Must match BANK_SHEETS in build-banks-data.mjs (display order).
 const EXPECTED_BANKS = ['臺灣銀行', '土地銀行', '合作金庫', '第一銀行', '華南銀行', '彰化銀行', '兆豐銀行', '台灣企銀'];
 // Must match ROUND_EXCLUDE in build-banks-data.mjs.
-const EXCLUDED_ROUNDS = { 土地銀行: ['114總行'], 第一銀行: ['114一招業務菁英'] };
+const EXCLUDED_ROUNDS = { 第一銀行: ['114一招業務菁英'] };
 
 const errors = [];
 const fail = (msg) => errors.push(msg);

@@ -41,6 +41,7 @@ interface RegionValue {
   prev: number | null;
   isCore: boolean;
   parent: string | null;
+  nonGeo: boolean;
 }
 
 interface DistrictRender {
@@ -67,6 +68,16 @@ function interpolatePalette(palette: string[], t: number): string {
   return `rgb(${channel(0)}, ${channel(1)}, ${channel(2)})`;
 }
 
+function ringArea(ring: [number, number][]): number {
+  let a = 0;
+  for (let i = 0, n = ring.length; i < n; i++) {
+    const [x1, y1] = ring[i];
+    const [x2, y2] = ring[(i + 1) % n];
+    a += x1 * y2 - x2 * y1;
+  }
+  return Math.abs(a / 2);
+}
+
 function hexToRgb(hex: string): [number, number, number] {
   return [
     parseInt(hex.slice(1, 3), 16),
@@ -81,6 +92,9 @@ export function MapPage() {
   const [bankIdx, setBankIdx] = useState(0);
   const [roundIdx, setRoundIdx] = useState(-1);
   const [selRegion, setSelRegion] = useState<string | null>(null);
+  // The region currently hovered on the map, so its whole combined exam district
+  // can light up together (set on enter/leave, not on move — cheap re-render).
+  const [hoverReg, setHoverReg] = useState<string | null>(null);
   const [roundMenuOpen, setRoundMenuOpen] = useState(false);
   const [roundYear, setRoundYear] = useState<string | null>(null);
   const roundPickerRef = useRef<HTMLDivElement | null>(null);
@@ -130,7 +144,8 @@ export function MapPage() {
     const out: Record<string, RegionValue> = {};
     if (!bank) return out;
     for (const r of bank.regions) {
-      if (r.nonGeo) continue;
+      // Non-geographic categories (不分區 / 專業人員 / 櫃台組…) and sub-districts
+      // stay out of the map but are kept here so the ranking can list them.
       const present = r.vals.map((v, i) => (v == null ? null : ([i, v] as [number, number]))).filter(Boolean) as [number, number][];
       let val: number | null = null;
       let rd: string | null = null;
@@ -154,7 +169,7 @@ export function MapPage() {
         const same = present.filter(([i]) => i < roundIdx && seriesOf(bank.name, bank.rounds[i]) === series);
         if (same.length) prev = same[same.length - 1][1];
       }
-      out[r.region] = { val, rd, ri, prev, isCore: r.isCore, parent: r.parent };
+      out[r.region] = { val, rd, ri, prev, isCore: r.isCore, parent: r.parent, nonGeo: r.nonGeo };
     }
     return out;
   }, [bank, roundIdx]);
@@ -249,9 +264,12 @@ export function MapPage() {
   if (state === 'error' || !data || !bank)
     return <div className="container py-4 map-page"><p className="calendar-empty">資料載入失敗，請稍後再試。</p></div>;
 
-  // ranking
-  const core = Object.entries(rv).filter(([, x]) => x.isCore);
-  const open = core.filter(([, x]) => x.val != null).sort((a, b) => (b[1].val as number) - (a[1].val as number));
+  // ranking — every row with a score for this round: core regions, sub-districts
+  // (旗山美濃…) and non-geographic categories (不分區 / 專業人員…). The map shows
+  // only core regions; the ranking is where the rest surface.
+  const open = Object.entries(rv)
+    .filter(([, x]) => x.val != null)
+    .sort((a, b) => (b[1].val as number) - (a[1].val as number));
 
   const selRow = selRegion ? bank.regions.find((r) => r.region === selRegion) : null;
   const selRec = selRegion ? rv[selRegion] : null;
@@ -287,6 +305,11 @@ export function MapPage() {
   });
   const districtRegionSet = new Set(activeDistricts.flat());
 
+  // Counties to light up on hover: the hovered region's whole combined district
+  // (so 同考區 glow together), or just the hovered region's own counties.
+  const hoverGroup = hoverReg ? regionDistrict.get(hoverReg) ?? [hoverReg] : [];
+  const hlCounties = new Set(hoverGroup.flatMap((reg) => data.regionToCounty[reg] ?? []));
+
   // When the selected region is part of a merged district, show the whole
   // group's label (e.g. 「台中、彰化」) above the score, matching the ranking row.
   const selGroup = selRegion ? regionDistrict.get(selRegion) : null;
@@ -294,10 +317,17 @@ export function MapPage() {
 
   const rankRows = open.flatMap(([reg, x]) => {
     const group = regionDistrict.get(reg);
-    if (!group) return [{ key: reg, label: reg, regions: [reg], value: x.val as number, prev: x.prev, isDistrict: false }];
+    if (!group) {
+      // Any non-core row (sub-district like 旗山美濃, or a non-geographic
+      // category like 不分區 / 專業人員) is listed but kept off the map. A
+      // sub-district shows its parent region as a tag for context; categories
+      // just show their own (already descriptive) name.
+      const isExtra = !x.isCore;
+      return [{ key: reg, label: reg, regions: [reg], value: x.val as number, prev: x.prev, isDistrict: false, isExtra, tag: x.parent }];
+    }
     if (group[0] !== reg) return [];
     const first = group.map((member) => rv[member]).find((item) => item?.val != null) ?? x;
-    return [{ key: group.join('|'), label: group.join('、'), regions: group, value: first.val as number, prev: first.prev, isDistrict: true }];
+    return [{ key: group.join('|'), label: group.join('、'), regions: group, value: first.val as number, prev: first.prev, isDistrict: true, isExtra: false, tag: null }];
   }).sort((a, b) => b.value - a.value);
 
   const Delta = ({ cur, prev }: { cur: number | null; prev: number | null }) => {
@@ -419,11 +449,12 @@ export function MapPage() {
               return (
                 <path
                   key={cty}
-                  className="map-county"
+                  className={`map-county ${hlCounties.has(cty) ? 'is-hl' : ''}`}
                   d={d}
                   fill={colorOf(v, colorScale)}
+                  onMouseEnter={() => setHoverReg(v != null ? reg : null)}
                   onMouseMove={(e) => moveTip(e, `<b>${reg ?? cty}</b>　${v != null ? `${v} 分` : '無資料'}${groupNote}`)}
-                  onMouseLeave={hideTip}
+                  onMouseLeave={() => { hideTip(); setHoverReg(null); }}
                   onClick={reg && v != null ? () => selectRegion(reg) : undefined}
                 />
               );
@@ -460,12 +491,17 @@ export function MapPage() {
               let vb = '0 0 10 10';
               let dPath = '';
               if (rings) {
+                // 馬祖/澎湖 are widely scattered, so framing the full extent makes
+                // every island tiny. Frame on the main island(s) only and let the
+                // far-flung small outliers crop off the bottom/edges.
+                const maxA = Math.max(...rings.map(ringArea));
+                const framed = rings.filter((r) => ringArea(r) >= maxA * 0.3);
                 let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-                for (const ring of rings)
+                for (const ring of framed)
                   for (const [x, y] of ring) {
                     x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
                   }
-                const pad = 3;
+                const pad = Math.max(x1 - x0, y1 - y0) * 0.12;
                 vb = `${x0 - pad} ${y0 - pad} ${x1 - x0 + 2 * pad} ${y1 - y0 + 2 * pad}`;
                 dPath = data.map.counties[cty] ?? '';
               }
@@ -514,11 +550,11 @@ export function MapPage() {
             {rankRows.map((row, i) => (
               <div
                 key={row.key}
-                className={`map-row ${row.regions.includes(selRegion ?? '') ? 'is-sel' : ''} ${row.isDistrict ? 'is-district' : ''}`}
+                className={`map-row ${row.regions.includes(selRegion ?? '') ? 'is-sel' : ''} ${row.isDistrict ? 'is-district' : ''} ${row.isExtra ? 'is-extra' : ''}`}
                 onClick={() => selectRegion(row.regions[0])}
               >
                 <span className="rk">{i + 1}</span>
-                <span className="nm">{row.label}</span>
+                <span className="nm">{row.label}{row.tag && <em className="tag">{row.tag}</em>}</span>
                 <span className="track">
                   <span className="fill" style={{ width: `${((row.value - mn) / (mx - mn || 1)) * 100}%`, background: colorOf(row.value, colorScale) }} />
                 </span>

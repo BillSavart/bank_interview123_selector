@@ -3096,12 +3096,14 @@ select {
 .map-county {
   stroke: #fff;
   stroke-width: 1.1;
-  transition: fill 0.4s ease, opacity 0.15s;
+  transition: fill 0.4s ease, filter 0.15s ease;
   cursor: pointer;
 }
 
-.map-county:hover {
-  opacity: 0.82;
+/* Only data-bearing regions glow on hover (driven by is-hl); 無資料 counties
+   stay flat. Whole combined districts light up together. */
+.map-county.is-hl {
+  filter: brightness(1.14) saturate(1.06);
 }
 
 .map-county.is-sel {
@@ -3162,7 +3164,17 @@ select {
 .map-island svg {
   display: block;
   width: 100%;
-  height: 46px;
+  height: 72px;
+  overflow: hidden;
+}
+
+/* These are archipelagos (馬祖/澎湖) drawn small, so give every islet a crisp
+   outline that doesn't scale with the tiny viewBox — otherwise the pale
+   無資料 grey vanishes against the near-white card. */
+.map-island .map-county {
+  stroke: #aab4c2;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
 }
 
 .map-island .nm {
@@ -3328,6 +3340,26 @@ select {
 
 .map-row.is-district .nm {
   width: 6.8rem;
+}
+
+/* Non-geographic categories (不分區 / 專業人員…) and sub-districts (旗山美濃…):
+   not on the map, listed here. Wider name + a small muted tag for context. */
+.map-row.is-extra .nm {
+  width: 7.6rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+
+.map-row.is-extra .nm .tag {
+  flex: none;
+  font-size: 0.64rem;
+  font-weight: 700;
+  font-style: normal;
+  color: #0c7c70;
+  background: #cfe9e3;
+  border-radius: 4px;
+  padding: 0.04rem 0.3rem;
 }
 
 .map-row .track {
