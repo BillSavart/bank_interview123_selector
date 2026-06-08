@@ -7,6 +7,22 @@ const PAL = ['#16b8a6', '#10936b', '#82b936', '#f2c12e', '#f57a1f', '#d9362f', '
 const GREY = '#dfe4ec';
 const ISLAND_REGIONS = ['金門', '馬祖', '澎湖'] as const;
 
+// Per-region [dx, dy] tweaks for the lone (non-district) score label, where the
+// vertex-centroid sits off the visual centre of the county. +x right, +y down.
+const LABEL_NUDGE: Record<string, [number, number]> = {
+  台中: [0, 7],
+  苗栗: [-5, 5],
+  雲林: [9, -7],
+  嘉義: [0, -5],
+  台南: [0, 6],
+  屏東: [-9, -9],
+  台東: [-10, -5],
+  宜蘭: [0, 6],
+  大台北: [0, 6],
+  花蓮: [5, 0],
+  桃園: [-5, -5],
+};
+
 interface Region {
   region: string;
   vals: (number | null)[];
@@ -470,8 +486,9 @@ export function MapPage() {
               );
               const c = cty ? data.map.centroids[cty] : null;
               if (!c) return null;
+              const [dx, dy] = LABEL_NUDGE[reg] ?? [0, 0];
               return (
-                <text key={reg} className="map-vlbl" x={c[0]} y={c[1]} textAnchor="middle">{rec.val}</text>
+                <text key={reg} className="map-vlbl" x={c[0] + dx} y={c[1] + dy} textAnchor="middle">{rec.val}</text>
               );
             })}
             {districtRenders.map((group) => (
