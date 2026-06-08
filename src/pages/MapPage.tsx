@@ -361,12 +361,15 @@ export function MapPage() {
           筆試門檻
         </span>
         <h1 className="map-page-title">八大公股行庫 · 歷年筆試門檻</h1>
-        {data.meta?.sheetUrl && (
-          <a className="map-sheet-link" href={data.meta.sheetUrl} target="_blank" rel="noreferrer">
-            <FileSpreadsheet size={16} />
-            資料來源試算表
-          </a>
-        )}
+        <div className="map-head-meta">
+          {data.meta?.sheetUrl && (
+            <a className="map-sheet-link" href={data.meta.sheetUrl} target="_blank" rel="noreferrer">
+              <FileSpreadsheet size={16} />
+              資料來源試算表
+            </a>
+          )}
+          <span className="map-credit">Credit: 公股銀行招考討論區Jack</span>
+        </div>
       </div>
 
       <div className="map-banks">

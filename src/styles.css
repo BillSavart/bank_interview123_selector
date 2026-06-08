@@ -2828,11 +2828,24 @@ select {
   line-height: 1.6;
 }
 
+.map-head-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.8rem;
+  margin-top: 0.2rem;
+}
+
+.map-credit {
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
 .map-sheet-link {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  margin-top: 0.2rem;
   padding: 0.32rem 0.7rem;
   border: 1px solid #cbd5e1;
   border-radius: 999px;
