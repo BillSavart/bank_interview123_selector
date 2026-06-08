@@ -4,6 +4,19 @@ import { ArrowUp } from 'lucide-react';
 import { NavBar } from './NavBar';
 import { AdSlot, AD_ENABLED } from '../AdSlot';
 
+const SITE_NAME = '公股銀行新手村';
+// Per-route browser-tab title. Falls back to the bare site name for anything
+// not listed (e.g. the catch-all route).
+const PAGE_TITLES: Record<string, string> = {
+  '/': '面試題目篩選器',
+  '/calendar': '招考行事曆',
+  '/scores-map': '筆試門檻',
+  '/number-trainer': '大寫數字訓練器',
+  '/check-game': '支票審查員',
+  '/about': '使用說明',
+  '/admin': '後台管理',
+};
+
 export function Layout() {
   const { pathname } = useLocation();
   const showFooter = pathname !== '/about';
@@ -17,6 +30,12 @@ export function Layout() {
   // scroll to top on route change
   useEffect(() => {
     window.scrollTo({ top: 0 });
+  }, [pathname]);
+
+  // Keep the browser-tab title in sync with the current route.
+  useEffect(() => {
+    const page = PAGE_TITLES[pathname];
+    document.title = page ? `${page} | ${SITE_NAME}` : SITE_NAME;
   }, [pathname]);
 
   return (

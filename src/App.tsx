@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { HomePage } from './pages/HomePage';
@@ -18,6 +19,10 @@ const isAdminHost = typeof window !== 'undefined' && /^admin\./i.test(window.loc
 const allowAdminPath = import.meta.env.DEV;
 
 export function App() {
+  useEffect(() => {
+    if (isAdminHost) document.title = '後台管理 | 公股銀行新手村';
+  }, []);
+
   if (isAdminHost) return <AdminPage />;
 
   return (
