@@ -10,7 +10,7 @@
     "extract:questions": "node scripts/extract-questions.mjs",
     "make:answer-prompts": "node scripts/make-answer-prompts.mjs",
     "prebuild": "npm run extract:questions && npm run build:banks-data && npm run check:banks-data",
-    "build": "tsc -b && vite build",
+    "build": "tsc -b && vite build && node scripts/prerender.mjs",
     "build:banks-data": "node scripts/build-banks-data.mjs",
     "check:banks-data": "node scripts/check-banks-data.mjs",
     "typecheck": "tsc -b",
