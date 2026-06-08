@@ -8,6 +8,14 @@ on:
     - cron: "0 20 * * *"
   workflow_dispatch: # allow manual runs from the Actions tab
 
+# One deploy per ref at a time. If a duplicate/overlapping run starts (e.g. a
+# double-delivered push, or a newer commit while one is mid-flight), the older
+# in-progress run is cancelled so only the latest state ships. Sequential,
+# non-overlapping pushes are unaffected — each deploys normally.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
   packages: write # push images to ghcr.io
