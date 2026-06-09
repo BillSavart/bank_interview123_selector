@@ -36,6 +36,13 @@ function setMeta(html, key, value) {
   return html.replace(re, `$1${esc(value)}$2`);
 }
 
+// Point <link rel="canonical"> at this route's clean URL.
+function setCanonical(html, url) {
+  const re = /(<link rel="canonical" href=")[^"]*(")/;
+  if (!re.test(html)) throw new Error('prerender: <link rel="canonical"> not found in index.html');
+  return html.replace(re, `$1${esc(url)}$2`);
+}
+
 const template = await readFile(join(DIST, 'index.html'), 'utf8');
 
 for (const r of ROUTES) {
@@ -44,6 +51,7 @@ for (const r of ROUTES) {
 
   let html = template.replace(/<title>[\s\S]*?<\/title>/, `<title>${esc(fullTitle)}</title>`);
   html = setMeta(html, 'description', r.desc);
+  html = setCanonical(html, url);
   html = setMeta(html, 'og:url', url);
   html = setMeta(html, 'og:title', fullTitle);
   html = setMeta(html, 'og:description', r.desc);
@@ -72,3 +80,18 @@ for (const r of ROUTES) {
   await writeFile(out, html);
   console.log(`prerendered ${r.path}/index.html — ${fullTitle}${r.image ? ' [+og image]' : ''}`);
 }
+
+// sitemap.xml — homepage + every prerendered route. lastmod is the build date;
+// our routes are static pages, so a single shared date is fine. robots.txt
+// (in public/) points crawlers here.
+const today = new Date().toISOString().slice(0, 10);
+const urls = ['/', ...ROUTES.map((r) => r.path)];
+const sitemap =
+  '<?xml version="1.0" encoding="UTF-8"?>\n' +
+  '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+  urls
+    .map((p) => `  <url><loc>${BASE}${p}</loc><lastmod>${today}</lastmod></url>`)
+    .join('\n') +
+  '\n</urlset>\n';
+await writeFile(join(DIST, 'sitemap.xml'), sitemap);
+console.log(`wrote sitemap.xml — ${urls.length} URLs`);

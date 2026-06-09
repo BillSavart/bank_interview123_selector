@@ -21,12 +21,49 @@ const OUT = new URL("../public/banks-data.json", import.meta.url);
 // Excludes 信保基金 and 農業金庫.
 const BANK_SHEETS = ["臺灣銀行", "土地銀行", "合作金庫", "第一銀行", "華南銀行", "彰化銀行", "兆豐銀行", "台灣企銀"];
 
+// A real .xlsx is a zip, so it must start with the "PK" local-file signature.
+// A failed/blocked curl (e.g. no network in a sandbox, or an HTML error page)
+// writes something that isn't, which we'd otherwise only discover as a cryptic
+// `unzip` "End-of-central-directory signature not found" mid-build.
+function isValidXlsx(path) {
+  if (!fs.existsSync(path) || fs.statSync(path).size < 1000) return false;
+  const fd = fs.openSync(path, "r");
+  try {
+    const buf = Buffer.alloc(2);
+    fs.readSync(fd, buf, 0, 2, 0);
+    return buf[0] === 0x50 && buf[1] === 0x4b; // "PK"
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
 function prep() {
   if (!fs.existsSync(GEO)) {
-    execSync(`curl -sL "https://raw.githubusercontent.com/g0v/twgeojson/master/json/twCounty2010.geo.json" -o "${GEO}"`);
+    execSync(`curl -sfL "https://raw.githubusercontent.com/g0v/twgeojson/master/json/twCounty2010.geo.json" -o "${GEO}"`);
   }
-  // Always re-pull the sheet so a rebuild reflects the latest edits.
-  execSync(`curl -sL "https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=xlsx" -o "${XLSX}"`);
+  // Always try to re-pull the sheet so a rebuild reflects the latest edits, but
+  // download to a temp path first and only swap it in if it's a valid xlsx —
+  // a botched download must not clobber a good cached copy. If the fresh pull
+  // fails (offline/sandbox), fall back to the last good copy in /tmp.
+  const tmp = `${XLSX}.dl`;
+  try {
+    execSync(`curl -sfL "https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=xlsx" -o "${tmp}"`);
+    if (isValidXlsx(tmp)) {
+      fs.renameSync(tmp, XLSX);
+    } else {
+      console.warn("!! sheet download was not a valid xlsx; keeping cached copy if any");
+      fs.rmSync(tmp, { force: true });
+    }
+  } catch (e) {
+    console.warn(`!! sheet download failed (${e.message.split("\n")[0]}); keeping cached copy if any`);
+    fs.rmSync(tmp, { force: true });
+  }
+  if (!isValidXlsx(XLSX)) {
+    throw new Error(
+      `No valid sheet xlsx at ${XLSX}. The download failed and no good cached ` +
+      `copy exists. Re-run with network access to fetch the Google Sheet.`,
+    );
+  }
   fs.rmSync(XDIR, { recursive: true, force: true });
   fs.mkdirSync(XDIR, { recursive: true });
   execSync(`cd "${XDIR}" && unzip -oq "${XLSX}"`);
