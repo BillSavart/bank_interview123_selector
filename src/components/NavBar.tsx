@@ -2,11 +2,15 @@ import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { Banknote, ChevronDown, Download, Mail, Menu, X } from 'lucide-react';
 
-const navItems = [
-  { to: '/', label: '面試題目篩選', end: true },
+// 考試相關的三個功能收進「考試專區」下拉，navbar 才不會太長。
+const examItems = [
+  { to: '/selector', label: '面試題目篩選' },
   { to: '/calendar', label: '招考行事曆' },
   { to: '/scores-map', label: '筆試門檻' },
 ];
+
+// 經驗分享維持單一連結。
+const navItems = [{ to: '/experience', label: '經驗分享' }];
 
 const gameItems = [
   { to: '/number-trainer', label: '大寫數字訓練器' },
@@ -15,12 +19,15 @@ const gameItems = [
 
 export function NavBar() {
   const [open, setOpen] = useState(false);
+  const [examOpen, setExamOpen] = useState(false);
   const [gameOpen, setGameOpen] = useState(false);
   const location = useLocation();
+  const isExamActive = examItems.some((item) => location.pathname.startsWith(item.to));
   const isGameActive = gameItems.some((item) => location.pathname.startsWith(item.to));
 
   const closeNav = () => {
     setOpen(false);
+    setExamOpen(false);
     setGameOpen(false);
   };
 
@@ -43,11 +50,33 @@ export function NavBar() {
         </button>
 
         <nav className={`nav-links ${open ? 'is-open' : ''}`}>
+          <div className={`nav-game ${examOpen ? 'is-open' : ''}`}>
+            <button
+              className={`nav-game-toggle ${isExamActive ? 'is-active' : ''}`}
+              type="button"
+              aria-expanded={examOpen}
+              onClick={() => setExamOpen((v) => !v)}
+            >
+              考試專區
+              <ChevronDown size={15} />
+            </button>
+            <div className="nav-game-menu">
+              {examItems.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  className={({ isActive }) => (isActive ? 'is-active' : '')}
+                  onClick={closeNav}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
+          </div>
           {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.end}
               className={({ isActive }) => (isActive ? 'is-active' : '')}
               onClick={closeNav}
             >

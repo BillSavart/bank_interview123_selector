@@ -8,7 +8,7 @@ const SITE_NAME = '公股銀行新手村';
 // Per-route browser-tab title. Falls back to the bare site name for anything
 // not listed (e.g. the catch-all route).
 const PAGE_TITLES: Record<string, string> = {
-  '/': '面試題目篩選器',
+  '/selector': '面試題目篩選器',
   '/calendar': '招考行事曆',
   '/scores-map': '筆試門檻',
   '/number-trainer': '大寫數字訓練器',
@@ -23,9 +23,10 @@ export function Layout() {
   // No ads on the admin tool; and only render the slot wrappers when ads will
   // actually show (so production-with-ads-off leaves no empty gaps).
   const showAd = AD_ENABLED && !pathname.startsWith('/admin');
-  // The home page interleaves its own ads in the question list (incl. one above
-  // the first question), so it doesn't need the top banner — only the bottom one.
-  const isHome = pathname === '/';
+  // The selector page interleaves its own ads in the question list (incl. one
+  // above the first question), so it doesn't need the top banner. The landing
+  // page stays clean, so it skips the top banner too.
+  const hideTopAd = pathname === '/' || pathname === '/selector';
 
   // scroll to top on route change
   useEffect(() => {
@@ -41,7 +42,7 @@ export function Layout() {
   return (
     <>
       <NavBar />
-      {showAd && !isHome && (
+      {showAd && !hideTopAd && (
         <div className="container site-ad site-ad-top">
           <AdSlot slot="site-top" />
         </div>

@@ -2,3 +2,4 @@ User-agent: *
 Allow: /
 
 Sitemap: https://bank-interview-advisor.com/sitemap.xml
+Sitemap: https://bank-interview-advisor.com/api/sitemap-posts.xml

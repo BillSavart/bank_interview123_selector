@@ -13,8 +13,11 @@ import {
 } from '../lib/calendar';
 import {
   fetchAdminComments,
+  fetchAdminPostComments,
   moderateComment,
+  moderatePostComment,
   type AdminComment,
+  type AdminPostComment,
   type ModerateAction,
 } from '../lib/adminComments';
 import {
@@ -23,6 +26,19 @@ import {
   deleteLeaderboardEntry,
   type LeaderboardEntry,
 } from '../lib/adminLeaderboard';
+import {
+  POST_CATEGORIES,
+  createPost,
+  emptyPostInput,
+  fetchAdminPosts,
+  formatPostTime,
+  moderatePost,
+  updatePost,
+  type AdminPost,
+  type PostCategory,
+  type PostInput,
+  type PostModerateAction,
+} from '../lib/posts';
 
 const FIELD_LABELS: Array<{ key: keyof CalendarEventInput; label: string; type: 'text' | 'datetime'; placeholder?: string }> = [
   { key: 'org', label: '機關 / 名稱', type: 'text', placeholder: '台灣銀行 一般金融人員' },
@@ -134,7 +150,7 @@ function AdminDashboard({
   setEvents: (e: CalendarEvent[]) => void;
   onLogout: () => void;
 }) {
-  const [tab, setTab] = useState<'calendar' | 'comments' | 'leaderboard'>('calendar');
+  const [tab, setTab] = useState<'calendar' | 'experience' | 'comments' | 'leaderboard'>('calendar');
   // `null` = no form open; '' draft for new; an id for editing.
   const [editingId, setEditingId] = useState<string | 'new' | null>(null);
   const [draft, setDraft] = useState<CalendarEventInput>(emptyEventInput());
@@ -220,6 +236,13 @@ function AdminDashboard({
         </button>
         <button
           type="button"
+          className={`admin-tab ${tab === 'experience' ? 'is-active' : ''}`}
+          onClick={() => setTab('experience')}
+        >
+          經驗分享
+        </button>
+        <button
+          type="button"
           className={`admin-tab ${tab === 'comments' ? 'is-active' : ''}`}
           onClick={() => setTab('comments')}
         >
@@ -234,7 +257,9 @@ function AdminDashboard({
         </button>
       </div>
 
-      {tab === 'comments' ? (
+      {tab === 'experience' ? (
+        <PostsAdmin token={token} />
+      ) : tab === 'comments' ? (
         <CommentsAdmin token={token} />
       ) : tab === 'leaderboard' ? (
         <LeaderboardAdmin token={token} />
@@ -366,7 +391,287 @@ function AdminDashboard({
   );
 }
 
+function PostsAdmin({ token }: { token: string }) {
+  const [posts, setPosts] = useState<AdminPost[]>([]);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState('');
+  const [busyId, setBusyId] = useState('');
+  // `null` = no form open; 'new' = composing a new post; an id = editing it.
+  const [editingId, setEditingId] = useState<string | 'new' | null>(null);
+  const [draft, setDraft] = useState<PostInput>(emptyPostInput());
+  // List filters (only relevant when many posts have accumulated).
+  const [filterCat, setFilterCat] = useState<PostCategory | 'all'>('all');
+  const [query, setQuery] = useState('');
+
+  const load = () => {
+    setState('loading');
+    fetchAdminPosts(token)
+      .then((list) => {
+        setPosts(list);
+        setState('ready');
+      })
+      .catch(() => setState('error'));
+  };
+
+  useEffect(load, [token]);
+
+  const openNew = () => {
+    setDraft(emptyPostInput());
+    setEditingId('new');
+    setError('');
+  };
+
+  const openEdit = (p: AdminPost) => {
+    setDraft({ category: p.category, title: p.title, author: p.author, content: p.content });
+    setEditingId(p.id);
+    setError('');
+  };
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!draft.title.trim()) {
+      setError('標題不可為空。');
+      return;
+    }
+    if (!draft.content.trim()) {
+      setError('內容不可為空。');
+      return;
+    }
+    setBusyId('form');
+    setError('');
+    const action = editingId === 'new' ? createPost(token, draft) : updatePost(token, editingId as string, draft);
+    action
+      .then((list) => {
+        setPosts(list);
+        setEditingId(null);
+      })
+      .catch((err) => setError(err.message || '儲存失敗。'))
+      .finally(() => setBusyId(''));
+  };
+
+  const act = (p: AdminPost, action: PostModerateAction) => {
+    if (action === 'delete' && !window.confirm(`確定永久刪除「${p.title}」？`)) return;
+    setBusyId(p.id);
+    setError('');
+    moderatePost(token, p.id, action)
+      .then(setPosts)
+      .catch((err) => setError(err.message || '操作失敗。'))
+      .finally(() => setBusyId(''));
+  };
+
+  if (state === 'loading') return <p className="admin-empty">載入中…</p>;
+  if (state === 'error') return <p className="admin-error">文章載入失敗，請重新登入或稍後再試。</p>;
+
+  const catLabel = (c: AdminPost['category']) => POST_CATEGORIES.find((x) => x.value === c)?.label || c;
+
+  const q = query.trim().toLowerCase();
+  const filtered = posts.filter(
+    (p) =>
+      (filterCat === 'all' || p.category === filterCat) &&
+      (!q || p.title.toLowerCase().includes(q) || p.author.toLowerCase().includes(q)),
+  );
+  const filterCats: Array<{ value: PostCategory | 'all'; label: string }> = [
+    { value: 'all', label: '全部' },
+    ...POST_CATEGORIES,
+  ];
+
+  return (
+    <div>
+      {error && <p className="admin-error">{error}</p>}
+
+      {editingId !== null ? (
+        <form className="admin-form" onSubmit={submit}>
+          <h2 className="admin-form-title">{editingId === 'new' ? '發表文章' : '編輯文章'}</h2>
+          <div className="admin-form-grid">
+            <label className="admin-field">
+              <span className="admin-label">分類</span>
+              <select
+                className="admin-input"
+                value={draft.category}
+                onChange={(e) => setDraft({ ...draft, category: e.target.value as PostInput['category'] })}
+              >
+                {POST_CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="admin-field">
+              <span className="admin-label">作者</span>
+              <input
+                className="admin-input"
+                type="text"
+                value={draft.author}
+                placeholder="例如：阿明（可留空）"
+                onChange={(e) => setDraft({ ...draft, author: e.target.value })}
+              />
+            </label>
+            <label className="admin-field admin-field-wide">
+              <span className="admin-label">標題</span>
+              <input
+                className="admin-input"
+                type="text"
+                value={draft.title}
+                placeholder="例如：台銀一般金融上榜心得"
+                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+              />
+            </label>
+            <label className="admin-field admin-field-wide">
+              <span className="admin-label">內容</span>
+              <textarea
+                className="admin-input admin-textarea"
+                rows={10}
+                value={draft.content}
+                placeholder="文章內容…"
+                onChange={(e) => setDraft({ ...draft, content: e.target.value })}
+              />
+            </label>
+          </div>
+          <div className="admin-form-actions">
+            <button type="submit" className="admin-btn admin-btn-primary" disabled={busyId === 'form'}>
+              <Save size={16} /> {editingId === 'new' ? '發表' : '儲存'}
+            </button>
+            <button
+              type="button"
+              className="admin-btn admin-btn-ghost"
+              onClick={() => setEditingId(null)}
+              disabled={busyId === 'form'}
+            >
+              <X size={16} /> 取消
+            </button>
+          </div>
+        </form>
+      ) : (
+        <button type="button" className="admin-btn admin-btn-primary admin-add" onClick={openNew}>
+          <Plus size={18} /> 發表文章
+        </button>
+      )}
+
+      {posts.length > 0 && (
+        <div className="admin-filterbar">
+          <div className="admin-chips">
+            {filterCats.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                className={`admin-chip ${filterCat === c.value ? 'is-active' : ''}`}
+                onClick={() => setFilterCat(c.value)}
+              >
+                {c.label}
+                <span className="admin-chip-count">
+                  {c.value === 'all' ? posts.length : posts.filter((p) => p.category === c.value).length}
+                </span>
+              </button>
+            ))}
+          </div>
+          <input
+            className="admin-input admin-search"
+            type="search"
+            value={query}
+            placeholder="搜尋標題或作者…"
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+      )}
+
+      <div className="admin-list">
+        {posts.length === 0 && <p className="admin-empty">目前沒有任何文章，點「發表文章」開始撰寫。</p>}
+        {posts.length > 0 && filtered.length === 0 && (
+          <p className="admin-empty">沒有符合條件的文章。</p>
+        )}
+        {filtered.map((p) => (
+          <div key={p.id} className={`admin-row ${p.hidden ? 'is-hidden' : ''}`}>
+            <div className="admin-row-main">
+              <span className="admin-row-org">
+                <span className="admin-lb-rank">{catLabel(p.category)}</span> {p.title}
+                {p.hidden && <em className="admin-tag-hidden">已隱藏</em>}
+              </span>
+              <span className="admin-comment-text admin-post-excerpt">{p.content}</span>
+              <span className="admin-row-meta">
+                {p.author && <span>作者 {p.author}</span>}
+                <span>{formatPostTime(p.createdAt)}</span>
+              </span>
+            </div>
+            <div className="admin-row-actions">
+              <button
+                type="button"
+                className="admin-icon-btn"
+                disabled={busyId === p.id}
+                onClick={() => openEdit(p)}
+                aria-label="編輯"
+                title="編輯文章"
+              >
+                <Pencil size={16} />
+              </button>
+              {p.hidden ? (
+                <button
+                  type="button"
+                  className="admin-icon-btn"
+                  disabled={busyId === p.id}
+                  onClick={() => act(p, 'show')}
+                  aria-label="取消隱藏"
+                  title="取消隱藏"
+                >
+                  <Eye size={16} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="admin-icon-btn"
+                  disabled={busyId === p.id}
+                  onClick={() => act(p, 'hide')}
+                  aria-label="隱藏"
+                  title="隱藏文章"
+                >
+                  <EyeOff size={16} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="admin-icon-btn is-danger"
+                disabled={busyId === p.id}
+                onClick={() => act(p, 'delete')}
+                aria-label="刪除"
+                title="永久刪除"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// 留言板管理：分成「面試篩選器留言」與「文章留言」兩個分頁，刻意不混在一起。
 function CommentsAdmin({ token }: { token: string }) {
+  const [board, setBoard] = useState<'question' | 'post'>('question');
+  return (
+    <div>
+      <div className="admin-subtabs">
+        <button
+          type="button"
+          className={`admin-subtab ${board === 'question' ? 'is-active' : ''}`}
+          onClick={() => setBoard('question')}
+        >
+          面試篩選器留言
+        </button>
+        <button
+          type="button"
+          className={`admin-subtab ${board === 'post' ? 'is-active' : ''}`}
+          onClick={() => setBoard('post')}
+        >
+          文章留言
+        </button>
+      </div>
+      {board === 'question' ? <QuestionCommentsAdmin token={token} /> : <PostCommentsAdmin token={token} />}
+    </div>
+  );
+}
+
+function QuestionCommentsAdmin({ token }: { token: string }) {
   const [comments, setComments] = useState<AdminComment[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
@@ -412,6 +717,105 @@ function CommentsAdmin({ token }: { token: string }) {
             <div className="admin-row-main">
               <span className="admin-row-org">
                 第 {c.questionId} 題 · {c.name}
+                {c.adminHidden && <em className="admin-tag-hidden">已隱藏</em>}
+              </span>
+              <span className="admin-comment-text">{c.text}</span>
+              <span className="admin-row-meta">
+                <span>讚 {c.up}</span>
+                <span>倒讚 {c.down}</span>
+                <span>{new Date(c.createdAt).toLocaleString('zh-TW', { hour12: false })}</span>
+              </span>
+            </div>
+            <div className="admin-row-actions">
+              {c.adminHidden ? (
+                <button
+                  type="button"
+                  className="admin-icon-btn"
+                  disabled={busyId === c.id}
+                  onClick={() => act(c, 'show')}
+                  aria-label="取消隱藏"
+                  title="取消隱藏"
+                >
+                  <Eye size={16} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="admin-icon-btn"
+                  disabled={busyId === c.id}
+                  onClick={() => act(c, 'hide')}
+                  aria-label="隱藏"
+                  title="隱藏留言"
+                >
+                  <EyeOff size={16} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="admin-icon-btn is-danger"
+                disabled={busyId === c.id}
+                onClick={() => act(c, 'delete')}
+                aria-label="刪除"
+                title="永久刪除"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PostCommentsAdmin({ token }: { token: string }) {
+  const [comments, setComments] = useState<AdminPostComment[]>([]);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState('');
+  const [busyId, setBusyId] = useState('');
+
+  const load = () => {
+    setState('loading');
+    fetchAdminPostComments(token)
+      .then((list) => {
+        setComments(list);
+        setState('ready');
+      })
+      .catch(() => setState('error'));
+  };
+
+  useEffect(load, [token]);
+
+  const act = (c: AdminPostComment, action: ModerateAction) => {
+    if (action === 'delete' && !window.confirm(`確定永久刪除這則留言？\n「${c.text.slice(0, 40)}」`)) return;
+    setBusyId(c.id);
+    setError('');
+    moderatePostComment(token, c.id, action)
+      .then(() => {
+        setComments((prev) => {
+          if (action === 'delete') return prev.filter((x) => x.id !== c.id);
+          return prev.map((x) =>
+            x.id === c.id ? { ...x, adminHidden: action === 'hide', hidden: action === 'hide' || x.hidden } : x,
+          );
+        });
+      })
+      .catch((err) => setError(err.message || '操作失敗。'))
+      .finally(() => setBusyId(''));
+  };
+
+  if (state === 'loading') return <p className="admin-empty">載入中…</p>;
+  if (state === 'error') return <p className="admin-error">留言載入失敗，請重新登入或稍後再試。</p>;
+
+  return (
+    <div>
+      {error && <p className="admin-error">{error}</p>}
+      <div className="admin-list">
+        {comments.length === 0 && <p className="admin-empty">目前沒有任何文章留言。</p>}
+        {comments.map((c) => (
+          <div key={c.id} className={`admin-row ${c.adminHidden ? 'is-hidden' : ''}`}>
+            <div className="admin-row-main">
+              <span className="admin-row-org">
+                {c.postTitle || '（文章已刪除）'} · {c.name}
                 {c.adminHidden && <em className="admin-tag-hidden">已隱藏</em>}
               </span>
               <span className="admin-comment-text">{c.text}</span>
