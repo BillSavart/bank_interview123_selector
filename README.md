@@ -2,6 +2,12 @@
 
 React + Bootstrap + TypeScript 的靜態網站，適合部署到 Cloudflare 網域 + GCP e2-micro。題庫 PDF 放在 `public/20260515bank123.pdf`，語意標註資料放在 `bank123_pdftojson.json`，建置前會產生前端使用的題庫資料。
 
+## 系統架構
+
+![公股銀行新手村系統架構圖](docs/system-architecture.svg)
+
+可編輯 Mermaid 版與圖上重點整理在 [docs/system-architecture.md](docs/system-architecture.md)。
+
 ## 功能
 
 - 依年齡、工作年資、是否應屆、是否有銀行經驗、銀行年資、是否有銷售經驗推薦題目。
