@@ -93,6 +93,66 @@ select {
   font-size: 0.84rem;
 }
 
+/* 篩選器頁首：刻意做成淺色、緊湊的「工具列」風格，跟首頁那種深色大圖 hero
+   區隔開來，讓使用者一看就知道「這是在用工具」而不是還在行銷首頁。 */
+.selector-hero {
+  background: #ffffff;
+  border-bottom: 1px solid #e4ebe9;
+}
+
+.selector-hero-kicker {
+  padding: 0.3rem 0.7rem;
+  border-radius: 999px;
+  background: #e2f3f0;
+  color: #0f766e;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.selector-hero-title {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.8vw, 2.15rem);
+  font-weight: 800;
+  color: #17313d;
+  line-height: 1.2;
+}
+
+.selector-hero-copy {
+  max-width: 640px;
+  color: #506470;
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.selector-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.selector-stats div {
+  min-width: 0;
+  padding: 0.7rem 0.4rem;
+  border-radius: 10px;
+  background: #f4f8f7;
+  border: 1px solid #e4ebe9;
+  text-align: center;
+}
+
+.selector-stats strong {
+  display: block;
+  color: #0f766e;
+  font-size: clamp(1.35rem, 2.6vw, 1.85rem);
+  line-height: 1;
+}
+
+.selector-stats span {
+  display: block;
+  margin-top: 0.35rem;
+  color: #64748b;
+  font-size: 0.82rem;
+}
+
 .workspace-band {
   background: #f4f6f7;
 }
@@ -2554,6 +2614,30 @@ select {
   border-bottom-color: #0f4f49;
 }
 
+/* 留言板管理裡的次分頁（面試篩選器留言 / 文章留言），用膠囊樣式跟主分頁區隔。 */
+.admin-subtabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.admin-subtab {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #475569;
+  cursor: pointer;
+}
+
+.admin-subtab.is-active {
+  background: #0f4f49;
+  border-color: #0f4f49;
+  color: #fff;
+}
+
 .admin-comment-text {
   color: #334155;
   font-size: 0.95rem;
@@ -4057,4 +4141,219 @@ select {
   -webkit-box-orient: vertical;
   overflow: hidden;
   white-space: normal;
+}
+
+/* ============================ 首頁 Landing ============================ */
+/* 沿用 hero-band 的深藍綠漸層；CTA 用金色呼應全站的 gold 點綴。 */
+.py-lg-6 {
+  padding-top: 4.5rem;
+  padding-bottom: 4.5rem;
+}
+
+.landing-hero-inner {
+  max-width: 760px;
+}
+
+.landing-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.landing-cta-primary,
+.landing-cta-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.4rem;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 1.02rem;
+  text-decoration: none;
+  transition: transform 0.12s ease, background-color 0.12s ease, box-shadow 0.12s ease;
+}
+
+.landing-cta-primary {
+  background: #f6c453;
+  color: #3a2c06;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.landing-cta-primary:hover {
+  background: #ffd470;
+  color: #3a2c06;
+  transform: translateY(-1px);
+}
+
+.landing-cta-ghost {
+  background: rgba(255, 255, 255, 0.08);
+  color: #eef6f4;
+  border: 1px solid rgba(255, 255, 255, 0.5);
+}
+
+.landing-cta-ghost:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+/* 區塊標題 */
+.landing-section {
+  background: #f4f6f7;
+}
+
+.landing-section-head {
+  text-align: center;
+  margin-bottom: 2.25rem;
+}
+
+.landing-eyebrow {
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: #e2f3f0;
+  color: #0f766e;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.landing-section-title {
+  margin: 0;
+  font-size: clamp(1.5rem, 2.6vw, 2.1rem);
+  font-weight: 800;
+  color: #17313d;
+}
+
+/* 功能卡片格：桌機固定上三下三，窄螢幕降到兩欄、手機單欄。 */
+.landing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1.1rem;
+}
+
+@media (max-width: 960px) {
+  .landing-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .landing-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.landing-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 1.5rem;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  text-decoration: none;
+  transition: transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease;
+}
+
+.landing-card:hover {
+  transform: translateY(-4px);
+  border-color: #cdded9;
+  box-shadow: 0 16px 32px rgba(15, 49, 45, 0.12);
+}
+
+.landing-card.is-accent {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 1px #0f766e inset;
+}
+
+.landing-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  background: #e2f3f0;
+  color: #0f766e;
+  margin-bottom: 0.9rem;
+}
+
+.landing-card.is-accent .landing-card-icon {
+  background: #0f766e;
+  color: #ffffff;
+}
+
+.landing-card-title {
+  font-size: 1.18rem;
+  font-weight: 800;
+  color: #17313d;
+  margin-bottom: 0.4rem;
+}
+
+.landing-card-desc {
+  font-size: 0.96rem;
+  line-height: 1.65;
+  color: #506470;
+  margin-bottom: 1rem;
+}
+
+.landing-card-go {
+  margin-top: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-weight: 700;
+  color: #0f766e;
+}
+
+/* 三步開始 */
+.landing-steps-band {
+  background: #eef5f4;
+}
+
+.landing-steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.1rem;
+}
+
+.landing-step {
+  display: flex;
+  gap: 0.9rem;
+  align-items: flex-start;
+  padding: 1.25rem;
+  background: #ffffff;
+  border: 1px solid #dbe7e4;
+  border-radius: 14px;
+}
+
+.landing-step-num {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: #17313d;
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.landing-step-title {
+  display: block;
+  font-weight: 800;
+  color: #17313d;
+  margin-bottom: 0.2rem;
+}
+
+.landing-step-desc {
+  display: block;
+  font-size: 0.93rem;
+  line-height: 1.6;
+  color: #506470;
+}
+
+.landing-steps-cta {
+  margin-top: 2rem;
+  text-align: center;
 }

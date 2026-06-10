@@ -20,6 +20,7 @@ const SITE = '公股銀行新手村';
 // Home is already correct in dist/index.html (the source index.html defaults),
 // so it's not regenerated here. `image` (optional) → public/og/<file>.
 const ROUTES = [
+  { path: '/selector',       title: '面試題目篩選器', desc: '依考生背景排序 123 題公股銀行常見口試題，附答題方向與示範回答。' },
   { path: '/calendar',       title: '招考行事曆',     desc: '八大公股銀行報名、筆試、面試與放榜日期，一頁掌握。',     image: { file: 'calendar.jpg',   w: 1200, h: 938 } },
   { path: '/scores-map',     title: '筆試門檻',       desc: '以台灣地圖呈現八大公股行庫歷年各考區的筆試錄取分數。', image: { file: 'scores-map.jpg', w: 1200, h: 1200 } },
   { path: '/experience',     title: '經驗分享',       desc: '公股銀行考試篇與工作篇的第一手經驗分享。' },

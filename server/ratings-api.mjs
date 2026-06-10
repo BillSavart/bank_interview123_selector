@@ -28,6 +28,13 @@ const commentMaxPerWindow = Number(process.env.COMMENT_MAX_PER_WINDOW || 30);
 // Comments at or below this net score are auto-hidden (users can still reveal them).
 const commentHideScore = Number(process.env.COMMENT_HIDE_SCORE || -100);
 
+// --- 文章留言板 config ------------------------------------------------------
+// 經驗分享文章底下的留言板。刻意跟「面試篩選器題目」的留言完全分開存：自己的
+// 三份 append-only log（留言 / 投票 / 後台隱藏刪除），後台也分開管理，兩邊不混。
+const postCommentsFile = process.env.POST_COMMENTS_FILE || '/data/post-comments.jsonl';
+const postCommentVotesFile = process.env.POST_COMMENT_VOTES_FILE || '/data/post-comment-votes.jsonl';
+const postCommentModFile = process.env.POST_COMMENT_MOD_FILE || '/data/post-comment-mods.jsonl';
+
 // --- Mini-game leaderboard config ------------------------------------------
 // We deliberately keep ONLY the top-N entries on disk: the store is rewritten on
 // every change (tmp + rename) and truncated to N, so a score that drops out of
@@ -121,154 +128,27 @@ const persistStore = () => {
 };
 
 // --- Comments store --------------------------------------------------------
-// In-memory index: questionId -> array of comments (oldest first). Backed by an
-// append-only JSONL file that we replay on startup. Each comment also carries a
-// `votes` map (voterId -> 1 | -1); commentById gives O(1) lookup for voting.
-const commentsByQuestion = new Map();
-const commentById = new Map();
-let commentAppendQueue = Promise.resolve();
-let voteAppendQueue = Promise.resolve();
+// Two independent comment boards share this one implementation but never share
+// data: 面試篩選器題目 (keyed by integer questionId) and 經驗分享文章 (keyed by
+// string postId). makeCommentStore() builds one isolated store — its own files,
+// in-memory index and append queues — so the two boards stay cleanly separated
+// on disk and in the admin panel.
 
-const loadComments = async () => {
-  commentsByQuestion.clear();
-  commentById.clear();
-  let raw = '';
-  try {
-    raw = await readFile(commentsFile, 'utf8');
-  } catch (error) {
-    if (error?.code !== 'ENOENT') {
-      console.warn(`Could not read ${commentsFile}; starting with no comments.`, error);
-    }
-    return;
+// up/down counts and net score from a votes map. Shared with the posts store.
+const tallyVotes = (votes) => {
+  let up = 0;
+  let down = 0;
+  for (const v of Object.values(votes || {})) {
+    if (v === 1) up += 1;
+    else if (v === -1) down += 1;
   }
-
-  for (const line of raw.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try {
-      const entry = JSON.parse(trimmed);
-      const questionId = Number(entry.questionId);
-      if (!Number.isInteger(questionId)) continue;
-      const list = commentsByQuestion.get(questionId) || [];
-      const comment = {
-        id: String(entry.id),
-        questionId,
-        name: String(entry.name || '匿名'),
-        text: String(entry.text || ''),
-        createdAt: String(entry.createdAt),
-        votes: {},
-        adminHidden: false,
-      };
-      list.push(comment);
-      commentById.set(comment.id, comment);
-      commentsByQuestion.set(questionId, list);
-    } catch {
-      // Skip malformed lines rather than failing the whole load.
-    }
-  }
-};
-
-// Replay the vote log onto the loaded comments (last write per voter wins).
-const loadVotes = async () => {
-  let raw = '';
-  try {
-    raw = await readFile(commentVotesFile, 'utf8');
-  } catch (error) {
-    if (error?.code !== 'ENOENT') {
-      console.warn(`Could not read ${commentVotesFile}; starting with no votes.`, error);
-    }
-    return;
-  }
-
-  for (const line of raw.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try {
-      const entry = JSON.parse(trimmed);
-      const comment = commentById.get(String(entry.commentId));
-      if (!comment) continue;
-      const value = Number(entry.value);
-      if (value === 0) delete comment.votes[entry.voterId];
-      else if (value === 1 || value === -1) comment.votes[entry.voterId] = value;
-    } catch {
-      // Skip malformed lines.
-    }
-  }
-};
-
-const appendComment = (entry) => {
-  commentAppendQueue = commentAppendQueue.then(async () => {
-    await mkdir(dirname(commentsFile), { recursive: true });
-    await appendFile(commentsFile, `${JSON.stringify(entry)}\n`);
-  });
-  return commentAppendQueue;
-};
-
-const appendVote = (entry) => {
-  voteAppendQueue = voteAppendQueue.then(async () => {
-    await mkdir(dirname(commentVotesFile), { recursive: true });
-    await appendFile(commentVotesFile, `${JSON.stringify(entry)}\n`);
-  });
-  return voteAppendQueue;
-};
-
-// --- Comment moderation (admin) --------------------------------------------
-let modAppendQueue = Promise.resolve();
-
-const removeComment = (comment) => {
-  const list = commentsByQuestion.get(comment.questionId);
-  if (list) {
-    const i = list.indexOf(comment);
-    if (i >= 0) list.splice(i, 1);
-  }
-  commentById.delete(comment.id);
-};
-
-// Apply one moderation action to in-memory state.
-const applyCommentMod = (commentId, action) => {
-  const comment = commentById.get(String(commentId));
-  if (!comment) return false;
-  if (action === 'delete') removeComment(comment);
-  else if (action === 'hide') comment.adminHidden = true;
-  else if (action === 'show') comment.adminHidden = false;
-  else return false;
-  return true;
-};
-
-// Replay the moderation log onto loaded comments (run after loadComments/loadVotes).
-const loadCommentMods = async () => {
-  let raw = '';
-  try {
-    raw = await readFile(commentModFile, 'utf8');
-  } catch (error) {
-    if (error?.code !== 'ENOENT') {
-      console.warn(`Could not read ${commentModFile}; starting with no moderation.`, error);
-    }
-    return;
-  }
-  for (const line of raw.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try {
-      const entry = JSON.parse(trimmed);
-      applyCommentMod(entry.commentId, entry.action);
-    } catch {
-      // Skip malformed lines.
-    }
-  }
-};
-
-const appendCommentMod = (entry) => {
-  modAppendQueue = modAppendQueue.then(async () => {
-    await mkdir(dirname(commentModFile), { recursive: true });
-    await appendFile(commentModFile, `${JSON.stringify(entry)}\n`);
-  });
-  return modAppendQueue;
+  return { up, down, score: up - down };
 };
 
 // Compact a JSONL file in place, dropping lines whose parsed `key` equals id.
 // Used to PHYSICALLY remove a deleted comment (and its votes) so the content
-// truly leaves disk and reclaims space — not just a tombstone.
+// truly leaves disk and reclaims space — not just a tombstone. Shared with the
+// posts vote log.
 const compactJsonl = (file, queueRef, key, id) =>
   queueRef.then(async () => {
     let raw = '';
@@ -292,47 +172,266 @@ const compactJsonl = (file, queueRef, key, id) =>
     await rename(tmp, file);
   });
 
-const removeCommentFromLog = (commentId) => {
-  commentAppendQueue = compactJsonl(commentsFile, commentAppendQueue, 'id', commentId);
-  return commentAppendQueue;
-};
+// Build one isolated comment board. `keyField` is the JSON property that holds
+// the thread key on disk ('questionId' or 'postId'); `normalizeKey` turns a raw
+// key (a URL segment or a value read back from disk) into its canonical form, or
+// returns null to reject it.
+const makeCommentStore = ({ commentsFile, votesFile, modFile, keyField, normalizeKey }) => {
+  // In-memory index: threadKey -> array of comments (oldest first). Each comment
+  // also carries a `votes` map (voterId -> 1 | -1); byId gives O(1) vote lookup.
+  const byThread = new Map();
+  const byId = new Map();
+  let commentQueue = Promise.resolve();
+  let voteQueue = Promise.resolve();
+  let modQueue = Promise.resolve();
 
-const removeVotesFromLog = (commentId) => {
-  voteAppendQueue = compactJsonl(commentVotesFile, voteAppendQueue, 'commentId', commentId);
-  return voteAppendQueue;
-};
+  const load = async () => {
+    byThread.clear();
+    byId.clear();
+    let raw = '';
+    try {
+      raw = await readFile(commentsFile, 'utf8');
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        console.warn(`Could not read ${commentsFile}; starting with no comments.`, error);
+      }
+      return;
+    }
 
-// up/down counts and net score from a votes map.
-const tallyVotes = (votes) => {
-  let up = 0;
-  let down = 0;
-  for (const v of Object.values(votes || {})) {
-    if (v === 1) up += 1;
-    else if (v === -1) down += 1;
-  }
-  return { up, down, score: up - down };
-};
-
-// Shape returned to clients (no raw voter map).
-const publicComment = (comment) => {
-  const { up, down, score } = tallyVotes(comment.votes);
-  return {
-    id: comment.id,
-    name: comment.name,
-    text: comment.text,
-    createdAt: comment.createdAt,
-    up,
-    down,
-    score,
-    hidden: score <= commentHideScore || !!comment.adminHidden,
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const entry = JSON.parse(trimmed);
+        const thread = normalizeKey(entry[keyField]);
+        if (thread === null) continue;
+        const list = byThread.get(thread) || [];
+        const comment = {
+          id: String(entry.id),
+          thread,
+          name: String(entry.name || '匿名'),
+          text: String(entry.text || ''),
+          createdAt: String(entry.createdAt),
+          votes: {},
+          adminHidden: false,
+        };
+        list.push(comment);
+        byId.set(comment.id, comment);
+        byThread.set(thread, list);
+      } catch {
+        // Skip malformed lines rather than failing the whole load.
+      }
+    }
   };
+
+  // Replay the vote log onto the loaded comments (last write per voter wins).
+  const loadVotes = async () => {
+    let raw = '';
+    try {
+      raw = await readFile(votesFile, 'utf8');
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        console.warn(`Could not read ${votesFile}; starting with no votes.`, error);
+      }
+      return;
+    }
+
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const entry = JSON.parse(trimmed);
+        const comment = byId.get(String(entry.commentId));
+        if (!comment) continue;
+        const value = Number(entry.value);
+        if (value === 0) delete comment.votes[entry.voterId];
+        else if (value === 1 || value === -1) comment.votes[entry.voterId] = value;
+      } catch {
+        // Skip malformed lines.
+      }
+    }
+  };
+
+  const append = (entry) => {
+    commentQueue = commentQueue.then(async () => {
+      await mkdir(dirname(commentsFile), { recursive: true });
+      await appendFile(commentsFile, `${JSON.stringify(entry)}\n`);
+    });
+    return commentQueue;
+  };
+
+  const appendVoteLog = (entry) => {
+    voteQueue = voteQueue.then(async () => {
+      await mkdir(dirname(votesFile), { recursive: true });
+      await appendFile(votesFile, `${JSON.stringify(entry)}\n`);
+    });
+    return voteQueue;
+  };
+
+  const removeComment = (comment) => {
+    const list = byThread.get(comment.thread);
+    if (list) {
+      const i = list.indexOf(comment);
+      if (i >= 0) list.splice(i, 1);
+    }
+    byId.delete(comment.id);
+  };
+
+  // Apply one moderation action to in-memory state.
+  const applyMod = (commentId, action) => {
+    const comment = byId.get(String(commentId));
+    if (!comment) return false;
+    if (action === 'delete') removeComment(comment);
+    else if (action === 'hide') comment.adminHidden = true;
+    else if (action === 'show') comment.adminHidden = false;
+    else return false;
+    return true;
+  };
+
+  // Replay the moderation log onto loaded comments (run after load/loadVotes).
+  const loadMods = async () => {
+    let raw = '';
+    try {
+      raw = await readFile(modFile, 'utf8');
+    } catch (error) {
+      if (error?.code !== 'ENOENT') {
+        console.warn(`Could not read ${modFile}; starting with no moderation.`, error);
+      }
+      return;
+    }
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      try {
+        const entry = JSON.parse(trimmed);
+        applyMod(entry.commentId, entry.action);
+      } catch {
+        // Skip malformed lines.
+      }
+    }
+  };
+
+  const appendModLog = (entry) => {
+    modQueue = modQueue.then(async () => {
+      await mkdir(dirname(modFile), { recursive: true });
+      await appendFile(modFile, `${JSON.stringify(entry)}\n`);
+    });
+    return modQueue;
+  };
+
+  const removeCommentFromLog = (commentId) => {
+    commentQueue = compactJsonl(commentsFile, commentQueue, 'id', commentId);
+    return commentQueue;
+  };
+
+  const removeVotesFromLog = (commentId) => {
+    voteQueue = compactJsonl(votesFile, voteQueue, 'commentId', commentId);
+    return voteQueue;
+  };
+
+  // Shape returned to clients (no raw voter map).
+  const publicComment = (comment) => {
+    const { up, down, score } = tallyVotes(comment.votes);
+    return {
+      id: comment.id,
+      name: comment.name,
+      text: comment.text,
+      createdAt: comment.createdAt,
+      up,
+      down,
+      score,
+      hidden: score <= commentHideScore || !!comment.adminHidden,
+    };
+  };
+
+  // Admin view — public shape plus the thread key (under its real field name)
+  // and the moderation flag.
+  const adminComment = (comment) => ({
+    ...publicComment(comment),
+    [keyField]: comment.thread,
+    adminHidden: !!comment.adminHidden,
+  });
+
+  // --- High-level ops used by the route handlers ---------------------------
+  const list = (thread) => byThread.get(thread) || [];
+  const get = (commentId) => byId.get(commentId);
+  const all = () => [...byId.values()];
+
+  // Append a new comment to a thread. Caps the in-memory list so memory stays
+  // bounded; the full log stays on disk. Returns the stored comment.
+  const add = async (thread, name, text) => {
+    const comment = {
+      id: randomUUID(),
+      thread,
+      name,
+      text,
+      createdAt: new Date().toISOString(),
+      votes: {},
+      adminHidden: false,
+    };
+    const arr = byThread.get(thread) || [];
+    arr.push(comment);
+    if (arr.length > maxCommentsPerQuestion) {
+      const removed = arr.splice(0, arr.length - maxCommentsPerQuestion);
+      for (const old of removed) byId.delete(old.id);
+    }
+    byThread.set(thread, arr);
+    byId.set(comment.id, comment);
+    await append({ [keyField]: thread, id: comment.id, name, text, createdAt: comment.createdAt });
+    return comment;
+  };
+
+  // value: 1 (up), -1 (down), 0 (clear). Returns the updated comment, or null.
+  const setVote = async (commentId, voterId, value) => {
+    const comment = byId.get(commentId);
+    if (!comment) return null;
+    if (value === 0) delete comment.votes[voterId];
+    else comment.votes[voterId] = value;
+    await appendVoteLog({ commentId: comment.id, voterId, value });
+    return comment;
+  };
+
+  // hide / show flip a flag (append-only mod log); delete physically compacts the
+  // comment + its votes out of disk. Returns false when the comment is unknown.
+  const moderate = async (commentId, action) => {
+    const comment = byId.get(commentId);
+    if (!comment) return false;
+    if (action === 'delete') {
+      removeComment(comment);
+      await removeCommentFromLog(commentId);
+      await removeVotesFromLog(commentId);
+    } else {
+      if (!applyMod(commentId, action)) return false;
+      await appendModLog({ commentId, action, at: new Date().toISOString() });
+    }
+    return true;
+  };
+
+  return { load, loadVotes, loadMods, list, get, all, add, setVote, moderate, publicComment, adminComment };
 };
 
-// Admin view of a comment — same as public plus its questionId and moderation flags.
-const adminComment = (comment) => ({
-  ...publicComment(comment),
-  questionId: comment.questionId,
-  adminHidden: !!comment.adminHidden,
+// 面試篩選器題目留言（key = 整數題號）。
+const questionComments = makeCommentStore({
+  commentsFile,
+  votesFile: commentVotesFile,
+  modFile: commentModFile,
+  keyField: 'questionId',
+  normalizeKey: (raw) => {
+    const n = Number(raw);
+    return Number.isInteger(n) ? n : null;
+  },
+});
+
+// 經驗分享文章留言（key = 文章 id 字串）。獨立的三份 log，與題目留言完全不混。
+const postComments = makeCommentStore({
+  commentsFile: postCommentsFile,
+  votesFile: postCommentVotesFile,
+  modFile: postCommentModFile,
+  keyField: 'postId',
+  normalizeKey: (raw) => {
+    const s = String(raw ?? '').trim();
+    return s || null;
+  },
 });
 
 // --- Mini-game leaderboard store -------------------------------------------
@@ -943,13 +1042,28 @@ const parseCommentVote = (pathname) => {
 
   const questionId = Number(match[1]);
   if (!Number.isInteger(questionId) || questionId < 1 || questionId > maxQuestionId) return null;
-  return { questionId, commentId: match[2] };
+  return { store: questionComments, commentId: match[2] };
+};
+
+// 文章留言：以文章 id（UUID）為 thread key，與題目留言的整數題號分流。
+const parsePostCommentId = (pathname) => {
+  const match = pathname.match(/^\/api\/post-comments\/([a-f0-9-]{36})$/);
+  return match ? match[1] : null;
+};
+
+const parsePostCommentVote = (pathname) => {
+  const match = pathname.match(/^\/api\/post-comments\/([a-f0-9-]{36})\/([a-f0-9-]{36})\/vote$/);
+  if (!match) return null;
+  return { store: postComments, commentId: match[2] };
 };
 
 await loadStore();
-await loadComments();
-await loadVotes();
-await loadCommentMods();
+await questionComments.load();
+await questionComments.loadVotes();
+await questionComments.loadMods();
+await postComments.load();
+await postComments.loadVotes();
+await postComments.loadMods();
 await Promise.all(Object.values(leaderboards).map((lb) => lb.load()));
 await loadCalendar();
 await loadPosts();
@@ -1281,14 +1395,13 @@ createServer(async (req, res) => {
         sendJson(res, 401, { error: 'unauthorized' });
         return;
       }
-      const all = [];
-      for (const comment of commentById.values()) all.push(adminComment(comment));
+      const all = questionComments.all().map(questionComments.adminComment);
       all.sort((a, b) => b.createdAt.localeCompare(a.createdAt)); // newest first
       sendJson(res, 200, { comments: all });
       return;
     }
 
-    // Hide / show / delete a single comment.
+    // Hide / show / delete a single 面試篩選器 comment.
     const adminCommentMatch = url.pathname.match(/^\/api\/admin\/comments\/([a-f0-9-]{36})\/moderate$/);
     if (req.method === 'POST' && adminCommentMatch) {
       if (!isAdmin(req)) {
@@ -1308,22 +1421,55 @@ createServer(async (req, res) => {
         sendJson(res, 400, { error: 'action must be hide, show or delete' });
         return;
       }
-      const id = adminCommentMatch[1];
-      const target = commentById.get(id);
-      if (!target) {
+      const ok = await questionComments.moderate(adminCommentMatch[1], action);
+      if (!ok) {
         sendJson(res, 404, { error: 'comment not found' });
         return;
       }
-      if (action === 'delete') {
-        // True permanent delete: remove from memory AND compact it out of the
-        // on-disk logs so the content no longer occupies space.
-        removeComment(target);
-        await removeCommentFromLog(id);
-        await removeVotesFromLog(id);
-      } else {
-        // hide / show are flags → record in the append-only moderation log.
-        applyCommentMod(id, action);
-        await appendCommentMod({ commentId: id, action, at: new Date().toISOString() });
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    // 文章留言板 (admin): list every article comment, newest first. Joins the
+    // article title so the admin can see which post each comment belongs to.
+    if (req.method === 'GET' && url.pathname === '/api/admin/post-comments') {
+      if (!isAdmin(req)) {
+        sendJson(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      const all = postComments.all().map((comment) => ({
+        ...postComments.adminComment(comment),
+        postTitle: postById.get(comment.thread)?.title || '',
+      }));
+      all.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      sendJson(res, 200, { comments: all });
+      return;
+    }
+
+    // Hide / show / delete a single 文章 comment.
+    const adminPostCommentMatch = url.pathname.match(/^\/api\/admin\/post-comments\/([a-f0-9-]{36})\/moderate$/);
+    if (req.method === 'POST' && adminPostCommentMatch) {
+      if (!isAdmin(req)) {
+        sendJson(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      const bodyText = await readBody(req);
+      let body = {};
+      try {
+        body = bodyText ? JSON.parse(bodyText) : {};
+      } catch {
+        sendJson(res, 400, { error: 'request body must be valid JSON' });
+        return;
+      }
+      const action = body.action;
+      if (!['hide', 'show', 'delete'].includes(action)) {
+        sendJson(res, 400, { error: 'action must be hide, show or delete' });
+        return;
+      }
+      const ok = await postComments.moderate(adminPostCommentMatch[1], action);
+      if (!ok) {
+        sendJson(res, 404, { error: 'comment not found' });
+        return;
       }
       sendJson(res, 200, { ok: true });
       return;
@@ -1443,14 +1589,24 @@ createServer(async (req, res) => {
       return;
     }
 
+    // --- 留言板 (面試篩選器題目 + 經驗分享文章) ----------------------------
+    // Both boards share the same request shape; only the store + key differ. We
+    // resolve which board this path targets, then run one common handler.
     const commentQuestionId = parseCommentQuestionId(url.pathname);
-    if (req.method === 'GET' && commentQuestionId) {
-      const list = commentsByQuestion.get(commentQuestionId) || [];
-      sendJson(res, 200, { comments: list.map(publicComment) }, cacheRead);
+    const commentPostId = parsePostCommentId(url.pathname);
+    const commentTarget = commentQuestionId !== null
+      ? { store: questionComments, thread: commentQuestionId }
+      : commentPostId !== null && postById.has(commentPostId)
+        ? { store: postComments, thread: commentPostId }
+        : null;
+
+    if (req.method === 'GET' && commentTarget) {
+      const list = commentTarget.store.list(commentTarget.thread);
+      sendJson(res, 200, { comments: list.map(commentTarget.store.publicComment) }, cacheRead);
       return;
     }
 
-    if (req.method === 'POST' && commentQuestionId) {
+    if (req.method === 'POST' && commentTarget) {
       const bodyText = await readBody(req);
       let body = {};
       try {
@@ -1482,31 +1638,12 @@ createServer(async (req, res) => {
         return;
       }
 
-      const comment = {
-        id: randomUUID(),
-        questionId: commentQuestionId,
-        name,
-        text,
-        createdAt: new Date().toISOString(),
-        votes: {},
-        adminHidden: false,
-      };
-      const list = commentsByQuestion.get(commentQuestionId) || [];
-      list.push(comment);
-      // Cap in-memory list so memory stays bounded; the full log stays on disk.
-      if (list.length > maxCommentsPerQuestion) {
-        const removed = list.splice(0, list.length - maxCommentsPerQuestion);
-        for (const old of removed) commentById.delete(old.id);
-      }
-      commentsByQuestion.set(commentQuestionId, list);
-      commentById.set(comment.id, comment);
-      await appendComment({ questionId: commentQuestionId, id: comment.id, name, text, createdAt: comment.createdAt });
-
-      sendJson(res, 200, { comment: publicComment(comment) });
+      const comment = await commentTarget.store.add(commentTarget.thread, name, text);
+      sendJson(res, 200, { comment: commentTarget.store.publicComment(comment) });
       return;
     }
 
-    const voteTarget = parseCommentVote(url.pathname);
+    const voteTarget = parseCommentVote(url.pathname) || parsePostCommentVote(url.pathname);
     if (req.method === 'POST' && voteTarget) {
       const bodyText = await readBody(req);
       let body = {};
@@ -1529,17 +1666,13 @@ createServer(async (req, res) => {
         return;
       }
 
-      const comment = commentById.get(voteTarget.commentId);
+      const comment = await voteTarget.store.setVote(voteTarget.commentId, voterId, value);
       if (!comment) {
         sendJson(res, 404, { error: 'comment not found' });
         return;
       }
 
-      if (value === 0) delete comment.votes[voterId];
-      else comment.votes[voterId] = value;
-      await appendVote({ commentId: comment.id, voterId, value });
-
-      sendJson(res, 200, { comment: publicComment(comment) });
+      sendJson(res, 200, { comment: voteTarget.store.publicComment(comment) });
       return;
     }
 

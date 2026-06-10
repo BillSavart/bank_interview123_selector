@@ -13,8 +13,11 @@ import {
 } from '../lib/calendar';
 import {
   fetchAdminComments,
+  fetchAdminPostComments,
   moderateComment,
+  moderatePostComment,
   type AdminComment,
+  type AdminPostComment,
   type ModerateAction,
 } from '../lib/adminComments';
 import {
@@ -642,7 +645,33 @@ function PostsAdmin({ token }: { token: string }) {
   );
 }
 
+// 留言板管理：分成「面試篩選器留言」與「文章留言」兩個分頁，刻意不混在一起。
 function CommentsAdmin({ token }: { token: string }) {
+  const [board, setBoard] = useState<'question' | 'post'>('question');
+  return (
+    <div>
+      <div className="admin-subtabs">
+        <button
+          type="button"
+          className={`admin-subtab ${board === 'question' ? 'is-active' : ''}`}
+          onClick={() => setBoard('question')}
+        >
+          面試篩選器留言
+        </button>
+        <button
+          type="button"
+          className={`admin-subtab ${board === 'post' ? 'is-active' : ''}`}
+          onClick={() => setBoard('post')}
+        >
+          文章留言
+        </button>
+      </div>
+      {board === 'question' ? <QuestionCommentsAdmin token={token} /> : <PostCommentsAdmin token={token} />}
+    </div>
+  );
+}
+
+function QuestionCommentsAdmin({ token }: { token: string }) {
   const [comments, setComments] = useState<AdminComment[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
@@ -688,6 +717,105 @@ function CommentsAdmin({ token }: { token: string }) {
             <div className="admin-row-main">
               <span className="admin-row-org">
                 第 {c.questionId} 題 · {c.name}
+                {c.adminHidden && <em className="admin-tag-hidden">已隱藏</em>}
+              </span>
+              <span className="admin-comment-text">{c.text}</span>
+              <span className="admin-row-meta">
+                <span>讚 {c.up}</span>
+                <span>倒讚 {c.down}</span>
+                <span>{new Date(c.createdAt).toLocaleString('zh-TW', { hour12: false })}</span>
+              </span>
+            </div>
+            <div className="admin-row-actions">
+              {c.adminHidden ? (
+                <button
+                  type="button"
+                  className="admin-icon-btn"
+                  disabled={busyId === c.id}
+                  onClick={() => act(c, 'show')}
+                  aria-label="取消隱藏"
+                  title="取消隱藏"
+                >
+                  <Eye size={16} />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="admin-icon-btn"
+                  disabled={busyId === c.id}
+                  onClick={() => act(c, 'hide')}
+                  aria-label="隱藏"
+                  title="隱藏留言"
+                >
+                  <EyeOff size={16} />
+                </button>
+              )}
+              <button
+                type="button"
+                className="admin-icon-btn is-danger"
+                disabled={busyId === c.id}
+                onClick={() => act(c, 'delete')}
+                aria-label="刪除"
+                title="永久刪除"
+              >
+                <Trash2 size={16} />
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PostCommentsAdmin({ token }: { token: string }) {
+  const [comments, setComments] = useState<AdminPostComment[]>([]);
+  const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [error, setError] = useState('');
+  const [busyId, setBusyId] = useState('');
+
+  const load = () => {
+    setState('loading');
+    fetchAdminPostComments(token)
+      .then((list) => {
+        setComments(list);
+        setState('ready');
+      })
+      .catch(() => setState('error'));
+  };
+
+  useEffect(load, [token]);
+
+  const act = (c: AdminPostComment, action: ModerateAction) => {
+    if (action === 'delete' && !window.confirm(`確定永久刪除這則留言？\n「${c.text.slice(0, 40)}」`)) return;
+    setBusyId(c.id);
+    setError('');
+    moderatePostComment(token, c.id, action)
+      .then(() => {
+        setComments((prev) => {
+          if (action === 'delete') return prev.filter((x) => x.id !== c.id);
+          return prev.map((x) =>
+            x.id === c.id ? { ...x, adminHidden: action === 'hide', hidden: action === 'hide' || x.hidden } : x,
+          );
+        });
+      })
+      .catch((err) => setError(err.message || '操作失敗。'))
+      .finally(() => setBusyId(''));
+  };
+
+  if (state === 'loading') return <p className="admin-empty">載入中…</p>;
+  if (state === 'error') return <p className="admin-error">留言載入失敗，請重新登入或稍後再試。</p>;
+
+  return (
+    <div>
+      {error && <p className="admin-error">{error}</p>}
+      <div className="admin-list">
+        {comments.length === 0 && <p className="admin-empty">目前沒有任何文章留言。</p>}
+        {comments.map((c) => (
+          <div key={c.id} className={`admin-row ${c.adminHidden ? 'is-hidden' : ''}`}>
+            <div className="admin-row-main">
+              <span className="admin-row-org">
+                {c.postTitle || '（文章已刪除）'} · {c.name}
                 {c.adminHidden && <em className="admin-tag-hidden">已隱藏</em>}
               </span>
               <span className="admin-comment-text">{c.text}</span>

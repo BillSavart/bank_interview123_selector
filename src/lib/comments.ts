@@ -33,25 +33,29 @@ function saveMyCommentVote(commentId: string, value: CommentVote | 0) {
   localStorage.setItem(myVotesStorageKey, JSON.stringify(votes));
 }
 
-export async function fetchComments(questionId: number): Promise<Comment[]> {
-  const response = await fetch(`/api/comments/${questionId}`, { headers: { Accept: 'application/json' } });
+export interface SubmitCommentResult {
+  comment?: Comment;
+  error?: string;
+}
+
+// --- 通用留言 API（依 base 路徑分流）-------------------------------------
+// 面試篩選器題目用 `/api/comments/<questionId>`；經驗分享文章用
+// `/api/post-comments/<postId>`。兩邊的請求/回應格式一致，只差在 base 路徑，
+// 所以共用這組函式，由呼叫端決定 base。
+export async function fetchCommentsAt(base: string): Promise<Comment[]> {
+  const response = await fetch(base, { headers: { Accept: 'application/json' } });
   if (!response.ok) throw new Error('comments fetch failed');
 
   const payload = (await response.json()) as { comments?: Comment[] };
   return payload.comments || [];
 }
 
-export interface SubmitCommentResult {
-  comment?: Comment;
-  error?: string;
-}
-
-export async function submitComment(
-  questionId: number,
+export async function submitCommentAt(
+  base: string,
   text: string,
   name: string,
 ): Promise<SubmitCommentResult> {
-  const response = await fetch(`/api/comments/${questionId}`, {
+  const response = await fetch(base, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -69,12 +73,12 @@ export async function submitComment(
 }
 
 // value: 1 (up), -1 (down), or 0 (clear). Persists the user's choice locally.
-export async function voteComment(
-  questionId: number,
+export async function voteCommentAt(
+  base: string,
   commentId: string,
   value: CommentVote | 0,
 ): Promise<Comment | null> {
-  const response = await fetch(`/api/comments/${questionId}/${commentId}/vote`, {
+  const response = await fetch(`${base}/${commentId}/vote`, {
     method: 'POST',
     headers: {
       Accept: 'application/json',
@@ -89,3 +93,10 @@ export async function voteComment(
   saveMyCommentVote(commentId, value);
   return payload.comment;
 }
+
+// 面試篩選器題目留言：固定打 `/api/comments/<questionId>`。
+export const fetchComments = (questionId: number) => fetchCommentsAt(`/api/comments/${questionId}`);
+export const submitComment = (questionId: number, text: string, name: string) =>
+  submitCommentAt(`/api/comments/${questionId}`, text, name);
+export const voteComment = (questionId: number, commentId: string, value: CommentVote | 0) =>
+  voteCommentAt(`/api/comments/${questionId}`, commentId, value);

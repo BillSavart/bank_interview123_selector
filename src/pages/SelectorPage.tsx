@@ -59,7 +59,7 @@ function AnswerRating({ questionId, rating, myScore, isSaving, onRate }: AnswerR
   );
 }
 
-export function HomePage() {
+export function SelectorPage() {
   const [profile, setProfile] = useState<CandidateProfile>(defaultProfile);
   const [keyword, setKeyword] = useState('');
   const [activeCategory, setActiveCategory] = useState('全部');
@@ -202,23 +202,21 @@ export function HomePage() {
 
   return (
     <>
-      <section className="hero-band">
-        <div className="container py-4 py-lg-5">
-          <div className="row g-4 align-items-end">
+      <section className="selector-hero">
+        <div className="container py-4">
+          <div className="row g-3 align-items-center">
             <div className="col-lg-7">
-              <div className="d-inline-flex align-items-center gap-2 hero-kicker mb-3">
-                <Banknote size={18} />
-                公股銀行面試題庫
+              <div className="d-inline-flex align-items-center gap-2 selector-hero-kicker mb-2">
+                <Banknote size={16} />
+                面試題目篩選器
               </div>
-              <h1 className="display-title mb-3">公股銀行面試題目篩選器</h1>
-              <p className="hero-copy mb-0">
-                依照考生背景排序 123 題常見口試題，快速抓出最該優先練的動機題、情境題、業務題與時事題。
-                選好條件後可直接展開每題的答題方向與示範回答。
-                <span className="hero-credit">Credit: 公股銀行招考討論區 Jack/聯合哥</span>
+              <h1 className="selector-hero-title mb-2">依你的背景，挑出最該練的口試題</h1>
+              <p className="selector-hero-copy mb-0">
+                排序 123 題常見口試題，快速抓出該優先準備的動機題、情境題、業務題與時事題，每題可展開答題方向與示範回答。
               </p>
             </div>
             <div className="col-lg-5">
-              <div className="hero-metrics">
+              <div className="selector-stats">
                 <div>
                   <strong>{interviewQuestions.length}</strong>
                   <span>題庫題目</span>
@@ -366,7 +364,7 @@ export function HomePage() {
                             <div className="prebuilt-answer">
                               {renderStoredAnswer(question, profile)}
                             </div>
-                            <CommentBoard questionId={question.id} />
+                            <CommentBoard source={{ kind: 'question', questionId: question.id }} />
                           </div>
                         )}
                       </div>

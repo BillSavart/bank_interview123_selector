@@ -1,17 +1,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MessageSquare, Send, ThumbsDown, ThumbsUp } from 'lucide-react';
 import {
-  fetchComments,
+  fetchCommentsAt,
   loadMyCommentVotes,
-  submitComment,
-  voteComment,
+  submitCommentAt,
+  voteCommentAt,
   type Comment,
   type CommentVote,
 } from '../lib/comments';
 
+// 同一個留言板元件服務兩種來源：面試篩選器題目（整數題號）與經驗分享文章
+// （文章 id 字串）。兩者只差在 API base 路徑與標題，其餘行為完全一致。
+export type CommentSource =
+  | { kind: 'question'; questionId: number }
+  | { kind: 'post'; postId: string };
+
 interface CommentBoardProps {
-  questionId: number;
+  source: CommentSource;
 }
+
+const sourceBase = (source: CommentSource) =>
+  source.kind === 'question' ? `/api/comments/${source.questionId}` : `/api/post-comments/${source.postId}`;
+
+const sourceAriaLabel = (source: CommentSource) =>
+  source.kind === 'question' ? `第 ${source.questionId} 題留言板` : '文章留言板';
 
 type SortMode = 'votes' | 'time';
 
@@ -31,7 +43,9 @@ function formatTime(iso: string) {
 
 // Anonymous, per-question comment board with up/down voting. Mounts only when a
 // question's answer panel is expanded, so comments are fetched lazily on demand.
-export function CommentBoard({ questionId }: CommentBoardProps) {
+export function CommentBoard({ source }: CommentBoardProps) {
+  const base = sourceBase(source);
+  const ariaLabel = sourceAriaLabel(source);
   const [comments, setComments] = useState<Comment[]>([]);
   const [loading, setLoading] = useState(true);
   const [text, setText] = useState('');
@@ -49,7 +63,7 @@ export function CommentBoard({ questionId }: CommentBoardProps) {
     const refreshComments = (showSpinner: boolean) => {
       if (showSpinner) setLoading(true);
 
-      fetchComments(questionId)
+      fetchCommentsAt(base)
         .then((next) => {
           if (isMounted) setComments(next);
         })
@@ -78,7 +92,7 @@ export function CommentBoard({ questionId }: CommentBoardProps) {
       window.clearInterval(intervalId);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [questionId]);
+  }, [base]);
 
   const sortedComments = useMemo(() => {
     const list = [...comments];
@@ -104,7 +118,7 @@ export function CommentBoard({ questionId }: CommentBoardProps) {
     setError(null);
 
     const trimmedName = name.trim();
-    const result = await submitComment(questionId, trimmed, trimmedName);
+    const result = await submitCommentAt(base, trimmed, trimmedName);
 
     if (result.comment) {
       setComments((current) => [...current, result.comment as Comment]);
@@ -121,7 +135,7 @@ export function CommentBoard({ questionId }: CommentBoardProps) {
     // Clicking your current vote again clears it; otherwise switch to it.
     const nextValue: CommentVote | 0 = myVotes[comment.id] === choice ? 0 : choice;
 
-    const updated = await voteComment(questionId, comment.id, nextValue);
+    const updated = await voteCommentAt(base, comment.id, nextValue);
     if (!updated) return;
 
     setComments((current) => current.map((c) => (c.id === updated.id ? updated : c)));
@@ -134,7 +148,7 @@ export function CommentBoard({ questionId }: CommentBoardProps) {
   };
 
   return (
-    <section className="comment-board" aria-label={`第 ${questionId} 題留言板`}>
+    <section className="comment-board" aria-label={ariaLabel}>
       <div className="comment-board-head">
         <MessageSquare size={16} />
         <span>留言板</span>

@@ -36,7 +36,8 @@ export function ExperiencePage() {
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
-  const [sort, setSort] = useState<Sort>('new');
+  // 預設依讚數（最熱）排序，最新留作次要選項。
+  const [sort, setSort] = useState<Sort>('top');
   // 左側分類選單預設「收合」。
   const [expanded, setExpanded] = useState<Record<PostCategory, boolean>>({ exam: false, work: false });
   const [myVotes, setMyVotes] = useState<Record<string, PostVote>>({});
@@ -159,11 +160,11 @@ export function ExperiencePage() {
               ))}
             </div>
             <div className="exp-sort">
-              <button type="button" className={sort === 'new' ? 'is-active' : ''} onClick={() => setSort('new')}>
-                最新
-              </button>
               <button type="button" className={sort === 'top' ? 'is-active' : ''} onClick={() => setSort('top')}>
                 最熱
+              </button>
+              <button type="button" className={sort === 'new' ? 'is-active' : ''} onClick={() => setSort('new')}>
+                最新
               </button>
             </div>
           </div>

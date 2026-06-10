@@ -22,6 +22,9 @@ services:
       COMMENTS_FILE: /data/comments.jsonl
       COMMENT_VOTES_FILE: /data/comment-votes.jsonl
       COMMENT_MOD_FILE: /data/comment-mods.jsonl
+      POST_COMMENTS_FILE: /data/post-comments.jsonl
+      POST_COMMENT_VOTES_FILE: /data/post-comment-votes.jsonl
+      POST_COMMENT_MOD_FILE: /data/post-comment-mods.jsonl
       CHECKGAME_FILE: /data/checkgame-top.json
       NUMBERGAME_FILE: /data/numbergame-top.json
       CALENDAR_FILE: /data/calendar.json

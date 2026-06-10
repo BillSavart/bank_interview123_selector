@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
-import { HomePage } from './pages/HomePage';
+import { LandingPage } from './pages/LandingPage';
+import { SelectorPage } from './pages/SelectorPage';
 import { AboutPage } from './pages/AboutPage';
 import { CheckGamePage } from './pages/CheckGamePage';
 import { NumberTrainerPage } from './pages/NumberTrainerPage';
@@ -30,7 +31,8 @@ export function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
-        <Route index element={<HomePage />} />
+        <Route index element={<LandingPage />} />
+        <Route path="selector" element={<SelectorPage />} />
         <Route path="about" element={<AboutPage />} />
         <Route path="check-game" element={<CheckGamePage />} />
         <Route path="number-trainer" element={<NumberTrainerPage />} />
@@ -39,7 +41,7 @@ export function App() {
         <Route path="experience" element={<ExperiencePage />} />
         <Route path="experience/:id" element={<ExperiencePostPage />} />
         {allowAdminPath && <Route path="admin" element={<AdminPage />} />}
-        <Route path="*" element={<HomePage />} />
+        <Route path="*" element={<LandingPage />} />
       </Route>
     </Routes>
   );

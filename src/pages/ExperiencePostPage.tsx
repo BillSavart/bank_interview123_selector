@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, Copy, QrCode, Share2, UserRound } from 'lucide-react';
 import { AdSlot, AD_ENABLED } from '../AdSlot';
+import { CommentBoard } from '../components/CommentBoard';
 import { VoteButtons } from './ExperiencePage';
 import {
   fetchPost,
@@ -96,6 +97,8 @@ export function ExperiencePostPage() {
             <span className="exp-article-vote-label">這篇文章對你有幫助嗎？</span>
             <VoteButtons post={post} my={myVote} onVote={handleVote} />
           </div>
+
+          <CommentBoard source={{ kind: 'post', postId: post.id }} />
         </article>
       )}
     </div>
