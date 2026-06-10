@@ -1,7 +1,7 @@
 import { createServer } from 'node:http';
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 
 const port = Number(process.env.PORT || 3000);
 const dataFile = process.env.RATINGS_FILE || '/data/ratings.json';
@@ -49,6 +49,23 @@ const numberGameMaxScore = Number(process.env.NUMBERGAME_MAX_SCORE || 100000);
 // the persisted data volume, so editing the calendar never requires a redeploy.
 const calendarFile = process.env.CALENDAR_FILE || '/data/calendar.json';
 const maxCalendarEvents = Number(process.env.MAX_CALENDAR_EVENTS || 500);
+
+// --- 經驗分享 (experience posts) config ------------------------------------
+// Articles authored in the admin panel, split into 考試篇 (exam) / 工作篇 (work).
+// Stored as a single JSON file in the persisted volume (same model as the
+// calendar), so posting / hiding / deleting never needs a redeploy.
+const postsFile = process.env.POSTS_FILE || '/data/posts.json';
+// 文章的讚 / 倒讚走 append-only JSONL（與留言投票同一套做法），寫入 O(1)，
+// 不會每次投票就重寫整份 posts.json。
+const postVotesFile = process.env.POST_VOTES_FILE || '/data/post-votes.jsonl';
+const maxPosts = Number(process.env.MAX_POSTS || 1000);
+const maxPostTitleLength = Number(process.env.MAX_POST_TITLE_LENGTH || 120);
+const maxPostAuthorLength = Number(process.env.MAX_POST_AUTHOR_LENGTH || 40);
+const maxPostContentLength = Number(process.env.MAX_POST_CONTENT_LENGTH || 8000);
+const postCategories = ['exam', 'work'];
+// Canonical site origin, used for og:url / canonical / sitemap in the
+// server-rendered article pages. Matches scripts/prerender.mjs's BASE.
+const siteBase = (process.env.SITE_BASE || 'https://bank-interview-advisor.com').replace(/\/$/, '');
 // Shared secret for the admin API. If unset, all admin writes are rejected
 // (the calendar stays read-only) — set ADMIN_TOKEN in the VM's .env to enable.
 const adminToken = process.env.ADMIN_TOKEN || '';
@@ -529,6 +546,271 @@ const persistCalendar = () => {
   return calendarWriteQueue;
 };
 
+// --- 經驗分享 (experience posts) store -------------------------------------
+// In-memory array of posts, rewritten to disk (tmp + rename) on every change.
+// Each post: { id, category('exam'|'work'), title, content, hidden, createdAt, updatedAt }.
+let posts = [];
+// id -> post，給投票 / 短網址等需要按 id 取用的地方做 O(1) 查找。
+const postById = new Map();
+let postsWriteQueue = Promise.resolve();
+let postVoteAppendQueue = Promise.resolve();
+
+// Newest first.
+const sortPosts = (rows) => rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+// 短網址用的 slug：6 碼 base62，由伺服器產生（非使用者輸入）。短網址
+// /e/<slug> 會 302 轉到 /experience/<id>，方便分享與產生 QR Code。
+const SLUG_ALPHABET = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const makeSlug = (len = 6) => {
+  const bytes = randomBytes(len);
+  let s = '';
+  for (let i = 0; i < len; i++) s += SLUG_ALPHABET[bytes[i] % 62];
+  return s;
+};
+const uniqueSlug = () => {
+  let s = makeSlug();
+  while (posts.some((p) => p.slug === s)) s = makeSlug();
+  return s;
+};
+
+const cleanPostInput = (raw) => ({
+  category: postCategories.includes(raw?.category) ? raw.category : 'exam',
+  title: sanitizeText(raw?.title ?? '', maxPostTitleLength),
+  author: sanitizeText(raw?.author ?? '', maxPostAuthorLength),
+  content: sanitizeText(raw?.content ?? '', maxPostContentLength),
+});
+
+const loadPosts = async () => {
+  posts = [];
+  let raw = '';
+  try {
+    raw = await readFile(postsFile, 'utf8');
+  } catch (error) {
+    if (error?.code !== 'ENOENT') {
+      console.warn(`Could not read ${postsFile}; starting with no posts.`, error);
+    }
+    return;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    const rows = Array.isArray(parsed) ? parsed : parsed?.posts;
+    if (!Array.isArray(rows)) return;
+    posts = sortPosts(
+      rows
+        .filter((p) => p && typeof p === 'object' && p.id)
+        .map((p) => ({
+          id: String(p.id),
+          slug: typeof p.slug === 'string' ? p.slug : '',
+          ...cleanPostInput(p),
+          hidden: !!p.hidden,
+          createdAt: String(p.createdAt || ''),
+          updatedAt: String(p.updatedAt || ''),
+        })),
+    );
+    // 投票表（voterId -> 1|-1）只活在記憶體 + JSONL log，不寫進 posts.json。
+    postById.clear();
+    for (const p of posts) {
+      p.votes = {};
+      postById.set(p.id, p);
+    }
+    // Backfill short-url slugs for any older posts saved before this feature.
+    let changed = false;
+    for (const p of posts) {
+      if (!p.slug) {
+        p.slug = uniqueSlug();
+        changed = true;
+      }
+    }
+    if (changed) await persistPosts();
+  } catch (error) {
+    console.warn(`Could not parse ${postsFile}; starting with no posts.`, error);
+  }
+};
+
+const persistPosts = () => {
+  postsWriteQueue = postsWriteQueue.then(async () => {
+    await mkdir(dirname(postsFile), { recursive: true });
+    const tmpFile = `${postsFile}.${process.pid}.${randomUUID()}.tmp`;
+    // 投票表不落在 posts.json（票數由 post-votes.jsonl 還原），序列化時剝掉。
+    const serializable = posts.map(({ votes, ...rest }) => rest);
+    await writeFile(tmpFile, `${JSON.stringify(serializable, null, 2)}\n`);
+    await rename(tmpFile, postsFile);
+  });
+  return postsWriteQueue;
+};
+
+// 還原文章投票（在 loadPosts 之後跑）：依 JSONL 重播，最後一筆 per voter 為準。
+const loadPostVotes = async () => {
+  let raw = '';
+  try {
+    raw = await readFile(postVotesFile, 'utf8');
+  } catch (error) {
+    if (error?.code !== 'ENOENT') {
+      console.warn(`Could not read ${postVotesFile}; starting with no post votes.`, error);
+    }
+    return;
+  }
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      const entry = JSON.parse(trimmed);
+      const post = postById.get(String(entry.postId));
+      if (!post) continue;
+      const value = Number(entry.value);
+      if (value === 0) delete post.votes[entry.voterId];
+      else if (value === 1 || value === -1) post.votes[entry.voterId] = value;
+    } catch {
+      // Skip malformed lines.
+    }
+  }
+};
+
+const appendPostVote = (entry) => {
+  postVoteAppendQueue = postVoteAppendQueue.then(async () => {
+    await mkdir(dirname(postVotesFile), { recursive: true });
+    await appendFile(postVotesFile, `${JSON.stringify(entry)}\n`);
+  });
+  return postVoteAppendQueue;
+};
+
+const removePostVotesFromLog = (postId) => {
+  postVoteAppendQueue = compactJsonl(postVotesFile, postVoteAppendQueue, 'postId', postId);
+  return postVoteAppendQueue;
+};
+
+// Public shape: drop the hidden flag (hidden posts are filtered out before this)
+// and the raw voter map — expose only aggregate 讚/倒讚 counts.
+const publicPost = (p) => {
+  const { up, down, score } = tallyVotes(p.votes);
+  return {
+    id: p.id,
+    slug: p.slug,
+    category: p.category,
+    title: p.title,
+    author: p.author,
+    content: p.content,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
+    up,
+    down,
+    score,
+  };
+};
+
+// Admin view: public shape + the moderation flag (no raw voter map either).
+const adminPost = (p) => ({ ...publicPost(p), hidden: !!p.hidden });
+const adminPosts = () => posts.map(adminPost);
+
+// --- 經驗分享：伺服器端 SEO 渲染 (dynamic SEO) ------------------------------
+// 一般使用者由 Caddy 導向靜態 SPA（前端自行渲染）；只有已知的爬蟲 / 社群預覽
+// (Googlebot / facebookexternalhit / LINE / Twitterbot …) 會被導到這裡，拿到
+// 一份帶正確 <head> meta、且不需 JavaScript 就能閱讀的文章 HTML。
+const POST_CATEGORY_LABELS = { exam: '考試篇', work: '工作篇' };
+
+const escapeHtml = (s) =>
+  String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+
+// 台北時間、24 小時制（與前端 formatPostTime 對齊）。Node 20 內建 full-ICU。
+const taipeiDateTime = new Intl.DateTimeFormat('zh-TW', {
+  timeZone: 'Asia/Taipei',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hour12: false,
+});
+const formatTaipei = (iso) => {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? '' : taipeiDateTime.format(d);
+};
+
+// 取內文前 N 字當 meta description（壓平換行/空白）。
+const excerpt = (text, n = 140) => {
+  const flat = String(text).replace(/\s+/g, ' ').trim();
+  return flat.length > n ? `${flat.slice(0, n)}…` : flat;
+};
+
+// 內文依空行切段落、單一換行轉 <br>。
+const articleParagraphs = (content) =>
+  String(content)
+    .split(/\n{2,}/)
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => `<p>${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
+    .join('\n');
+
+const renderArticleHtml = (post) => {
+  const label = POST_CATEGORY_LABELS[post.category] || '';
+  const fullTitle = `${post.title}｜經驗分享｜公股銀行新手村`;
+  const desc = excerpt(post.content, 140);
+  const canonical = `${siteBase}/experience/${post.id}`;
+  const meta = [post.author && `作者：${post.author}`, formatTaipei(post.createdAt)].filter(Boolean).join('　');
+  return `<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>${escapeHtml(fullTitle)}</title>
+<meta name="description" content="${escapeHtml(desc)}" />
+<link rel="canonical" href="${escapeHtml(canonical)}" />
+<meta property="og:type" content="article" />
+<meta property="og:site_name" content="公股銀行新手村" />
+<meta property="og:locale" content="zh_TW" />
+<meta property="og:url" content="${escapeHtml(canonical)}" />
+<meta property="og:title" content="${escapeHtml(fullTitle)}" />
+<meta property="og:description" content="${escapeHtml(desc)}" />
+<meta name="twitter:card" content="summary" />
+<meta name="twitter:title" content="${escapeHtml(fullTitle)}" />
+<meta name="twitter:description" content="${escapeHtml(desc)}" />
+<style>
+body{font-family:system-ui,-apple-system,"Noto Sans TC",sans-serif;max-width:720px;margin:0 auto;padding:2rem 1.2rem;color:#1f2937;line-height:1.8}
+a{color:#0f4f49}
+.kicker{font-weight:800;color:#0f4f49;font-size:.85rem}
+h1{font-size:1.6rem;line-height:1.3;margin:.4rem 0}
+.meta{color:#6b7280;font-size:.85rem;margin-bottom:1.5rem}
+.body p{margin:0 0 1rem}
+</style>
+</head>
+<body>
+<p><a href="/experience">← 經驗分享</a></p>
+<article>
+<div class="kicker">${escapeHtml(label)}</div>
+<h1>${escapeHtml(post.title)}</h1>
+<div class="meta">${escapeHtml(meta)}</div>
+<div class="body">${articleParagraphs(post.content)}</div>
+</article>
+</body>
+</html>`;
+};
+
+const render404Html = () =>
+  `<!doctype html><html lang="zh-Hant"><head><meta charset="UTF-8" />` +
+  `<meta name="robots" content="noindex" /><title>找不到文章｜公股銀行新手村</title></head>` +
+  `<body><p>找不到這篇文章，可能已被移除。</p><p><a href="/experience">回到經驗分享</a></p></body></html>`;
+
+// 經驗分享文章的動態 sitemap（robots.txt 會指向這裡）。
+const renderPostsSitemap = () => {
+  const items = posts
+    .filter((p) => !p.hidden)
+    .map((p) => {
+      const lastmod = String(p.updatedAt || p.createdAt || '').slice(0, 10);
+      return `  <url><loc>${siteBase}/experience/${p.id}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}</url>`;
+    })
+    .join('\n');
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${items}\n</urlset>\n`;
+};
+
+const sendHtml = (res, status, html, cacheControl = 'no-store') => {
+  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': cacheControl });
+  res.end(html);
+};
+
 // Constant-time check of the admin bearer token. Returns false when ADMIN_TOKEN
 // is unset, so the admin API is disabled-by-default rather than open.
 const isAdmin = (req) => {
@@ -670,6 +952,8 @@ await loadVotes();
 await loadCommentMods();
 await Promise.all(Object.values(leaderboards).map((lb) => lb.load()));
 await loadCalendar();
+await loadPosts();
+await loadPostVotes();
 
 createServer(async (req, res) => {
   try {
@@ -775,6 +1059,218 @@ createServer(async (req, res) => {
       pruneCalendar(); // drop any events that have since aged out of the window
       await persistCalendar();
       sendJson(res, 200, { event: calendarEvents.find((e) => e.id === id), events: calendarEvents });
+      return;
+    }
+
+    // --- 經驗分享 (experience posts) -------------------------------------
+    // Public read: visible posts only, newest first.
+    if (req.method === 'GET' && url.pathname === '/api/posts') {
+      sendJson(res, 200, { posts: posts.filter((p) => !p.hidden).map(publicPost) }, cacheRead);
+      return;
+    }
+
+    // 動態 SEO：伺服器端渲染的單篇文章頁（Caddy 只把爬蟲 UA 導到這裡）。
+    const articleMatch = url.pathname.match(/^\/experience\/([a-f0-9-]{36})$/);
+    if (req.method === 'GET' && articleMatch) {
+      const post = posts.find((p) => p.id === articleMatch[1] && !p.hidden);
+      if (!post) {
+        sendHtml(res, 404, render404Html());
+        return;
+      }
+      sendHtml(res, 200, renderArticleHtml(post), 'public, max-age=0, s-maxage=60');
+      return;
+    }
+
+    // 短網址：/e/<slug> → 302 轉到 /experience/<id>（找不到就回文章列表）。
+    const shortMatch = url.pathname.match(/^\/e\/([0-9A-Za-z]{6})$/);
+    if (req.method === 'GET' && shortMatch) {
+      const post = posts.find((p) => p.slug === shortMatch[1] && !p.hidden);
+      res.writeHead(302, {
+        Location: post ? `/experience/${post.id}` : '/experience',
+        'Cache-Control': 'no-store',
+      });
+      res.end();
+      return;
+    }
+
+    // 經驗分享文章的動態 sitemap。
+    if (req.method === 'GET' && url.pathname === '/api/sitemap-posts.xml') {
+      res.writeHead(200, {
+        'Content-Type': 'application/xml; charset=utf-8',
+        'Cache-Control': 'public, max-age=0, s-maxage=300',
+      });
+      res.end(renderPostsSitemap());
+      return;
+    }
+
+    // Public read: a single visible post by id (powers the per-article URL).
+    const postReadMatch = url.pathname.match(/^\/api\/posts\/([a-f0-9-]{36})$/);
+    if (req.method === 'GET' && postReadMatch) {
+      const post = posts.find((p) => p.id === postReadMatch[1] && !p.hidden);
+      if (!post) {
+        sendJson(res, 404, { error: 'post not found' });
+        return;
+      }
+      sendJson(res, 200, { post: publicPost(post) }, cacheRead);
+      return;
+    }
+
+    // 對文章按讚 / 倒讚。value: 1（讚）, -1（倒讚）, 0（取消）。
+    const postVoteMatch = url.pathname.match(/^\/api\/posts\/([a-f0-9-]{36})\/vote$/);
+    if (req.method === 'POST' && postVoteMatch) {
+      const bodyText = await readBody(req);
+      let body = {};
+      try {
+        body = bodyText ? JSON.parse(bodyText) : {};
+      } catch {
+        sendJson(res, 400, { error: 'request body must be valid JSON' });
+        return;
+      }
+      const voterId = typeof body.voterId === 'string' ? body.voterId.trim() : '';
+      const value = Number(body.value);
+      if (!/^[a-zA-Z0-9_-]{12,80}$/.test(voterId)) {
+        sendJson(res, 400, { error: 'voterId is invalid' });
+        return;
+      }
+      if (![1, 0, -1].includes(value)) {
+        sendJson(res, 400, { error: 'value must be 1, 0, or -1' });
+        return;
+      }
+      const post = postById.get(postVoteMatch[1]);
+      if (!post || post.hidden) {
+        sendJson(res, 404, { error: 'post not found' });
+        return;
+      }
+      if (value === 0) delete post.votes[voterId];
+      else post.votes[voterId] = value;
+      await appendPostVote({ postId: post.id, voterId, value });
+      sendJson(res, 200, { post: publicPost(post) });
+      return;
+    }
+
+    // Admin: list every post (including hidden) for management.
+    if (req.method === 'GET' && url.pathname === '/api/admin/posts') {
+      if (!isAdmin(req)) {
+        sendJson(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      sendJson(res, 200, { posts: adminPosts() });
+      return;
+    }
+
+    // Admin: create a post.
+    if (req.method === 'POST' && url.pathname === '/api/admin/posts') {
+      if (!isAdmin(req)) {
+        sendJson(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      if (posts.length >= maxPosts) {
+        sendJson(res, 400, { error: '文章數量已達上限' });
+        return;
+      }
+      const bodyText = await readBody(req);
+      let body = {};
+      try {
+        body = bodyText ? JSON.parse(bodyText) : {};
+      } catch {
+        sendJson(res, 400, { error: 'request body must be valid JSON' });
+        return;
+      }
+      const fields = cleanPostInput(body);
+      if (!fields.title) {
+        sendJson(res, 400, { error: '標題不可為空' });
+        return;
+      }
+      if (!fields.content) {
+        sendJson(res, 400, { error: '內容不可為空' });
+        return;
+      }
+      const now = new Date().toISOString();
+      const post = { id: randomUUID(), slug: uniqueSlug(), ...fields, hidden: false, createdAt: now, updatedAt: now, votes: {} };
+      posts.push(post);
+      postById.set(post.id, post);
+      sortPosts(posts);
+      await persistPosts();
+      sendJson(res, 200, { post: adminPost(post), posts: adminPosts() });
+      return;
+    }
+
+    // Admin: edit a single post by id (category / title / author / content).
+    const adminPostEditMatch = url.pathname.match(/^\/api\/admin\/posts\/([a-f0-9-]{36})$/);
+    if (req.method === 'PUT' && adminPostEditMatch) {
+      if (!isAdmin(req)) {
+        sendJson(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      const bodyText = await readBody(req);
+      let body = {};
+      try {
+        body = bodyText ? JSON.parse(bodyText) : {};
+      } catch {
+        sendJson(res, 400, { error: 'request body must be valid JSON' });
+        return;
+      }
+      const fields = cleanPostInput(body);
+      if (!fields.title) {
+        sendJson(res, 400, { error: '標題不可為空' });
+        return;
+      }
+      if (!fields.content) {
+        sendJson(res, 400, { error: '內容不可為空' });
+        return;
+      }
+      const id = adminPostEditMatch[1];
+      const idx = posts.findIndex((p) => p.id === id);
+      if (idx === -1) {
+        sendJson(res, 404, { error: 'post not found' });
+        return;
+      }
+      posts[idx] = { ...posts[idx], ...fields, updatedAt: new Date().toISOString() };
+      postById.set(id, posts[idx]); // keep the vote index pointing at the new object
+      sortPosts(posts);
+      await persistPosts();
+      sendJson(res, 200, { post: adminPost(posts[idx]), posts: adminPosts() });
+      return;
+    }
+
+    // Admin: hide / show / delete a single post by id.
+    const adminPostMatch = url.pathname.match(/^\/api\/admin\/posts\/([a-f0-9-]{36})\/moderate$/);
+    if (req.method === 'POST' && adminPostMatch) {
+      if (!isAdmin(req)) {
+        sendJson(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      const bodyText = await readBody(req);
+      let body = {};
+      try {
+        body = bodyText ? JSON.parse(bodyText) : {};
+      } catch {
+        sendJson(res, 400, { error: 'request body must be valid JSON' });
+        return;
+      }
+      const action = body.action;
+      if (!['hide', 'show', 'delete'].includes(action)) {
+        sendJson(res, 400, { error: 'action must be hide, show or delete' });
+        return;
+      }
+      const id = adminPostMatch[1];
+      const idx = posts.findIndex((p) => p.id === id);
+      if (idx === -1) {
+        sendJson(res, 404, { error: 'post not found' });
+        return;
+      }
+      if (action === 'delete') {
+        const [removed] = posts.splice(idx, 1);
+        if (removed) {
+          postById.delete(removed.id);
+          await removePostVotesFromLog(removed.id); // 連同投票紀錄一起從 log 清掉
+        }
+      } else {
+        posts[idx] = { ...posts[idx], hidden: action === 'hide', updatedAt: new Date().toISOString() };
+        postById.set(posts[idx].id, posts[idx]);
+      }
+      await persistPosts();
+      sendJson(res, 200, { posts: adminPosts() });
       return;
     }
 

@@ -25,6 +25,9 @@ services:
       CHECKGAME_FILE: /data/checkgame-top.json
       NUMBERGAME_FILE: /data/numbergame-top.json
       CALENDAR_FILE: /data/calendar.json
+      POSTS_FILE: /data/posts.json
+      POST_VOTES_FILE: /data/post-votes.jsonl
+      SITE_BASE: ${SITE_BASE:-https://bank-interview-advisor.com}
       ADMIN_TOKEN: ${ADMIN_TOKEN}
       COMMENT_HIDE_SCORE: "-100"
       MAX_QUESTION_ID: "123"

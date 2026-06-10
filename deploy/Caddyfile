@@ -14,6 +14,21 @@ YOUR_DOMAIN {
 		reverse_proxy 127.0.0.1:3000
 	}
 
+	# 經驗分享文章短網址 /e/<slug> → API 302 轉到 /experience/<id>。
+	handle /e/* {
+		reverse_proxy 127.0.0.1:3000
+	}
+
+	# 經驗分享文章的動態 SEO：只有爬蟲 / 社群預覽的 UA 會被導到 API，由 API
+	# 回傳帶正確 <head> meta 的文章 HTML；一般使用者照舊走下方靜態 SPA。
+	@articlebot {
+		path /experience/*
+		header_regexp User-Agent (?i)(googlebot|bingbot|duckduckbot|baiduspider|yandex|facebookexternalhit|facebot|twitterbot|linebot|line/|slackbot|telegram|whatsapp|discordbot|applebot|pinterest|redditbot|embedly|skypeuripreview|w3c_validator)
+	}
+	handle @articlebot {
+		reverse_proxy 127.0.0.1:3000
+	}
+
 	# Static SPA
 	handle {
 		root * /var/www/bank-interview

@@ -6,6 +6,7 @@ const navItems = [
   { to: '/', label: '面試題目篩選', end: true },
   { to: '/calendar', label: '招考行事曆' },
   { to: '/scores-map', label: '筆試門檻' },
+  { to: '/experience', label: '經驗分享' },
 ];
 
 const gameItems = [
