@@ -6,8 +6,8 @@ import {
   CalendarDays,
   Calculator,
   ClipboardList,
+  MapPin,
   MapPinned,
-  ScrollText,
   Sparkles,
 } from 'lucide-react';
 import { AdSlot, AD_ENABLED } from '../AdSlot';
@@ -34,6 +34,12 @@ const features = [
     desc: '用台灣地圖看各考區歷年筆試門檻，挑出最有機會上榜的考區。',
   },
   {
+    to: '/venues',
+    icon: MapPin,
+    title: '試場資訊',
+    desc: '各家招考的筆試缺考統計與面試考題，依試場彙整，掌握各場狀況。',
+  },
+  {
     to: '/experience',
     icon: BookOpen,
     title: '經驗分享',
@@ -44,12 +50,6 @@ const features = [
     icon: Calculator,
     title: '大寫數字訓練器',
     desc: '壹貳參肆…金融大寫數字練到反射，銀行櫃檯與支票必備技能。',
-  },
-  {
-    to: '/check-game',
-    icon: ScrollText,
-    title: '支票審查員',
-    desc: '模擬支票挑錯小遊戲，邊玩邊練票據辨識的眼力與手感。',
   },
 ];
 

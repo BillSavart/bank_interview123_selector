@@ -11,6 +11,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/selector': '面試題目篩選器',
   '/calendar': '招考行事曆',
   '/scores-map': '筆試門檻',
+  '/venues': '試場資訊',
   '/number-trainer': '大寫數字訓練器',
   '/check-game': '支票審查員',
   '/about': '使用說明',

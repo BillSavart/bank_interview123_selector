@@ -6,6 +6,7 @@ import {
   Hash,
   CalendarDays,
   MapPinned,
+  MapPin,
   MessageSquare,
   Mail,
 } from 'lucide-react';
@@ -36,8 +37,8 @@ export function AboutPage() {
       </div>
       <h1 className="display-title mb-3">公股銀行新手村</h1>
       <p className="page-intro">
-        本站是給準備公股銀行招考的新手練功的地方，集合了面試題目篩選、兩款練習小遊戲，
-        以及一份招考行事曆。以下說明各功能怎麼用。
+        本站是給準備公股銀行招考的新手練功的地方，集合了面試題目篩選、招考行事曆、筆試門檻、
+        試場資訊與練習小遊戲。以下說明各功能怎麼用。
       </p>
 
       <h2 className="about-h2">
@@ -87,6 +88,19 @@ export function AboutPage() {
         <li>點任一考區，右側會顯示該區分數、與上一梯的升降，以及最近幾梯的分數折線。</li>
         <li>右側「難度排行」依分數高低列出當梯各考區；同色同分的相鄰考區會合併顯示。</li>
         <li>資料整理自公開招考結果，僅供落點參考，實際門檻仍以各行庫正式公告為準。</li>
+      </ol>
+
+      <h2 className="about-h2">
+        <MapPin size={18} /> 試場資訊
+      </h2>
+      <p className="about-text">
+        <Link to="/venues">試場資訊</Link>彙整各家銀行招考的試場情報，分成筆試與面試兩種：筆試統計各試場的缺考人數，面試則整理各試場的考題與考驗重點。
+      </p>
+      <ol className="about-list">
+        <li>左側選單依銀行分組，點銀行名稱可展開／收合該行的各場次，新資料會陸續補上。</li>
+        <li>每筆場次會標明「筆試」或「面試」，並列出試場數與缺考總人數。</li>
+        <li>筆試以各試場缺考人數呈現；面試則在各試場卡片列出當場被問到的題目。</li>
+        <li>面試題目會因面試官、考生背景與當下情況而異，僅供準備方向參考，不代表你會被問到相同題目；缺考等數據亦以考生回報為準，可能與官方公告有出入。</li>
       </ol>
 
       <h2 className="about-h2">

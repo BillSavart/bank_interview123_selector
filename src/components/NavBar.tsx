@@ -7,6 +7,7 @@ const examItems = [
   { to: '/selector', label: '面試題目篩選' },
   { to: '/calendar', label: '招考行事曆' },
   { to: '/scores-map', label: '筆試門檻' },
+  { to: '/venues', label: '試場資訊' },
 ];
 
 // 經驗分享維持單一連結。

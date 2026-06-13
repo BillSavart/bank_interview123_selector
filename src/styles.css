@@ -1438,6 +1438,336 @@ select {
   font-weight: 700;
 }
 
+/* 試場資訊頁 ---------------------------------------------------------------- */
+.venue-intro {
+  margin: 0.5rem 0 0.75rem;
+  color: #475569;
+  font-size: 0.95rem;
+}
+
+.venue-disclaimer {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 1.1rem;
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  color: #92400e;
+}
+
+.venue-disclaimer svg {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+}
+
+.venue-disclaimer p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+
+/* 左選單 + 主內容兩欄；窄螢幕時選單收到上方。 */
+.venue-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+
+.venue-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  position: sticky;
+  top: 1rem;
+}
+
+.venue-menu-all {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.venue-menu-all:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.venue-menu-all.is-active {
+  border-color: #0f4f49;
+  background: #e0f2f1;
+}
+
+.venue-menu-group {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.6rem;
+  background: #fff;
+  overflow: hidden;
+}
+
+.venue-menu-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+}
+
+.venue-menu-head:hover {
+  background: #f8fafc;
+}
+
+.venue-menu-bank {
+  flex: 1;
+  font-weight: 800;
+  color: #0f172a;
+  font-size: 0.95rem;
+}
+
+.venue-menu-count {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.venue-menu-dates {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid #f1f5f9;
+}
+
+.venue-menu-date {
+  text-align: left;
+  border: 0;
+  background: transparent;
+  padding: 0.45rem 0.7rem 0.45rem 2rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0f4f49;
+  cursor: pointer;
+}
+
+.venue-menu-date:hover {
+  background: #f8fafc;
+}
+
+.venue-menu-date.is-active {
+  background: #e0f2f1;
+}
+
+@media (max-width: 768px) {
+  .venue-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .venue-menu {
+    position: static;
+  }
+}
+
+.venue-report {
+  margin-bottom: 2rem;
+}
+
+.venue-report-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  padding-bottom: 0.6rem;
+  margin-bottom: 1rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.venue-report-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.venue-report-date {
+  font-weight: 700;
+  color: #0f4f49;
+}
+
+.venue-report-note {
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.venue-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.9rem;
+}
+
+.venue-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.85rem;
+  background: #fff;
+  padding: 0.9rem 1rem 1rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.venue-card-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.6rem;
+}
+
+.venue-room {
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.venue-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  border-radius: 999px;
+  padding: 0.12rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.venue-badge-grade {
+  background: #e0f2f1;
+  color: #0f4f49;
+}
+
+.venue-badge-absent {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.venue-badge-none {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+/* 階段標籤（筆試 / 面試）。 */
+.venue-stage-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.venue-stage-badge.stage-written {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.venue-stage-badge.stage-interview {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+/* 選單裡的小階段色塊。 */
+.venue-stagetag {
+  display: inline-block;
+  border-radius: 0.3rem;
+  padding: 0.05rem 0.35rem;
+  margin-right: 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.venue-stagetag.stage-written {
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.venue-stagetag.stage-interview {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+/* 統計摘要列。 */
+.venue-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin: 0.75rem 0 1rem;
+}
+
+.venue-summary-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #334155;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.venue-summary-absent {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+
+.venue-card-note {
+  margin: 0.5rem 0 0;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+.venue-qlist {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #334155;
+  font-size: 0.92rem;
+  line-height: 1.6;
+}
+
+.venue-qlist li {
+  margin-bottom: 0.2rem;
+}
+
+.venue-extras {
+  margin-top: 1.1rem;
+  border: 1px dashed #cbd5e1;
+  border-radius: 0.85rem;
+  background: #f8fafc;
+  padding: 0.9rem 1rem 1rem;
+}
+
+.venue-extras-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #475569;
+}
+
 .back-link {
   display: inline-flex;
   align-items: center;
