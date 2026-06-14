@@ -2,22 +2,28 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BookOpen,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
+  PenLine,
   Search,
+  Send,
   ThumbsDown,
   ThumbsUp,
   UserRound,
   X,
 } from 'lucide-react';
 import {
+  emptyPostInput,
   fetchPosts,
   formatPostTime,
   loadMyPostVotes,
+  submitPost,
   votePost,
   POST_CATEGORIES,
   type ExperiencePost,
   type PostCategory,
+  type PostInput,
   type PostVote,
 } from '../lib/posts';
 
@@ -41,6 +47,8 @@ export function ExperiencePage() {
   // 左側分類選單預設「收合」。
   const [expanded, setExpanded] = useState<Record<PostCategory, boolean>>({ exam: false, work: false });
   const [myVotes, setMyVotes] = useState<Record<string, PostVote>>({});
+  // 投稿視窗的開關。
+  const [submitOpen, setSubmitOpen] = useState(false);
 
   useEffect(() => {
     setMyVotes(loadMyPostVotes());
@@ -87,9 +95,15 @@ export function ExperiencePage() {
 
   return (
     <div className="container py-4 experience-page">
-      <div className="interview-kicker">
-        <BookOpen size={18} />
-        經驗分享
+      <div className="exp-head">
+        <div className="interview-kicker">
+          <BookOpen size={18} />
+          經驗分享
+        </div>
+        <button type="button" className="exp-submit-btn" onClick={() => setSubmitOpen(true)}>
+          <PenLine size={16} />
+          我要投稿
+        </button>
       </div>
 
       <div className="exp-layout">
@@ -206,6 +220,138 @@ export function ExperiencePage() {
               </article>
             ))}
         </section>
+      </div>
+
+      {submitOpen && <SubmitModal onClose={() => setSubmitOpen(false)} />}
+    </div>
+  );
+}
+
+function SubmitModal({ onClose }: { onClose: () => void }) {
+  const [draft, setDraft] = useState<PostInput>(emptyPostInput());
+  // 蜜罐欄位：真實使用者不會填，機器人才會。
+  const [website, setWebsite] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [done, setDone] = useState(false);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!draft.title.trim()) {
+      setError('標題不可為空。');
+      return;
+    }
+    if (!draft.content.trim()) {
+      setError('內容不可為空。');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    submitPost({ ...draft, website })
+      .then(() => setDone(true))
+      .catch((err) => setError(err.message || '投稿失敗，請稍後再試。'))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className="cal-modal-backdrop" onClick={onClose}>
+      <div className="cal-modal exp-submit-modal" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="cal-modal-close" onClick={onClose} aria-label="關閉">
+          <X size={18} />
+        </button>
+
+        {done ? (
+          <div className="exp-submit-done">
+            <CheckCircle2 size={40} className="exp-submit-done-icon" />
+            <h2 className="exp-submit-title">投稿成功，感謝分享！</h2>
+            <p className="exp-submit-note">
+              你的文章已送出，將由管理員審核後公開，暫時還不會顯示在網站上。
+            </p>
+            <button type="button" className="admin-btn admin-btn-primary" onClick={onClose}>
+              完成
+            </button>
+          </div>
+        ) : (
+          <form className="exp-submit-form" onSubmit={submit}>
+            <h2 className="exp-submit-title">我要投稿</h2>
+            <p className="exp-submit-note">
+              分享你的考試 / 工作經驗。送出後會先由管理員審核，通過後才會公開顯示。
+            </p>
+
+            <label className="admin-field">
+              <span className="admin-label">分類</span>
+              <select
+                className="admin-input"
+                value={draft.category}
+                onChange={(e) => setDraft({ ...draft, category: e.target.value as PostCategory })}
+              >
+                {POST_CATEGORIES.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="admin-field">
+              <span className="admin-label">作者（可留空）</span>
+              <input
+                className="admin-input"
+                type="text"
+                value={draft.author}
+                placeholder="例如：阿明（可留空，預設匿名）"
+                onChange={(e) => setDraft({ ...draft, author: e.target.value })}
+              />
+            </label>
+
+            <label className="admin-field">
+              <span className="admin-label">標題</span>
+              <input
+                className="admin-input"
+                type="text"
+                value={draft.title}
+                placeholder="例如：台銀一般金融上榜心得"
+                onChange={(e) => setDraft({ ...draft, title: e.target.value })}
+              />
+            </label>
+
+            <label className="admin-field">
+              <span className="admin-label">內容</span>
+              <textarea
+                className="admin-input admin-textarea"
+                rows={10}
+                value={draft.content}
+                placeholder="分享你的準備過程、面試經驗、工作心得…"
+                onChange={(e) => setDraft({ ...draft, content: e.target.value })}
+              />
+              <span className="exp-field-hint">
+                這邊畢竟不是靠北板，希望大家投稿還是以經驗分享、傳承為主 🙏
+              </span>
+            </label>
+
+            {/* 蜜罐：以 CSS 隱藏，真實使用者看不到也不會填。 */}
+            <input
+              className="exp-hp"
+              type="text"
+              tabIndex={-1}
+              autoComplete="off"
+              value={website}
+              onChange={(e) => setWebsite(e.target.value)}
+              aria-hidden="true"
+            />
+
+            {error && <p className="admin-error">{error}</p>}
+
+            <div className="exp-submit-actions">
+              <button type="submit" className="admin-btn admin-btn-primary" disabled={busy}>
+                <Send size={16} /> {busy ? '送出中…' : '送出投稿'}
+              </button>
+              <button type="button" className="admin-btn admin-btn-ghost" onClick={onClose} disabled={busy}>
+                取消
+              </button>
+            </div>
+          </form>
+        )}
       </div>
     </div>
   );

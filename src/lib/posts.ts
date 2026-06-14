@@ -29,9 +29,11 @@ export interface ExperiencePost {
   score: number;
 }
 
-/** 後台視角：多帶一個 hidden 旗標。 */
+/** 後台視角：多帶 hidden 旗標，以及「使用者投稿待審核」的 pending 旗標。 */
 export interface AdminPost extends ExperiencePost {
   hidden: boolean;
+  /** true 代表這是使用者投稿、尚未經管理員審核公開的文章。 */
+  pending: boolean;
 }
 
 /** 發文表單可編輯的欄位。 */
@@ -124,6 +126,23 @@ export async function fetchPosts(): Promise<ExperiencePost[]> {
   if (!res.ok) throw new Error('posts fetch failed');
   const payload = (await res.json()) as { posts?: ExperiencePost[] };
   return payload.posts || [];
+}
+
+/**
+ * 公開投稿一篇文章。送出後一律先存成「待審核」（hidden），要等管理員在後台
+ * 開放後才會公開。成功不回傳文章本身（投稿者看不到尚未公開的內容）。
+ * `website` 是給機器人用的蜜罐欄位，真實使用者一律留空。
+ */
+export async function submitPost(input: PostInput & { website?: string }): Promise<void> {
+  const res = await fetch('/api/posts', {
+    method: 'POST',
+    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(payload.error || '投稿失敗，請稍後再試。');
+  }
 }
 
 /** 公開讀取單篇文章（隱藏或不存在會丟 404 錯誤）。 */

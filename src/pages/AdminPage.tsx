@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck, Plus, Trash2, Save, X, LogOut, Pencil, EyeOff, Eye } from 'lucide-react';
+import { ShieldCheck, Plus, Trash2, Save, X, LogOut, Pencil, EyeOff, Eye, BookOpen } from 'lucide-react';
 import {
   createEvent,
   deleteEvent,
@@ -399,6 +399,8 @@ function PostsAdmin({ token }: { token: string }) {
   // `null` = no form open; 'new' = composing a new post; an id = editing it.
   const [editingId, setEditingId] = useState<string | 'new' | null>(null);
   const [draft, setDraft] = useState<PostInput>(emptyPostInput());
+  // 正在「閱讀全文」預覽的文章（審稿用），null = 沒開。
+  const [previewing, setPreviewing] = useState<AdminPost | null>(null);
   // List filters (only relevant when many posts have accumulated).
   const [filterCat, setFilterCat] = useState<PostCategory | 'all'>('all');
   const [query, setQuery] = useState('');
@@ -584,16 +586,31 @@ function PostsAdmin({ token }: { token: string }) {
           <div key={p.id} className={`admin-row ${p.hidden ? 'is-hidden' : ''}`}>
             <div className="admin-row-main">
               <span className="admin-row-org">
-                <span className="admin-lb-rank">{catLabel(p.category)}</span> {p.title}
-                {p.hidden && <em className="admin-tag-hidden">已隱藏</em>}
+                <span className="admin-lb-rank">{catLabel(p.category)}</span>{' '}
+                <button type="button" className="admin-post-title-link" onClick={() => setPreviewing(p)} title="閱讀全文">
+                  {p.title}
+                </button>
+                {p.pending && <em className="admin-tag-pending">待審核</em>}
+                {p.hidden && !p.pending && <em className="admin-tag-hidden">已隱藏</em>}
               </span>
-              <span className="admin-comment-text admin-post-excerpt">{p.content}</span>
+              <button type="button" className="admin-comment-text admin-post-excerpt admin-post-excerpt-btn" onClick={() => setPreviewing(p)}>
+                {p.content}
+              </button>
               <span className="admin-row-meta">
                 {p.author && <span>作者 {p.author}</span>}
                 <span>{formatPostTime(p.createdAt)}</span>
               </span>
             </div>
             <div className="admin-row-actions">
+              <button
+                type="button"
+                className="admin-icon-btn"
+                onClick={() => setPreviewing(p)}
+                aria-label="閱讀全文"
+                title="閱讀全文"
+              >
+                <BookOpen size={16} />
+              </button>
               <button
                 type="button"
                 className="admin-icon-btn"
@@ -640,6 +657,88 @@ function PostsAdmin({ token }: { token: string }) {
             </div>
           </div>
         ))}
+      </div>
+
+      {previewing && (
+        <PostPreviewModal
+          post={previewing}
+          catLabel={catLabel(previewing.category)}
+          onClose={() => setPreviewing(null)}
+          onEdit={() => {
+            const p = previewing;
+            setPreviewing(null);
+            openEdit(p);
+          }}
+          onModerate={(action) => {
+            const p = previewing;
+            setPreviewing(null);
+            act(p, action);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+// 審稿用：閱讀整篇文章（含尚未公開的待審稿），可直接從這裡顯示／隱藏／編輯。
+function PostPreviewModal({
+  post,
+  catLabel,
+  onClose,
+  onEdit,
+  onModerate,
+}: {
+  post: AdminPost;
+  catLabel: string;
+  onClose: () => void;
+  onEdit: () => void;
+  onModerate: (action: PostModerateAction) => void;
+}) {
+  return (
+    <div className="cal-modal-backdrop" onClick={onClose}>
+      <div className="cal-modal admin-post-preview" onClick={(e) => e.stopPropagation()}>
+        <button type="button" className="cal-modal-close" onClick={onClose} aria-label="關閉">
+          <X size={18} />
+        </button>
+
+        <div className="admin-post-preview-tags">
+          <span className="admin-lb-rank">{catLabel}</span>
+          {post.pending && <em className="admin-tag-pending">待審核</em>}
+          {post.hidden && !post.pending && <em className="admin-tag-hidden">已隱藏</em>}
+        </div>
+        <h2 className="admin-post-preview-title">{post.title}</h2>
+        <div className="admin-post-preview-meta">
+          {post.author && <span>作者 {post.author}</span>}
+          <span>{formatPostTime(post.createdAt)}</span>
+        </div>
+
+        <div className="admin-post-preview-body">
+          {post.content.split(/\n{2,}/).map((para, i) => (
+            <p key={i}>
+              {para.split('\n').map((line, j) => (
+                <span key={j}>
+                  {line}
+                  {j < para.split('\n').length - 1 && <br />}
+                </span>
+              ))}
+            </p>
+          ))}
+        </div>
+
+        <div className="admin-form-actions admin-post-preview-actions">
+          {post.hidden ? (
+            <button type="button" className="admin-btn admin-btn-primary" onClick={() => onModerate('show')}>
+              <Eye size={16} /> 顯示（公開）
+            </button>
+          ) : (
+            <button type="button" className="admin-btn admin-btn-ghost" onClick={() => onModerate('hide')}>
+              <EyeOff size={16} /> 隱藏
+            </button>
+          )}
+          <button type="button" className="admin-btn admin-btn-ghost" onClick={onEdit}>
+            <Pencil size={16} /> 編輯
+          </button>
+        </div>
       </div>
     </div>
   );

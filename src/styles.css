@@ -2997,6 +2997,18 @@ select {
   border-radius: 999px;
 }
 
+/* 使用者投稿、待管理員審核的標籤（比「已隱藏」更醒目）。 */
+.admin-tag-pending {
+  margin-left: 0.5rem;
+  font-style: normal;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #9a3412;
+  background: #ffedd5;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+}
+
 .admin-login {
   max-width: 360px;
   margin: 2rem auto;
@@ -3877,6 +3889,96 @@ select {
   max-width: 980px;
 }
 
+/* 頁首：標題 + 「我要投稿」按鈕分置兩端。 */
+.exp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.exp-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 0;
+  border-radius: 999px;
+  background: #0f4f49;
+  color: #fff;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.exp-submit-btn:hover {
+  background: #0c403b;
+}
+
+/* 投稿視窗（沿用行事曆的 modal backdrop / 卡片骨架，放寬寬度給表單用）。 */
+.exp-submit-modal {
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.exp-submit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.exp-submit-title {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 2rem 0 0;
+}
+
+.exp-submit-note {
+  color: #475569;
+  font-size: 0.9rem;
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* 內容欄下方的小提醒（投稿請以經驗分享為主）。 */
+.exp-field-hint {
+  font-size: 0.8rem;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.exp-submit-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 0.2rem;
+}
+
+.exp-submit-done {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1rem 0.5rem;
+}
+
+.exp-submit-done-icon {
+  color: #0f4f49;
+}
+
+/* 蜜罐欄位：徹底移出畫面，但對機器人仍是可填的 input。 */
+.exp-hp {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
 .exp-empty {
   color: #64748b;
   padding: 2rem 0;
@@ -4478,6 +4580,81 @@ select {
   -webkit-box-orient: vertical;
   overflow: hidden;
   white-space: normal;
+}
+
+/* 標題與摘要做成可點按鈕：點了開「閱讀全文」預覽視窗（審稿用）。 */
+.admin-post-title-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  text-align: left;
+}
+
+.admin-post-title-link:hover {
+  color: #0f4f49;
+  text-decoration: underline;
+}
+
+.admin-post-excerpt-btn {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* 閱讀全文預覽視窗 */
+.admin-post-preview {
+  max-width: 640px;
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+.admin-post-preview-tags {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-right: 2rem;
+}
+
+.admin-post-preview-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0.5rem 0 0.3rem;
+}
+
+.admin-post-preview-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  color: #94a3b8;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.admin-post-preview-body {
+  color: #1f2937;
+  line-height: 1.8;
+  white-space: normal;
+}
+
+.admin-post-preview-body p {
+  margin: 0 0 1rem;
+}
+
+.admin-post-preview-actions {
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  padding-top: 0.8rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid #eef2f6;
 }
 
 /* ============================ 首頁 Landing ============================ */

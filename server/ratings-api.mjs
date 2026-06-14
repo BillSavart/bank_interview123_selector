@@ -702,6 +702,9 @@ const loadPosts = async () => {
           slug: typeof p.slug === 'string' ? p.slug : '',
           ...cleanPostInput(p),
           hidden: !!p.hidden,
+          // 使用者投稿、尚未經管理員審核公開的文章。投稿一律 hidden + pending；
+          // 管理員按「顯示」公開後 pending 會被清掉。
+          pending: !!p.pending,
           createdAt: String(p.createdAt || ''),
           updatedAt: String(p.updatedAt || ''),
         })),
@@ -797,8 +800,9 @@ const publicPost = (p) => {
   };
 };
 
-// Admin view: public shape + the moderation flag (no raw voter map either).
-const adminPost = (p) => ({ ...publicPost(p), hidden: !!p.hidden });
+// Admin view: public shape + the moderation flag and the「待審核」flag (no raw
+// voter map either).
+const adminPost = (p) => ({ ...publicPost(p), hidden: !!p.hidden, pending: !!p.pending });
 const adminPosts = () => posts.map(adminPost);
 
 // --- 經驗分享：伺服器端 SEO 渲染 (dynamic SEO) ------------------------------
@@ -1183,6 +1187,50 @@ createServer(async (req, res) => {
       return;
     }
 
+    // Public 投稿：任何人都能投稿一篇文章，但一律先存成 hidden + pending（待審核），
+    // 要等管理員在後台「顯示」後才會出現在 /api/posts。與後台發文走不同路徑。
+    if (req.method === 'POST' && url.pathname === '/api/posts') {
+      const bodyText = await readBody(req);
+      let body = {};
+      try {
+        body = bodyText ? JSON.parse(bodyText) : {};
+      } catch {
+        sendJson(res, 400, { error: 'request body must be valid JSON' });
+        return;
+      }
+      // Honeypot：真實使用者看不到 website 欄位，有填就當機器人，假裝成功不存。
+      if (typeof body.website === 'string' && body.website.trim() !== '') {
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+      if (posts.length >= maxPosts) {
+        sendJson(res, 400, { error: '文章數量已達上限，暫時無法投稿。' });
+        return;
+      }
+      const fields = cleanPostInput(body);
+      if (!fields.title) {
+        sendJson(res, 400, { error: '標題不可為空' });
+        return;
+      }
+      if (!fields.content) {
+        sendJson(res, 400, { error: '內容不可為空' });
+        return;
+      }
+      const rate = checkRateLimit(getClientIp(req));
+      if (!rate.ok) {
+        sendJson(res, 429, { error: rate.reason });
+        return;
+      }
+      const now = new Date().toISOString();
+      const post = { id: randomUUID(), slug: uniqueSlug(), ...fields, hidden: true, pending: true, createdAt: now, updatedAt: now, votes: {} };
+      posts.push(post);
+      postById.set(post.id, post);
+      sortPosts(posts);
+      await persistPosts();
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
     // 動態 SEO：伺服器端渲染的單篇文章頁（Caddy 只把爬蟲 UA 導到這裡）。
     const articleMatch = url.pathname.match(/^\/experience\/([a-f0-9-]{36})$/);
     if (req.method === 'GET' && articleMatch) {
@@ -1300,7 +1348,7 @@ createServer(async (req, res) => {
         return;
       }
       const now = new Date().toISOString();
-      const post = { id: randomUUID(), slug: uniqueSlug(), ...fields, hidden: false, createdAt: now, updatedAt: now, votes: {} };
+      const post = { id: randomUUID(), slug: uniqueSlug(), ...fields, hidden: false, pending: false, createdAt: now, updatedAt: now, votes: {} };
       posts.push(post);
       postById.set(post.id, post);
       sortPosts(posts);
@@ -1380,7 +1428,13 @@ createServer(async (req, res) => {
           await removePostVotesFromLog(removed.id); // 連同投票紀錄一起從 log 清掉
         }
       } else {
-        posts[idx] = { ...posts[idx], hidden: action === 'hide', updatedAt: new Date().toISOString() };
+        // 「顯示」即代表審核通過：清掉 pending（待審核）旗標。
+        posts[idx] = {
+          ...posts[idx],
+          hidden: action === 'hide',
+          pending: action === 'show' ? false : posts[idx].pending,
+          updatedAt: new Date().toISOString(),
+        };
         postById.set(posts[idx].id, posts[idx]);
       }
       await persistPosts();
