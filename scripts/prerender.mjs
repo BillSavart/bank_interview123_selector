@@ -61,21 +61,14 @@ for (const r of ROUTES) {
   html = setMeta(html, 'twitter:title', fullTitle);
   html = setMeta(html, 'twitter:description', r.desc);
 
+  // The template ships the brand share card (og/home.jpg) as the default; routes
+  // with their own thumbnail just overwrite the image meta, others inherit it.
   if (r.image) {
     const img = `${BASE}/og/${r.image.file}`;
-    // Upgrade the Twitter card to a large image and inject the image tags right
-    // after og:description (the template ships none, so this adds them).
-    html = setMeta(html, 'twitter:card', 'summary_large_image');
-    const tags =
-      `    <meta property="og:description" content="${esc(r.desc)}" />\n` +
-      `    <meta property="og:image" content="${img}" />\n` +
-      `    <meta property="og:image:width" content="${r.image.w}" />\n` +
-      `    <meta property="og:image:height" content="${r.image.h}" />\n` +
-      `    <meta name="twitter:image" content="${img}" />`;
-    html = html.replace(
-      new RegExp(`<meta property="og:description" content="[^"]*" />`),
-      tags,
-    );
+    html = setMeta(html, 'og:image', img);
+    html = setMeta(html, 'og:image:width', String(r.image.w));
+    html = setMeta(html, 'og:image:height', String(r.image.h));
+    html = setMeta(html, 'twitter:image', img);
   }
 
   const out = join(DIST, r.path, 'index.html');

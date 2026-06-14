@@ -1,0 +1,147 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="1080" viewBox="0 0 1440 1080" role="img" aria-labelledby="title desc">
+  <title id="title">公股銀行新手村 logo design board</title>
+  <desc id="desc">Logo design board showing the primary logo, mark, dark version, small-size preview, monochrome version, color palette, and design notes.</desc>
+  <defs>
+    <linearGradient id="mark-bg" x1="0" y1="0" x2="190" y2="190" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#17313d"/>
+      <stop offset="1" stop-color="#0f4f49"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#10252b" flood-opacity="0.14"/>
+    </filter>
+    <style>
+      .bg { fill: #f4f6f7; }
+      .card { fill: #ffffff; stroke: #dce7e4; stroke-width: 2; }
+      .ink { fill: #17313d; }
+      .muted { fill: #506470; }
+      .eyebrow { fill: #0f766e; font: 800 16px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", Arial, sans-serif; letter-spacing: 0; }
+      .h1 { fill: #17313d; font: 800 48px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", Arial, sans-serif; letter-spacing: 0; }
+      .h2 { fill: #17313d; font: 800 26px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", Arial, sans-serif; letter-spacing: 0; }
+      .body { fill: #506470; font: 600 18px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", Arial, sans-serif; letter-spacing: 0; }
+      .small { fill: #64748b; font: 600 14px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", Arial, sans-serif; letter-spacing: 0; }
+      .wordmark { fill: #17313d; font: 800 54px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", Arial, sans-serif; letter-spacing: 0; }
+      .tagline { fill: #506470; font: 600 24px "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", Arial, sans-serif; letter-spacing: 0; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1440" height="1080"/>
+  <text x="80" y="86" class="eyebrow">LOGO CONCEPT</text>
+  <text x="80" y="142" class="h1">公股銀行新手村</text>
+  <text x="80" y="180" class="body">可信的備考工具站：方向感、題庫整理、銀行職能訓練，不做成銀行官方機構感。</text>
+
+  <rect x="80" y="230" width="830" height="280" rx="24" class="card"/>
+  <text x="120" y="286" class="h2">Primary Logo</text>
+  <g transform="translate(120 326)">
+    <g>
+      <circle cx="80" cy="80" r="74" fill="url(#mark-bg)" filter="url(#shadow)"/>
+      <circle cx="80" cy="80" r="60" fill="#f7faf9"/>
+      <path d="M45 62 L80 39 L115 62" fill="none" stroke="#f6c453" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M53 69 H107" stroke="#17313d" stroke-width="7" stroke-linecap="round"/>
+      <rect x="45" y="72" width="70" height="44" rx="10" fill="#ffffff" stroke="#17313d" stroke-width="5"/>
+      <path d="M58 87 H103" stroke="#a9bbb7" stroke-width="4.5" stroke-linecap="round"/>
+      <path d="M58 101 H88" stroke="#cbd8d5" stroke-width="4.5" stroke-linecap="round"/>
+      <circle cx="103" cy="102" r="7" fill="#e2f3f0" stroke="#0f766e" stroke-width="3.5"/>
+      <path d="M80 62 L97 97 L80 91 L63 97 Z" fill="#0f766e"/>
+      <path d="M80 62 L80 91 L63 97 Z" fill="#17313d" opacity="0.92"/>
+      <circle cx="80" cy="85" r="6" fill="#f6c453" stroke="#f7faf9" stroke-width="3"/>
+      <path d="M55 126 C66 135 94 135 105 126" fill="none" stroke="#f6c453" stroke-width="7" stroke-linecap="round"/>
+    </g>
+    <g transform="translate(198 24)">
+      <text x="0" y="62" class="wordmark">公股銀行新手村</text>
+      <text x="2" y="112" class="tagline">面試題庫・招考行事曆・筆試門檻</text>
+      <path d="M4 135 H430" stroke="#e2ece9" stroke-width="6" stroke-linecap="round"/>
+      <path d="M4 135 H156" stroke="#f6c453" stroke-width="6" stroke-linecap="round"/>
+    </g>
+  </g>
+
+  <rect x="950" y="230" width="410" height="280" rx="24" class="card"/>
+  <text x="990" y="286" class="h2">Logo Mark</text>
+  <g transform="translate(1058 306) scale(1.08)">
+    <circle cx="80" cy="80" r="74" fill="url(#mark-bg)" filter="url(#shadow)"/>
+    <circle cx="80" cy="80" r="60" fill="#f7faf9"/>
+    <path d="M45 62 L80 39 L115 62" fill="none" stroke="#f6c453" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M53 69 H107" stroke="#17313d" stroke-width="7" stroke-linecap="round"/>
+    <rect x="45" y="72" width="70" height="44" rx="10" fill="#ffffff" stroke="#17313d" stroke-width="5"/>
+    <path d="M58 87 H103" stroke="#a9bbb7" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M58 101 H88" stroke="#cbd8d5" stroke-width="4.5" stroke-linecap="round"/>
+    <circle cx="103" cy="102" r="7" fill="#e2f3f0" stroke="#0f766e" stroke-width="3.5"/>
+    <path d="M80 62 L97 97 L80 91 L63 97 Z" fill="#0f766e"/>
+    <path d="M80 62 L80 91 L63 97 Z" fill="#17313d" opacity="0.92"/>
+    <circle cx="80" cy="85" r="6" fill="#f6c453" stroke="#f7faf9" stroke-width="3"/>
+    <path d="M55 126 C66 135 94 135 105 126" fill="none" stroke="#f6c453" stroke-width="7" stroke-linecap="round"/>
+  </g>
+
+  <rect x="80" y="550" width="580" height="220" rx="24" fill="#17313d"/>
+  <text x="120" y="606" fill="#f7faf9" font-family="'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', Arial, sans-serif" font-size="26" font-weight="800">Dark Surface</text>
+  <g transform="translate(120 632) scale(.68)">
+    <circle cx="80" cy="80" r="74" fill="#f7faf9"/>
+    <circle cx="80" cy="80" r="60" fill="#17313d"/>
+    <path d="M45 62 L80 39 L115 62" fill="none" stroke="#f6c453" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M53 69 H107" stroke="#ffffff" stroke-width="7" stroke-linecap="round"/>
+    <rect x="45" y="72" width="70" height="44" rx="10" fill="#f7faf9" stroke="#ffffff" stroke-width="5"/>
+    <path d="M58 87 H103" stroke="#a9bbb7" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M58 101 H88" stroke="#cbd8d5" stroke-width="4.5" stroke-linecap="round"/>
+    <circle cx="103" cy="102" r="7" fill="#e2f3f0" stroke="#0f766e" stroke-width="3.5"/>
+    <path d="M80 62 L97 97 L80 91 L63 97 Z" fill="#0f766e"/>
+    <path d="M80 62 L80 91 L63 97 Z" fill="#17313d" opacity="0.92"/>
+    <circle cx="80" cy="85" r="6" fill="#f6c453" stroke="#f7faf9" stroke-width="3"/>
+  </g>
+  <text x="250" y="698" fill="#f7faf9" font-family="'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', Arial, sans-serif" font-size="42" font-weight="800">公股銀行新手村</text>
+  <text x="252" y="738" fill="#cfe0dc" font-family="'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', Arial, sans-serif" font-size="20" font-weight="600">面試題庫・招考行事曆・筆試門檻</text>
+
+  <rect x="700" y="550" width="300" height="220" rx="24" class="card"/>
+  <text x="740" y="606" class="h2">Small Size</text>
+  <g transform="translate(742 632)">
+    <rect x="0" y="0" width="48" height="48" rx="12" fill="#f7faf9" stroke="#dce7e4"/>
+    <g transform="translate(4 4) scale(.25)">
+      <circle cx="80" cy="80" r="74" fill="url(#mark-bg)"/>
+      <circle cx="80" cy="80" r="60" fill="#f7faf9"/>
+      <path d="M45 62 L80 39 L115 62" fill="none" stroke="#f6c453" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="45" y="72" width="70" height="44" rx="10" fill="#ffffff" stroke="#17313d" stroke-width="5"/>
+      <path d="M80 62 L97 97 L80 91 L63 97 Z" fill="#0f766e"/>
+      <circle cx="80" cy="85" r="6" fill="#f6c453" stroke="#f7faf9" stroke-width="3"/>
+    </g>
+    <rect x="70" y="0" width="72" height="72" rx="18" fill="#f7faf9" stroke="#dce7e4"/>
+    <g transform="translate(76 6) scale(.375)">
+      <circle cx="80" cy="80" r="74" fill="url(#mark-bg)"/>
+      <circle cx="80" cy="80" r="60" fill="#f7faf9"/>
+      <path d="M45 62 L80 39 L115 62" fill="none" stroke="#f6c453" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="45" y="72" width="70" height="44" rx="10" fill="#ffffff" stroke="#17313d" stroke-width="5"/>
+      <path d="M80 62 L97 97 L80 91 L63 97 Z" fill="#0f766e"/>
+      <circle cx="80" cy="85" r="6" fill="#f6c453" stroke="#f7faf9" stroke-width="3"/>
+    </g>
+  </g>
+  <text x="740" y="738" class="small">48px / 72px favicon-style preview</text>
+
+  <rect x="1040" y="550" width="320" height="220" rx="24" class="card"/>
+  <text x="1080" y="606" class="h2">One Color</text>
+  <g transform="translate(1120 632) scale(.68)">
+    <circle cx="80" cy="80" r="74" fill="#17313d"/>
+    <circle cx="80" cy="80" r="58" fill="none" stroke="#ffffff" stroke-width="10"/>
+    <path d="M45 62 L80 39 L115 62" fill="none" stroke="#ffffff" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="45" y="72" width="70" height="44" rx="10" fill="none" stroke="#ffffff" stroke-width="6"/>
+    <path d="M80 62 L97 97 L80 91 L63 97 Z" fill="#ffffff"/>
+    <circle cx="80" cy="85" r="6" fill="#17313d" stroke="#ffffff" stroke-width="3"/>
+  </g>
+
+  <rect x="80" y="810" width="560" height="190" rx="24" class="card"/>
+  <text x="120" y="866" class="h2">Palette</text>
+  <g transform="translate(120 900)">
+    <rect x="0" y="0" width="80" height="56" rx="14" fill="#17313d"/>
+    <rect x="100" y="0" width="80" height="56" rx="14" fill="#0f4f49"/>
+    <rect x="200" y="0" width="80" height="56" rx="14" fill="#0f766e"/>
+    <rect x="300" y="0" width="80" height="56" rx="14" fill="#f6c453"/>
+    <rect x="400" y="0" width="80" height="56" rx="14" fill="#f7faf9" stroke="#dce7e4"/>
+    <text x="0" y="86" class="small">#17313D</text>
+    <text x="100" y="86" class="small">#0F4F49</text>
+    <text x="200" y="86" class="small">#0F766E</text>
+    <text x="300" y="86" class="small">#F6C453</text>
+    <text x="400" y="86" class="small">#F7FAF9</text>
+  </g>
+
+  <rect x="680" y="810" width="680" height="190" rx="24" class="card"/>
+  <text x="720" y="866" class="h2">Design Rationale</text>
+  <text x="720" y="908" class="body">村口屋頂：呼應「新手村」，線條保持成熟。</text>
+  <text x="720" y="940" class="body">題卡：代表面試題庫、考場資訊與準備清單。</text>
+  <text x="720" y="972" class="body">指南針：幫考生找方向，不假裝成官方銀行。</text>
+</svg>

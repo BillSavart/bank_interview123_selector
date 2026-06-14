@@ -1310,6 +1310,13 @@ select {
   text-decoration: none;
 }
 
+.nav-brand-logo {
+  display: block;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+}
+
 .nav-toggle {
   margin-left: auto;
   display: none;

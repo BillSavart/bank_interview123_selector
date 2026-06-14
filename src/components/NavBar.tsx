@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Banknote, ChevronDown, Download, Mail, Menu, X } from 'lucide-react';
+import { ChevronDown, Download, Mail, Menu, X } from 'lucide-react';
 
 // 考試相關的三個功能收進「考試專區」下拉，navbar 才不會太長。
 const examItems = [
@@ -36,7 +36,7 @@ export function NavBar() {
     <header className="site-nav">
       <div className="container site-nav-inner">
         <NavLink to="/" className="nav-brand" onClick={closeNav}>
-          <Banknote size={20} />
+          <img className="nav-brand-logo" src="/favicon.svg" alt="" width={28} height={28} />
           <span>公股銀行新手村</span>
         </NavLink>
 

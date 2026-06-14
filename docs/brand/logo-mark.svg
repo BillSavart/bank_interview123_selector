@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">公股銀行新手村 logo mark</title>
+  <desc id="desc">A round teal logo mark combining a village roof, a preparation card, and a compass arrow for a public bank exam preparation site.</desc>
+  <defs>
+    <linearGradient id="mark-bg" x1="92" y1="72" x2="420" y2="440" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#17313d"/>
+      <stop offset="1" stop-color="#0f4f49"/>
+    </linearGradient>
+    <filter id="soft-shadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#10252b" flood-opacity="0.18"/>
+    </filter>
+  </defs>
+
+  <circle cx="256" cy="256" r="224" fill="url(#mark-bg)" filter="url(#soft-shadow)"/>
+  <circle cx="256" cy="256" r="183" fill="#f7faf9"/>
+
+  <path d="M150 195 L256 126 L362 195" fill="none" stroke="#f6c453" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M176 214 H336" stroke="#17313d" stroke-width="18" stroke-linecap="round"/>
+
+  <rect x="153" y="220" width="206" height="128" rx="26" fill="#ffffff" stroke="#17313d" stroke-width="14"/>
+  <path d="M190 262 H322" stroke="#a9bbb7" stroke-width="13" stroke-linecap="round"/>
+  <path d="M190 302 H278" stroke="#cbd8d5" stroke-width="13" stroke-linecap="round"/>
+  <circle cx="317" cy="303" r="19" fill="#e2f3f0" stroke="#0f766e" stroke-width="10"/>
+
+  <path d="M256 192 L304 292 L256 271 L208 292 Z" fill="#0f766e"/>
+  <path d="M256 192 L256 271 L208 292 Z" fill="#17313d" opacity="0.92"/>
+  <circle cx="256" cy="256" r="17" fill="#f6c453" stroke="#f7faf9" stroke-width="8"/>
+
+  <path d="M183 381 C214 405 296 405 329 381" fill="none" stroke="#f6c453" stroke-width="18" stroke-linecap="round"/>
+  <path d="M217 381 H295" stroke="#17313d" stroke-width="12" stroke-linecap="round" opacity="0.9"/>
+</svg>
