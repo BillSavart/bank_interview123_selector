@@ -4,9 +4,54 @@ React + Bootstrap + TypeScript 的靜態網站，適合部署到 Cloudflare 網�
 
 ## 系統架構
 
-![公股銀行新手村系統架構圖](docs/system-architecture.svg)
+下圖由 GitHub 原生 Mermaid 直接渲染（自動排版、不會重疊）。實線是 runtime 請求流，虛線是建置／部署流。右下角虛線框是**目前尚未實作**的 SQLite 規劃，僅標註未來方向。
 
-可編輯 Mermaid 版與圖上重點整理在 [docs/system-architecture.md](docs/system-architecture.md)。
+```mermaid
+flowchart TB
+  user["🧑 使用者 Browser<br/>React SPA + /admin<br/>localStorage: voterId / 投票狀態 / admin token"]
+
+  cf["☁️ Cloudflare<br/>Proxied DNS · CDN · DDoS<br/>Edge TLS（Full strict）<br/>/api/* GET 邊緣快取 s-maxage=10"]
+
+  subgraph vm["🖥️ GCP e2-micro · Docker Compose"]
+    direction TB
+    web["web container — Caddy 2<br/>服務 /srv 靜態 SPA、PDF、OG 圖、banks-data.json<br/>reverse_proxy /api/* · /e/* · 爬蟲 SEO → api:3000"]
+    api["api container — Node server/ratings-api.mjs<br/>純 node:http，無框架／無外部 DB<br/>/api/ratings · /api/comments · /api/post-comments<br/>/api/posts · /api/calendar · /api/*/leaderboard<br/>/api/admin/*（Bearer ADMIN_TOKEN）"]
+    caddyvol[("caddy_data / caddy_config<br/>Origin Certificate 狀態")]
+    datavol[("ratings_data volume — 12 個檔<br/>ratings.json · comments.jsonl · comment-votes/mods.jsonl<br/>post-comments/votes/mods.jsonl · posts.json · post-votes.jsonl<br/>calendar.json · checkgame-top.json · numbergame-top.json")]
+  end
+
+  subgraph build["🏗️ Build-time Data Pipeline（在 CI 上跑）"]
+    direction TB
+    q["public/20260515bank123.pdf + bank123_pdftojson.json<br/>scripts/extract-questions.mjs → src/data/questions.generated.ts"]
+    m["Google Sheet XLSX + g0v GeoJSON<br/>scripts/build-banks-data.mjs → public/banks-data.json"]
+    a["answer_bank.json → 打包進 SPA"]
+  end
+
+  subgraph ci["⚙️ GitHub Actions CI/CD"]
+    direction LR
+    t["main push / 每日 cron / 手動"] --> c["typecheck + vitest + check:banks-data"] --> b["build web + api image"] --> g["push 到 GHCR"] --> d["SSH VM: docker compose pull && up -d"]
+  end
+
+  future["🗄️ 未來規劃：SQLite（better-sqlite3, WAL）<br/>單一 /data/app.db 取代 12 個 JSON/JSONL<br/>3 個 *-mods.jsonl 併入 UPDATE，store 數 12 → ~9 表"]
+
+  user -->|HTTPS| cf
+  cf -->|"80/443 origin（防火牆只放 Cloudflare IP）"| web
+  web -->|reverse_proxy| api
+  api -->|read / write| datavol
+  web -.-> caddyvol
+
+  q -.-> b
+  m -.-> b
+  a -.-> b
+  d -.->|pull image & 重啟| vm
+
+  datavol -.->|"規劃中遷移"| future
+
+  classDef plan stroke-dasharray:6 4,stroke:#888,fill:transparent;
+  class future plan;
+```
+
+圖上重點與可編輯版另存於 [docs/system-architecture.md](docs/system-architecture.md)。
 
 ## 功能
 
