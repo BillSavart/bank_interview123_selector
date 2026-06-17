@@ -1,8 +1,43 @@
-FROM node:20-alpine
+# API image: tiny Node HTTP server for ratings / comments / posts / calendar /
+# leaderboards. Built in CI, pulled by the e2-micro VM.
+#
+# Two stages so the runtime image stays lean:
+#   - deps:    has the C++ toolchain, compiles better-sqlite3 from source.
+#   - runtime: node:20-slim + the compiled node_modules + the server files only.
+#
+# Why compile instead of a prebuilt binary: better-sqlite3 publishes no prebuilt
+# binary for node20 / linux for the pinned version (prebuild-install reports
+# "No prebuilt binaries found", then node-gyp needs python3+make+g++). Because the
+# dep is OPTIONAL (so the alpine/musl web image can skip it), a failed build is
+# silently dropped — which would make this image boot-loop on a missing module.
+# Compiling here guarantees the native binding is present. The API's only npm
+# runtime dependency is better-sqlite3, so that's all we install.
+
+FROM node:20-slim AS deps
+WORKDIR /app
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends python3 make g++ \
+  && rm -rf /var/lib/apt/lists/*
+COPY package.json ./
+# Install just better-sqlite3, at the version pinned in package.json, compiling
+# the native binding against this exact Node/glibc.
+RUN npm install --omit=dev --no-save \
+  "better-sqlite3@$(node -p "require('./package.json').optionalDependencies['better-sqlite3']")"
+
+FROM node:20-slim
 WORKDIR /app
 ENV NODE_ENV=production
-ENV NODE_OPTIONS=--max-old-space-size=32
+# Compiled deps from the build stage (no toolchain in the final image).
+COPY --from=deps /app/node_modules ./node_modules
+# The server plus its SQLite schema + one-off migration helper. db.mjs is needed
+# at runtime (ratings-api.mjs imports it); migrate-to-sqlite.mjs is run manually
+# on the VM during cutover (docker compose run --rm api node ...).
 COPY server/ratings-api.mjs ./server/ratings-api.mjs
+COPY server/db.mjs ./server/db.mjs
+COPY server/migrate-to-sqlite.mjs ./server/migrate-to-sqlite.mjs
+# Runtime heap cap (only the long-running server needs it; npm/compile must not
+# be constrained to 32 MB or they OOM-abort).
+ENV NODE_OPTIONS=--max-old-space-size=32
 RUN mkdir -p /data && chown -R node:node /data
 USER node
 EXPOSE 3000

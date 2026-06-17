@@ -30,6 +30,13 @@ services:
       CALENDAR_FILE: /data/calendar.json
       POSTS_FILE: /data/posts.json
       POST_VOTES_FILE: /data/post-votes.jsonl
+      # SQLite backend (Phase 2/3 migration). Empty → JSON mode (unchanged
+      # behaviour). Flip the cutover by setting USE_SQLITE=1 in deploy/.env on the
+      # VM and `docker compose up -d` — no rebuild, no code push. Roll back by
+      # unsetting it. The JSON files in the volume stay as the safety net.
+      # See deploy/SQLITE-CUTOVER.md for the full zero-loss runbook.
+      USE_SQLITE: ${USE_SQLITE:-}
+      DB_FILE: /data/app.db
       SITE_BASE: ${SITE_BASE:-https://bank-interview-advisor.com}
       ADMIN_TOKEN: ${ADMIN_TOKEN}
       COMMENT_HIDE_SCORE: "-100"
