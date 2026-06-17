@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
-import { openDb } from './db.mjs';
+import { openDb, calendarColumns } from './db.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const dataFile = process.env.RATINGS_FILE || '/data/ratings.json';
@@ -551,12 +551,23 @@ const postComments = makeCommentStore({
 const sortLeaderboard = (rows) =>
   rows.sort((a, b) => b.score - a.score || a.createdAt.localeCompare(b.createdAt));
 
-const makeLeaderboard = ({ file, topN, maxScore }) => {
+const makeLeaderboard = ({ game, file, topN, maxScore }) => {
   let top = []; // [{ name, score, createdAt }], sorted desc, length <= topN
   let writeQueue = Promise.resolve();
 
   const load = async () => {
     top = [];
+    if (useSqlite) {
+      const clean = [];
+      for (const row of db.prepare('SELECT name, score, created_at FROM leaderboard WHERE game = ?').all(game)) {
+        const name = String(row.name || '').trim();
+        const score = Number(row.score);
+        if (!name || !Number.isInteger(score)) continue;
+        clean.push({ name, score, createdAt: String(row.created_at || '') });
+      }
+      top = sortLeaderboard(clean).slice(0, topN);
+      return;
+    }
     let raw = '';
     try {
       raw = await readFile(file, 'utf8');
@@ -585,6 +596,16 @@ const makeLeaderboard = ({ file, topN, maxScore }) => {
   };
 
   const persist = () => {
+    if (useSqlite) {
+      // Mirror this game's in-memory top-N into its rows only (the two games
+      // share one table, discriminated by `game`).
+      const ins = db.prepare('INSERT OR REPLACE INTO leaderboard (game, name, score, created_at) VALUES (?, ?, ?, ?)');
+      db.transaction(() => {
+        db.prepare('DELETE FROM leaderboard WHERE game = ?').run(game);
+        for (const e of top) ins.run(game, e.name, e.score, e.createdAt || '');
+      })();
+      return Promise.resolve();
+    }
     writeQueue = writeQueue.then(async () => {
       await mkdir(dirname(file), { recursive: true });
       const tmpFile = `${file}.${process.pid}.${randomUUID()}.tmp`;
@@ -628,8 +649,8 @@ const makeLeaderboard = ({ file, topN, maxScore }) => {
 
 // One leaderboard per mini-game, keyed by the URL slug used in /api/<game>/*.
 const leaderboards = {
-  checkgame: makeLeaderboard({ file: checkGameFile, topN: checkGameTopN, maxScore: checkGameMaxScore }),
-  numbergame: makeLeaderboard({ file: numberGameFile, topN: numberGameTopN, maxScore: numberGameMaxScore }),
+  checkgame: makeLeaderboard({ game: 'checkgame', file: checkGameFile, topN: checkGameTopN, maxScore: checkGameMaxScore }),
+  numbergame: makeLeaderboard({ game: 'numbergame', file: numberGameFile, topN: numberGameTopN, maxScore: numberGameMaxScore }),
 };
 
 // --- 招考行事曆 (calendar) store -------------------------------------------
@@ -715,6 +736,21 @@ const pruneCalendar = () => {
 
 const loadCalendar = async () => {
   calendarEvents = [];
+  if (useSqlite) {
+    const rows = db.prepare('SELECT * FROM calendar_events').all();
+    calendarEvents = sortCalendar(
+      rows.map((r) => ({
+        id: String(r.id),
+        // DB columns are snake_case; cleanCalendarInput keys on the camelCase
+        // form names, so map them back via the shared calendarColumns table.
+        ...cleanCalendarInput(Object.fromEntries(calendarColumns.map(([col, jsonKey]) => [jsonKey, r[col]]))),
+        createdAt: String(r.created_at || ''),
+        updatedAt: String(r.updated_at || ''),
+      })),
+    );
+    if (pruneCalendar() > 0) await persistCalendar();
+    return;
+  }
   let raw = '';
   try {
     raw = await readFile(calendarFile, 'utf8');
@@ -741,6 +777,17 @@ const loadCalendar = async () => {
 };
 
 const persistCalendar = () => {
+  if (useSqlite) {
+    const cols = ['id', ...calendarColumns.map(([col]) => col), 'created_at', 'updated_at'];
+    const ins = db.prepare(`INSERT OR REPLACE INTO calendar_events (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+    db.transaction(() => {
+      db.prepare('DELETE FROM calendar_events').run();
+      for (const e of calendarEvents) {
+        ins.run(String(e.id), ...calendarColumns.map(([, jsonKey]) => String(e[jsonKey] ?? '')), String(e.createdAt || ''), String(e.updatedAt || ''));
+      }
+    })();
+    return Promise.resolve();
+  }
   calendarWriteQueue = calendarWriteQueue.then(async () => {
     await mkdir(dirname(calendarFile), { recursive: true });
     const tmpFile = `${calendarFile}.${process.pid}.${randomUUID()}.tmp`;

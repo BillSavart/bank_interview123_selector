@@ -223,10 +223,10 @@ const main = async () => {
   // Build the SQLite DB from the same fixture with the real migration script.
   await run(migrate, { ...fileEnv(dir), DB_FILE: dbFile });
 
-  // In SQLite mode the not-yet-migrated stores (calendar + leaderboards) still
-  // read their JSON files, so the SQLite server gets the same file paths plus
-  // USE_SQLITE/DB_FILE — exactly the production cutover config.
-  const sqliteEnv = { ...fileEnv(dir), USE_SQLITE: '1', DB_FILE: dbFile };
+  // As of Batch B every store (incl. calendar + leaderboards) loads from the DB
+  // in SQLite mode, so the SQLite server gets NO JSON file paths — proving the
+  // data really comes from app.db, not stray JSON files.
+  const sqliteEnv = { USE_SQLITE: '1', DB_FILE: dbFile };
   const jsonSrv = await startServer(4601, fileEnv(dir));
   const sqlSrv = await startServer(4602, sqliteEnv);
 
@@ -281,6 +281,24 @@ const main = async () => {
   await postJson(srv.base, `/api/admin/posts/${POST2}/moderate`, { action: 'delete' }, true);
   // 7) vote on POST1
   await postJson(srv.base, `/api/posts/${POST1}/vote`, { voterId: NEWVOTER, value: 1 });
+  // 8) calendar: create two events, edit one, delete the other
+  const calA = await postJson(srv.base, '/api/admin/calendar', { org: '甲銀行', signupStart: '2026-08-01' }, true);
+  const calAId = calA.body.event?.id;
+  const calB = await postJson(srv.base, '/api/admin/calendar', { org: '乙銀行', signupStart: '2026-08-15' }, true);
+  const calBId = calB.body.event?.id;
+  await fetch(`${srv.base}/api/admin/calendar/${calAId}`, {
+    method: 'PUT',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${ADMIN}` },
+    body: JSON.stringify({ org: '甲銀行（已改名）', signupStart: '2026-08-01' }),
+  });
+  await fetch(`${srv.base}/api/admin/calendar/${calBId}`, { method: 'DELETE', headers: { authorization: `Bearer ${ADMIN}` } });
+  // 9) leaderboard: submit a score, delete the fixture champion
+  await postJson(srv.base, '/api/checkgame/score', { name: 'RoundTrip', score: 12345 });
+  await fetch(`${srv.base}/api/admin/checkgame/leaderboard`, {
+    method: 'DELETE',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${ADMIN}` },
+    body: JSON.stringify({ name: 'Champ' }),
+  });
 
   await srv.stop();
   // Reopen a brand-new process on the same DB: everything must have persisted.
@@ -303,6 +321,14 @@ const main = async () => {
 
   const post1 = (await getJson(srv.base, `/api/posts/${POST1}`)).body.post;
   eq('POST1 vote persisted (up=2 from fixture+roundtrip)', post1?.up, 2);
+
+  const cal = (await getJson(srv.base, '/api/admin/calendar', true)).body.events;
+  eq('calendar edit persisted (org renamed)', cal.find((e) => e.id === calAId)?.org, '甲銀行（已改名）');
+  eq('calendar delete persisted (event gone)', cal.some((e) => e.id === calBId), false);
+
+  const lb = (await getJson(srv.base, '/api/checkgame/leaderboard')).body.leaderboard;
+  eq('leaderboard score persisted', lb.find((e) => e.name === 'RoundTrip')?.score, 12345);
+  eq('leaderboard delete persisted (Champ gone)', lb.some((e) => e.name === 'Champ'), false);
 
   await srv.stop();
   rmSync(dir, { recursive: true, force: true });
