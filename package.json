@@ -8,6 +8,7 @@
     "api": "node server/ratings-api.mjs",
     "api:local": "ADMIN_TOKEN=${ADMIN_TOKEN:-local-admin} RATINGS_FILE=.local-ratings.json COMMENTS_FILE=.local-comments.jsonl COMMENT_VOTES_FILE=.local-comment-votes.jsonl COMMENT_MOD_FILE=.local-comment-mods.jsonl POST_COMMENTS_FILE=.local-post-comments.jsonl POST_COMMENT_VOTES_FILE=.local-post-comment-votes.jsonl POST_COMMENT_MOD_FILE=.local-post-comment-mods.jsonl CHECKGAME_FILE=.local-checkgame-top.json NUMBERGAME_FILE=.local-numbergame-top.json CALENDAR_FILE=.local-calendar.json POSTS_FILE=.local-posts.json POST_VOTES_FILE=.local-post-votes.jsonl node server/ratings-api.mjs",
     "db:migrate": "node server/migrate-to-sqlite.mjs",
+    "test:parity": "node server/parity-check.mjs",
     "db:migrate:local": "DB_FILE=.local-app.db RATINGS_FILE=.local-ratings.json COMMENTS_FILE=.local-comments.jsonl COMMENT_VOTES_FILE=.local-comment-votes.jsonl COMMENT_MOD_FILE=.local-comment-mods.jsonl POST_COMMENTS_FILE=.local-post-comments.jsonl POST_COMMENT_VOTES_FILE=.local-post-comment-votes.jsonl POST_COMMENT_MOD_FILE=.local-post-comment-mods.jsonl CHECKGAME_FILE=.local-checkgame-top.json NUMBERGAME_FILE=.local-numbergame-top.json CALENDAR_FILE=.local-calendar.json POSTS_FILE=.local-posts.json POST_VOTES_FILE=.local-post-votes.jsonl node server/migrate-to-sqlite.mjs",
     "extract:questions": "node scripts/extract-questions.mjs",
     "make:answer-prompts": "node scripts/make-answer-prompts.mjs",
