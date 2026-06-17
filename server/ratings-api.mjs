@@ -2,9 +2,23 @@ import { createServer } from 'node:http';
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { openDb } from './db.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const dataFile = process.env.RATINGS_FILE || '/data/ratings.json';
+
+// --- SQLite backend toggle (Phase 2 of the JSON → SQLite migration) ---------
+// When USE_SQLITE is set, the ratings / comments / posts stores persist to (and
+// load from) the SQLite database opened here instead of their JSON / JSONL
+// files. When unset (the default), every code path below is byte-for-byte the
+// previous behaviour — the JSON files stay the source of truth and are the
+// instant rollback. The in-memory model and all request handling are identical
+// in both modes; only the load/persist layer branches on `useSqlite`.
+//
+// Calendar + leaderboards stay on JSON until Batch B; their tables exist in the
+// DB (populated by the one-off migration) but are not wired up here yet.
+const useSqlite = process.env.USE_SQLITE === '1' || process.env.USE_SQLITE === 'true';
+const db = useSqlite ? openDb(process.env.DB_FILE || '/data/app.db') : null;
 const maxQuestionId = Number(process.env.MAX_QUESTION_ID || 123);
 
 // --- Comments config -------------------------------------------------------
@@ -105,6 +119,14 @@ const normalizeStore = (raw) => {
 };
 
 const loadStore = async () => {
+  if (useSqlite) {
+    store = emptyStore();
+    for (const row of db.prepare('SELECT question_id, voter_id, score FROM ratings').all()) {
+      const key = String(row.question_id);
+      (store.questions[key] ||= { votes: {} }).votes[row.voter_id] = row.score;
+    }
+    return;
+  }
   try {
     const raw = await readFile(dataFile, 'utf8');
     store = normalizeStore(JSON.parse(raw));
@@ -125,6 +147,21 @@ const persistStore = () => {
   });
 
   return writeQueue;
+};
+
+// Record one rating into the in-memory store and persist it. In SQLite mode this
+// is a single-row upsert (cheap regardless of how many ratings exist); in JSON
+// mode it rewrites the whole ratings file, exactly as before.
+const setRating = (questionId, voterId, score) => {
+  const key = String(questionId);
+  store.questions[key] ||= { votes: {} };
+  store.questions[key].votes[voterId] = score;
+  store.updatedAt = new Date().toISOString();
+  if (useSqlite) {
+    db.prepare('INSERT OR REPLACE INTO ratings (question_id, voter_id, score) VALUES (?, ?, ?)').run(questionId, voterId, score);
+    return Promise.resolve();
+  }
+  return persistStore();
 };
 
 // --- Comments store --------------------------------------------------------
@@ -176,7 +213,7 @@ const compactJsonl = (file, queueRef, key, id) =>
 // the thread key on disk ('questionId' or 'postId'); `normalizeKey` turns a raw
 // key (a URL segment or a value read back from disk) into its canonical form, or
 // returns null to reject it.
-const makeCommentStore = ({ commentsFile, votesFile, modFile, keyField, normalizeKey }) => {
+const makeCommentStore = ({ board, commentsFile, votesFile, modFile, keyField, normalizeKey }) => {
   // In-memory index: threadKey -> array of comments (oldest first). Each comment
   // also carries a `votes` map (voterId -> 1 | -1); byId gives O(1) vote lookup.
   const byThread = new Map();
@@ -188,6 +225,30 @@ const makeCommentStore = ({ commentsFile, votesFile, modFile, keyField, normaliz
   const load = async () => {
     byThread.clear();
     byId.clear();
+    if (useSqlite) {
+      // rowid order = insertion order, matching the JSONL append order.
+      const rows = db
+        .prepare('SELECT id, thread, name, text, created_at, admin_hidden FROM comments WHERE board = ? ORDER BY rowid')
+        .all(board);
+      for (const row of rows) {
+        const thread = normalizeKey(row.thread);
+        if (thread === null) continue;
+        const comment = {
+          id: String(row.id),
+          thread,
+          name: String(row.name || '匿名'),
+          text: String(row.text || ''),
+          createdAt: String(row.created_at),
+          votes: {},
+          adminHidden: !!row.admin_hidden,
+        };
+        const list = byThread.get(thread) || [];
+        list.push(comment);
+        byId.set(comment.id, comment);
+        byThread.set(thread, list);
+      }
+      return;
+    }
     let raw = '';
     try {
       raw = await readFile(commentsFile, 'utf8');
@@ -226,6 +287,18 @@ const makeCommentStore = ({ commentsFile, votesFile, modFile, keyField, normaliz
 
   // Replay the vote log onto the loaded comments (last write per voter wins).
   const loadVotes = async () => {
+    if (useSqlite) {
+      const rows = db
+        .prepare(
+          'SELECT cv.comment_id, cv.voter_id, cv.value FROM comment_votes cv JOIN comments c ON c.id = cv.comment_id WHERE c.board = ?',
+        )
+        .all(board);
+      for (const row of rows) {
+        const comment = byId.get(String(row.comment_id));
+        if (comment) comment.votes[row.voter_id] = row.value;
+      }
+      return;
+    }
     let raw = '';
     try {
       raw = await readFile(votesFile, 'utf8');
@@ -253,6 +326,12 @@ const makeCommentStore = ({ commentsFile, votesFile, modFile, keyField, normaliz
   };
 
   const append = (entry) => {
+    if (useSqlite) {
+      db.prepare(
+        'INSERT INTO comments (id, board, thread, name, text, created_at, admin_hidden) VALUES (?, ?, ?, ?, ?, ?, 0)',
+      ).run(String(entry.id), board, String(entry[keyField]), String(entry.name), String(entry.text), String(entry.createdAt));
+      return Promise.resolve();
+    }
     commentQueue = commentQueue.then(async () => {
       await mkdir(dirname(commentsFile), { recursive: true });
       await appendFile(commentsFile, `${JSON.stringify(entry)}\n`);
@@ -261,6 +340,14 @@ const makeCommentStore = ({ commentsFile, votesFile, modFile, keyField, normaliz
   };
 
   const appendVoteLog = (entry) => {
+    if (useSqlite) {
+      if (Number(entry.value) === 0) {
+        db.prepare('DELETE FROM comment_votes WHERE comment_id = ? AND voter_id = ?').run(String(entry.commentId), String(entry.voterId));
+      } else {
+        db.prepare('INSERT OR REPLACE INTO comment_votes (comment_id, voter_id, value) VALUES (?, ?, ?)').run(String(entry.commentId), String(entry.voterId), Number(entry.value));
+      }
+      return Promise.resolve();
+    }
     voteQueue = voteQueue.then(async () => {
       await mkdir(dirname(votesFile), { recursive: true });
       await appendFile(votesFile, `${JSON.stringify(entry)}\n`);
@@ -290,6 +377,9 @@ const makeCommentStore = ({ commentsFile, votesFile, modFile, keyField, normaliz
 
   // Replay the moderation log onto loaded comments (run after load/loadVotes).
   const loadMods = async () => {
+    // In SQLite mode the moderation state lives in the comments.admin_hidden
+    // column, already applied by load(); there is no separate log to replay.
+    if (useSqlite) return;
     let raw = '';
     try {
       raw = await readFile(modFile, 'utf8');
@@ -312,6 +402,11 @@ const makeCommentStore = ({ commentsFile, votesFile, modFile, keyField, normaliz
   };
 
   const appendModLog = (entry) => {
+    if (useSqlite) {
+      if (entry.action === 'hide') db.prepare('UPDATE comments SET admin_hidden = 1 WHERE id = ?').run(String(entry.commentId));
+      else if (entry.action === 'show') db.prepare('UPDATE comments SET admin_hidden = 0 WHERE id = ?').run(String(entry.commentId));
+      return Promise.resolve();
+    }
     modQueue = modQueue.then(async () => {
       await mkdir(dirname(modFile), { recursive: true });
       await appendFile(modFile, `${JSON.stringify(entry)}\n`);
@@ -320,11 +415,19 @@ const makeCommentStore = ({ commentsFile, votesFile, modFile, keyField, normaliz
   };
 
   const removeCommentFromLog = (commentId) => {
+    if (useSqlite) {
+      db.prepare('DELETE FROM comments WHERE id = ?').run(String(commentId));
+      return Promise.resolve();
+    }
     commentQueue = compactJsonl(commentsFile, commentQueue, 'id', commentId);
     return commentQueue;
   };
 
   const removeVotesFromLog = (commentId) => {
+    if (useSqlite) {
+      db.prepare('DELETE FROM comment_votes WHERE comment_id = ?').run(String(commentId));
+      return Promise.resolve();
+    }
     voteQueue = compactJsonl(votesFile, voteQueue, 'commentId', commentId);
     return voteQueue;
   };
@@ -412,6 +515,7 @@ const makeCommentStore = ({ commentsFile, votesFile, modFile, keyField, normaliz
 
 // 面試篩選器題目留言（key = 整數題號）。
 const questionComments = makeCommentStore({
+  board: 'question',
   commentsFile,
   votesFile: commentVotesFile,
   modFile: commentModFile,
@@ -424,6 +528,7 @@ const questionComments = makeCommentStore({
 
 // 經驗分享文章留言（key = 文章 id 字串）。獨立的三份 log，與題目留言完全不混。
 const postComments = makeCommentStore({
+  board: 'post',
   commentsFile: postCommentsFile,
   votesFile: postCommentVotesFile,
   modFile: postCommentModFile,
@@ -681,6 +786,35 @@ const cleanPostInput = (raw) => ({
 
 const loadPosts = async () => {
   posts = [];
+  if (useSqlite) {
+    const rows = db.prepare('SELECT * FROM posts').all();
+    posts = sortPosts(
+      rows.map((r) => ({
+        id: String(r.id),
+        slug: typeof r.slug === 'string' ? r.slug : '',
+        ...cleanPostInput({ category: r.category, title: r.title, author: r.author, content: r.content }),
+        hidden: !!r.hidden,
+        pending: !!r.pending,
+        createdAt: String(r.created_at || ''),
+        updatedAt: String(r.updated_at || ''),
+      })),
+    );
+    postById.clear();
+    for (const p of posts) {
+      p.votes = {};
+      postById.set(p.id, p);
+    }
+    // Backfill short-url slugs for any older posts saved before this feature.
+    let changed = false;
+    for (const p of posts) {
+      if (!p.slug) {
+        p.slug = uniqueSlug();
+        changed = true;
+      }
+    }
+    if (changed) await persistPosts();
+    return;
+  }
   let raw = '';
   try {
     raw = await readFile(postsFile, 'utf8');
@@ -730,6 +864,24 @@ const loadPosts = async () => {
 };
 
 const persistPosts = () => {
+  if (useSqlite) {
+    // The in-memory `posts` array is the source of truth; mirror it into the
+    // posts table in one transaction. Post volume is tiny (admin-authored +
+    // occasional submissions), so a full rewrite per change is cheap. Votes live
+    // in their own table (post_votes) and are untouched here.
+    const ins = db.prepare(
+      `INSERT OR REPLACE INTO posts
+       (id, slug, category, title, author, content, hidden, pending, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    );
+    db.transaction(() => {
+      db.prepare('DELETE FROM posts').run();
+      for (const p of posts) {
+        ins.run(p.id, p.slug, p.category, p.title, p.author, p.content, p.hidden ? 1 : 0, p.pending ? 1 : 0, p.createdAt, p.updatedAt);
+      }
+    })();
+    return Promise.resolve();
+  }
   postsWriteQueue = postsWriteQueue.then(async () => {
     await mkdir(dirname(postsFile), { recursive: true });
     const tmpFile = `${postsFile}.${process.pid}.${randomUUID()}.tmp`;
@@ -743,6 +895,13 @@ const persistPosts = () => {
 
 // 還原文章投票（在 loadPosts 之後跑）：依 JSONL 重播，最後一筆 per voter 為準。
 const loadPostVotes = async () => {
+  if (useSqlite) {
+    for (const row of db.prepare('SELECT post_id, voter_id, value FROM post_votes').all()) {
+      const post = postById.get(String(row.post_id));
+      if (post) post.votes[row.voter_id] = row.value;
+    }
+    return;
+  }
   let raw = '';
   try {
     raw = await readFile(postVotesFile, 'utf8');
@@ -769,6 +928,14 @@ const loadPostVotes = async () => {
 };
 
 const appendPostVote = (entry) => {
+  if (useSqlite) {
+    if (Number(entry.value) === 0) {
+      db.prepare('DELETE FROM post_votes WHERE post_id = ? AND voter_id = ?').run(String(entry.postId), String(entry.voterId));
+    } else {
+      db.prepare('INSERT OR REPLACE INTO post_votes (post_id, voter_id, value) VALUES (?, ?, ?)').run(String(entry.postId), String(entry.voterId), Number(entry.value));
+    }
+    return Promise.resolve();
+  }
   postVoteAppendQueue = postVoteAppendQueue.then(async () => {
     await mkdir(dirname(postVotesFile), { recursive: true });
     await appendFile(postVotesFile, `${JSON.stringify(entry)}\n`);
@@ -777,6 +944,10 @@ const appendPostVote = (entry) => {
 };
 
 const removePostVotesFromLog = (postId) => {
+  if (useSqlite) {
+    db.prepare('DELETE FROM post_votes WHERE post_id = ?').run(String(postId));
+    return Promise.resolve();
+  }
   postVoteAppendQueue = compactJsonl(postVotesFile, postVoteAppendQueue, 'postId', postId);
   return postVoteAppendQueue;
 };
@@ -1633,11 +1804,7 @@ createServer(async (req, res) => {
         return;
       }
 
-      const key = String(questionId);
-      store.questions[key] ||= { votes: {} };
-      store.questions[key].votes[voterId] = score;
-      store.updatedAt = new Date().toISOString();
-      await persistStore();
+      await setRating(questionId, voterId, score);
 
       sendJson(res, 200, { rating: summarizeQuestion(questionId), myScore: score });
       return;
@@ -1736,5 +1903,6 @@ createServer(async (req, res) => {
     sendJson(res, status, { error: status === 500 ? 'internal server error' : error.message });
   }
 }).listen(port, '0.0.0.0', () => {
-  console.log(`ratings-api listening on :${port}, data file ${dataFile}`);
+  const backend = useSqlite ? `SQLite ${process.env.DB_FILE || '/data/app.db'}` : `JSON ${dataFile}`;
+  console.log(`ratings-api listening on :${port}, backend ${backend}`);
 });
