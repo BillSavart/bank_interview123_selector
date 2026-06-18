@@ -75,11 +75,19 @@ bash deploy/backup-sqlite.sh
 ### 排程（cron，每天一次）
 
 ```bash
-crontab -e
-# 每天 03:30 備份。刻意避開台北 04:00（= deploy.yml 的每日 cron build & deploy，
-# 那時會重建 api 容器，別讓備份跟它撞在一起）。
-30 3 * * * cd /home/billwang_tech/bank_interview123_selector && bash deploy/backup-sqlite.sh >> /var/log/sqlite-backup.log 2>&1
+# 這台 VM 預設可能沒裝 cron（crontab: command not found）。先裝：
+sudo apt-get update && sudo apt-get install -y cron && sudo systemctl enable --now cron
+
+# 免進編輯器、直接加排程。每天 03:30（刻意避開台北 04:00 = deploy.yml 的每日 build &
+# deploy，那時會重建 api 容器）。log 寫到家目錄（一般使用者沒權限寫 /var/log）。
+( crontab -l 2>/dev/null; echo '30 3 * * * cd /home/billwang_tech/bank_interview123_selector && bash deploy/backup-sqlite.sh >> "$HOME/sqlite-backup.log" 2>&1' ) | crontab -
+crontab -l   # 確認
 ```
+
+> 不想裝 cron 也可以用 systemd timer（systemd 一定有）：建 `sqlite-backup.service`
+> (`Type=oneshot`、`User=<你>`、`WorkingDirectory=repo`、`ExecStart=/bin/bash deploy/backup-sqlite.sh`)
+> 與 `sqlite-backup.timer`(`OnCalendar=*-*-* 03:30:00`、`Persistent=true`)，
+> 再 `sudo systemctl enable --now sqlite-backup.timer`。
 
 > 補充：`deploy.yml` 有個每日 cron（台北 04:00）會重抓 Google Sheet、重建前端並重新部署。
 > 它對 SQLite 無害（`USE_SQLITE=1` 在未進 git 的 `deploy/.env`、資料在 volume），但備份排程

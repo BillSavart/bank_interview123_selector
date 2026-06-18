@@ -36,6 +36,9 @@ cat <<'EOF'
 Tip: ship the host copy off the box, e.g.
   gsutil cp sqlite-backups/app-*.db gs://YOUR_BUCKET/bank-interview/   # GCS
   # or: scp / rclone to wherever you keep off-site backups
-Schedule daily from cron (on the VM), e.g.:
-  0 4 * * * cd /home/billwang_tech/bank_interview123_selector && bash deploy/backup-sqlite.sh >> /var/log/sqlite-backup.log 2>&1
+Schedule daily (on the VM). cron example — note 03:30, NOT 04:00 (that clashes
+with deploy.yml's daily build & deploy), and log to a path the user can write:
+  30 3 * * * cd /home/billwang_tech/bank_interview123_selector && bash deploy/backup-sqlite.sh >> "$HOME/sqlite-backup.log" 2>&1
+If crontab is missing ("command not found"): sudo apt-get install -y cron && sudo
+systemctl enable --now cron — or use a systemd timer instead (see SQLITE-CUTOVER.md).
 EOF
