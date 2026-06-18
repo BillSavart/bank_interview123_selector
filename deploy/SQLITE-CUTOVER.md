@@ -76,9 +76,14 @@ bash deploy/backup-sqlite.sh
 
 ```bash
 crontab -e
-# 每天 04:00 備份
-0 4 * * * cd /home/billwang_tech/bank_interview123_selector && bash deploy/backup-sqlite.sh >> /var/log/sqlite-backup.log 2>&1
+# 每天 03:30 備份。刻意避開台北 04:00（= deploy.yml 的每日 cron build & deploy，
+# 那時會重建 api 容器，別讓備份跟它撞在一起）。
+30 3 * * * cd /home/billwang_tech/bank_interview123_selector && bash deploy/backup-sqlite.sh >> /var/log/sqlite-backup.log 2>&1
 ```
+
+> 補充：`deploy.yml` 有個每日 cron（台北 04:00）會重抓 Google Sheet、重建前端並重新部署。
+> 它對 SQLite 無害（`USE_SQLITE=1` 在未進 git 的 `deploy/.env`、資料在 volume），但備份排程
+> 要錯開它的時間。也盡量別剛好在 04:00 前後手動跑切換。
 
 ### Off-box（重要）
 
