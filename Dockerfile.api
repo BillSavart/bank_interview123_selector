@@ -35,6 +35,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY server/ratings-api.mjs ./server/ratings-api.mjs
 COPY server/db.mjs ./server/db.mjs
 COPY server/migrate-to-sqlite.mjs ./server/migrate-to-sqlite.mjs
+COPY server/backup-db.mjs ./server/backup-db.mjs
 # Runtime heap cap (only the long-running server needs it; npm/compile must not
 # be constrained to 32 MB or they OOM-abort).
 ENV NODE_OPTIONS=--max-old-space-size=32

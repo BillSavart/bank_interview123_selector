@@ -239,3 +239,6 @@ __marimo__/
 
 # Local dev runtime data (ratings/comments API)
 .local-*
+
+# SQLite backups copied off the volume (VM host dir)
+sqlite-backups/
