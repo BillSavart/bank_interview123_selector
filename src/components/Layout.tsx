@@ -24,9 +24,9 @@ export function Layout() {
   // No ads on the admin tool; and only render the slot wrappers when ads will
   // actually show (so production-with-ads-off leaves no empty gaps).
   const showAd = AD_ENABLED && !pathname.startsWith('/admin');
-  // The selector page interleaves its own ads in the question list (incl. one
-  // above the first question), so it doesn't need the top banner. The landing
-  // page stays clean, so it skips the top banner too.
+  // The selector page interleaves its own banner ads among the questions, so it
+  // doesn't need the top banner. The landing page stays clean, so it skips the
+  // top banner too.
   const hideTopAd = pathname === '/' || pathname === '/selector';
 
   // scroll to top on route change

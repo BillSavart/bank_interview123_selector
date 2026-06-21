@@ -36,25 +36,24 @@ const DEFAULT_BANNER_HOST = 'www.highperformanceformat.com';
 
 const BANNER_300x250: BannerSpec = { key: '51df605e351cba0f6ceb784cc9233022', width: 300, height: 250 };
 const BANNER_320x50: BannerSpec = { key: '0c7ff4a858fd628149179a6084782ae2', width: 320, height: 50 };
-const NATIVE_FEED = {
-  format: 'native',
-  key: '13149e91e1b6fe4c307cf007c0f92249',
-  src: 'https://pl29826314.effectivecpmnetwork.com/13149e91e1b6fe4c307cf007c0f92249/invoke.js',
-} as const;
 
-// 設計重點（高曝光但不吵，手機尤其）：每台裝置在同一頁只會看到「一個 300×250 + 一個
-// 320×50」，且大的 300×250 放在該裝置最不擾人的位置——
+// 設計重點（高曝光但不吵，手機尤其）：上/下「固定版位」每台裝置只會看到一個
+// 300×250 + 一個 320×50，大的 300×250 放在該裝置最不擾人的位置——
 //   桌機：300×250 放上方（空間夠、高曝光、不擋內容）；320×50 放下方。
 //   手機：上方只放 320×50 細條（不擋首屏）；300×250 改放下方。
 // 上下版位的桌機/手機尺寸剛好相反，確保同一裝置同一頁不會出現兩個相同 key
 // （Adsterra 偏好每頁版位唯一）。site-top 與 landing-top 不會同頁出現，共用設定。
+//
+// home-feed / article-mid 為內容中插入的 300×250 banner。⚠️ 目前沿用同一個
+// 300×250 key——Adsterra 偏好每個版位用獨立單元，重複使用同一 key 可能只填第一個
+// 或重複同一則素材。之後幫每個內插版位建獨立單元就能穩定填充（見檔尾說明/對話）。
 // key 留空 = 該版位在正式環境不顯示（本地仍會顯示佔位框供檢視）。
 const AD_UNITS: Record<string, AdUnit> = {
   'landing-top': { format: 'banner', desktop: BANNER_300x250, mobile: BANNER_320x50 },
   'site-top': { format: 'banner', desktop: BANNER_300x250, mobile: BANNER_320x50 },
   'site-bottom': { format: 'banner', desktop: BANNER_320x50, mobile: BANNER_300x250 },
-  'home-feed': NATIVE_FEED,
-  'article-mid': NATIVE_FEED,
+  'home-feed': { format: 'banner', desktop: BANNER_300x250 },
+  'article-mid': { format: 'banner', desktop: BANNER_300x250 },
 };
 // ==========================================================================
 

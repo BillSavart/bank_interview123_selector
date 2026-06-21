@@ -18,9 +18,11 @@ import { fetchRatings, loadLocalScores, submitRating, type RatingMap } from '../
 import type { CandidateProfile, InterviewQuestion } from '../data/types';
 import { AdSlot, AD_ENABLED } from '../AdSlot';
 
-// One native ad above the first question. We don't repeat it down the feed:
-// the Adsterra native unit uses a fixed `container-<key>` id, so multiple
-// copies on one page would collide (only the first would ever fill).
+// Interleave a banner ad among the questions: one after every AD_EVERY
+// questions, capped at MAX_FEED_ADS so a long result list doesn't become an ad
+// wall. Nothing above the first question — keep the top recommendation clean.
+const AD_EVERY = 6;
+const MAX_FEED_ADS = 3;
 
 interface AnswerRatingProps {
   questionId: number;
@@ -314,11 +316,14 @@ export function SelectorPage() {
               <div className="question-list">
                 {rankedQuestions.map(({ question, score, reasons }, index) => (
                   <Fragment key={question.id}>
-                    {AD_ENABLED && index === 0 && (
-                      <div className="question-ad">
-                        <AdSlot slot="home-feed" label="贊助" />
-                      </div>
-                    )}
+                    {AD_ENABLED &&
+                      index > 0 &&
+                      index % AD_EVERY === 0 &&
+                      index / AD_EVERY <= MAX_FEED_ADS && (
+                        <div className="question-ad">
+                          <AdSlot slot="home-feed" label="贊助" />
+                        </div>
+                      )}
                     <article className="question-card">
                       <div className="question-rank">
                         <span>#{question.id}</span>
