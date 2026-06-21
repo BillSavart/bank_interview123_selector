@@ -112,7 +112,7 @@ export function NavBar() {
             className={({ isActive }) => (isActive ? 'is-active' : '')}
             onClick={closeNav}
           >
-            使用說明
+            關於我們
           </NavLink>
           <a
             className="nav-pdf"

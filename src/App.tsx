@@ -4,6 +4,7 @@ import { Layout } from './components/Layout';
 import { LandingPage } from './pages/LandingPage';
 import { SelectorPage } from './pages/SelectorPage';
 import { AboutPage } from './pages/AboutPage';
+import { PrivacyPage } from './pages/PrivacyPage';
 import { CheckGamePage } from './pages/CheckGamePage';
 import { NumberTrainerPage } from './pages/NumberTrainerPage';
 import { CalendarPage } from './pages/CalendarPage';
@@ -35,6 +36,7 @@ export function App() {
         <Route index element={<LandingPage />} />
         <Route path="selector" element={<SelectorPage />} />
         <Route path="about" element={<AboutPage />} />
+        <Route path="privacy" element={<PrivacyPage />} />
         <Route path="check-game" element={<CheckGamePage />} />
         <Route path="number-trainer" element={<NumberTrainerPage />} />
         <Route path="calendar" element={<CalendarPage />} />

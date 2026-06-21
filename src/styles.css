@@ -1430,6 +1430,16 @@ select {
   color: #94a3b8;
 }
 
+.site-footer-link {
+  font-size: 0.78rem;
+  color: #94a3b8;
+  text-decoration: underline;
+}
+
+.site-footer-link:hover {
+  color: #64748b;
+}
+
 /* --- interview page --- */
 .interview-kicker {
   display: inline-flex;

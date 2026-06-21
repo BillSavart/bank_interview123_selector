@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
+import { Link, Outlet, useLocation } from 'react-router-dom';
 import { ArrowUp } from 'lucide-react';
 import { NavBar } from './NavBar';
 
@@ -13,7 +13,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/venues': '試場資訊',
   '/number-trainer': '大寫數字訓練器',
   '/check-game': '支票審查員',
-  '/about': '使用說明',
+  '/about': '關於我們',
+  '/privacy': '隱私權政策',
   '/admin': '後台管理',
 };
 
@@ -42,6 +43,7 @@ export function Layout() {
         <footer className="site-footer">
           <span>Credit: 公股銀行招考討論區Jack</span>
           <span className="site-footer-note">本站推薦僅供準備方向參考，實際面試以報考銀行與職缺為準。</span>
+          <Link to="/privacy" className="site-footer-link">隱私權政策</Link>
         </footer>
       )}
       <button

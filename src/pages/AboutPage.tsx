@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import {
   Banknote,
+  BookOpen,
   SlidersHorizontal,
   ClipboardCheck,
   Hash,
@@ -33,12 +34,17 @@ export function AboutPage() {
     <div className="container py-4 about-page">
       <div className="interview-kicker">
         <Banknote size={18} />
-        使用說明
+        關於我們
       </div>
       <h1 className="display-title mb-3">公股銀行新手村</h1>
       <p className="page-intro">
-        本站是給準備公股銀行招考的新手練功的地方，集合了面試題目篩選、招考行事曆、筆試門檻、
-        試場資訊與練習小遊戲。以下說明各功能怎麼用。
+        公股銀行新手村是一個<strong>非官方</strong>的公股銀行招考準備工具。準備八大公股行庫招考時，
+        題目、時程、筆試門檻與上榜心得往往散落在各個論壇與社群；我們把這些整理、結構化成一個地方，
+        讓新手用最短的時間抓到準備方向。
+      </p>
+      <p className="about-text">
+        這裡集合了面試題目篩選、招考行事曆、筆試門檻地圖、試場資訊、經驗分享與練習小遊戲，全部免費使用。
+        本站與任何銀行、招考單位或補習班皆無關，不販售課程、不代辦報名；所有內容整理自公開資源，僅供準備方向參考。
       </p>
 
       <h2 className="about-h2">
@@ -49,6 +55,11 @@ export function AboutPage() {
         行事曆日期請以各招考單位的正式公告為準。本站為非官方學習工具，與任何銀行或招考單位無關，
         題庫內容整理自公開資源，著作權仍屬原作者。
       </p>
+
+      <h2 className="about-h2">
+        <BookOpen size={18} /> 各功能使用說明
+      </h2>
+      <p className="about-text">本站各項工具的操作方式如下。</p>
 
       <h2 className="about-h2">
         <SlidersHorizontal size={18} /> 面試題目篩選
@@ -140,7 +151,9 @@ export function AboutPage() {
       </p>
 
       <p className="about-credit">Credit: 公股銀行招考討論區 Jack/聯合哥</p>
-      <p className="about-updated">最後更新：{lastUpdated()}（台灣時間）</p>
+      <p className="about-updated">
+        最後更新：{lastUpdated()}（台灣時間）　·　<Link to="/privacy">隱私權政策</Link>
+      </p>
     </div>
   );
 }
