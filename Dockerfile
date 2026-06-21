@@ -12,10 +12,6 @@ RUN npm ci || npm install
 # prebuild (extract:questions) needs public/*.pdf and bank123_pdftojson.json,
 # so copy the full context before building.
 COPY . .
-# Adsterra ads master switch — a public, build-time value baked into the bundle.
-# "true" → load real ads; anything else → no ads. Passed via --build-arg / CI.
-ARG VITE_ADS_ENABLED=""
-ENV VITE_ADS_ENABLED=$VITE_ADS_ENABLED
 RUN npm run build
 
 FROM caddy:2-alpine

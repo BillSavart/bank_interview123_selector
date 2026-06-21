@@ -10,7 +10,6 @@ import {
   MapPinned,
   Sparkles,
 } from 'lucide-react';
-import { AdSlot, AD_ENABLED } from '../AdSlot';
 
 // 經營理念：一個入口看懂整站在做什麼，再把人導到各功能。卡片順序＝重要性。
 const features = [
@@ -89,12 +88,6 @@ export function LandingPage() {
           </div>
         </div>
       </section>
-
-      {AD_ENABLED && (
-        <div className="container site-ad landing-ad">
-          <AdSlot slot="landing-top" />
-        </div>
-      )}
 
       <section className="landing-section">
         <div className="container py-5">

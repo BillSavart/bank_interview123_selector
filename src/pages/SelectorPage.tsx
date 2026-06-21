@@ -16,13 +16,6 @@ import { CommentBoard } from '../components/CommentBoard';
 import { categorySummary, defaultProfile, isProfileEmpty, scoreQuestion, tagLabels } from '../lib/scoring';
 import { fetchRatings, loadLocalScores, submitRating, type RatingMap } from '../lib/ratings';
 import type { CandidateProfile, InterviewQuestion } from '../data/types';
-import { AdSlot, AD_ENABLED } from '../AdSlot';
-
-// Interleave a banner ad among the questions: one after every AD_EVERY
-// questions, capped at MAX_FEED_ADS. Higher density for exposure (banners are
-// unobtrusive). Nothing above the first question — keep the top result clean.
-const AD_EVERY = 4;
-const MAX_FEED_ADS = 5;
 
 interface AnswerRatingProps {
   questionId: number;
@@ -314,16 +307,8 @@ export function SelectorPage() {
               </div>
 
               <div className="question-list">
-                {rankedQuestions.map(({ question, score, reasons }, index) => (
+                {rankedQuestions.map(({ question, score, reasons }) => (
                   <Fragment key={question.id}>
-                    {AD_ENABLED &&
-                      index > 0 &&
-                      index % AD_EVERY === 0 &&
-                      index / AD_EVERY <= MAX_FEED_ADS && (
-                        <div className="question-ad">
-                          <AdSlot slot="home-feed" label="贊助" variant={index / AD_EVERY - 1} />
-                        </div>
-                      )}
                     <article className="question-card">
                       <div className="question-rank">
                         <span>#{question.id}</span>

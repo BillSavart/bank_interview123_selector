@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { ArrowLeft, Check, Copy, QrCode, Share2, UserRound } from 'lucide-react';
-import { AdSlot, AD_ENABLED } from '../AdSlot';
 import { CommentBoard } from '../components/CommentBoard';
 import { VoteButtons } from './ExperiencePage';
 import {
@@ -15,16 +14,12 @@ import {
   type PostVote,
 } from '../lib/posts';
 
-// 內文依空行切成段落，方便在段落之間安插廣告版位。
+// 內文依空行切成段落。
 const splitParagraphs = (content: string) =>
   content
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean);
-
-// 每 AD_EVERY_PARAS 段插一個 banner，最多 MAX_ARTICLE_ADS 個（長文才會放好幾個）。
-const AD_EVERY_PARAS = 4;
-const MAX_ARTICLE_ADS = 3;
 
 export function ExperiencePostPage() {
   const { id = '' } = useParams();
@@ -83,21 +78,9 @@ export function ExperiencePostPage() {
           <SharePanel post={post} />
 
           <div className="exp-article-body">
-            {paragraphs.map((para, i) => {
-              // 每 AD_EVERY_PARAS 段插一個廣告，最多 MAX_ARTICLE_ADS 個。
-              const adNum = (i + 1) % AD_EVERY_PARAS === 0 ? (i + 1) / AD_EVERY_PARAS : 0;
-              const showAd = AD_ENABLED && adNum > 0 && adNum <= MAX_ARTICLE_ADS;
-              return (
-                <div key={i}>
-                  <p>{para}</p>
-                  {showAd && (
-                    <div className="exp-article-ad">
-                      <AdSlot slot="article-mid" label="贊助" variant={adNum - 1} />
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {paragraphs.map((para, i) => (
+              <p key={i}>{para}</p>
+            ))}
           </div>
 
           <div className="exp-article-vote">

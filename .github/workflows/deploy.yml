@@ -64,8 +64,6 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          build-args: |
-            VITE_ADS_ENABLED=true
           tags: |
             ghcr.io/${{ steps.meta.outputs.owner }}/bank-interview-web:latest
             ghcr.io/${{ steps.meta.outputs.owner }}/bank-interview-web:${{ github.sha }}

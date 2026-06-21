@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { ArrowUp } from 'lucide-react';
 import { NavBar } from './NavBar';
-import { AdSlot, AD_ENABLED } from '../AdSlot';
 
 const SITE_NAME = '公股銀行新手村';
 // Per-route browser-tab title. Falls back to the bare site name for anything
@@ -21,12 +20,6 @@ const PAGE_TITLES: Record<string, string> = {
 export function Layout() {
   const { pathname } = useLocation();
   const showFooter = pathname !== '/about';
-  // No ads on the admin tool; and only render the slot wrappers when ads will
-  // actually show (so production-with-ads-off leaves no empty gaps).
-  const showAd = AD_ENABLED && !pathname.startsWith('/admin');
-  // The landing page already carries its own hero banner (landing-top), so it
-  // skips the shared top banner to avoid stacking two at the top.
-  const hideTopAd = pathname === '/';
 
   // scroll to top on route change
   useEffect(() => {
@@ -42,19 +35,9 @@ export function Layout() {
   return (
     <>
       <NavBar />
-      {showAd && !hideTopAd && (
-        <div className="container site-ad site-ad-top">
-          <AdSlot slot="site-top" />
-        </div>
-      )}
       <main className="site-main">
         <Outlet />
       </main>
-      {showAd && (
-        <div className="container site-ad">
-          <AdSlot slot="site-bottom" />
-        </div>
-      )}
       {showFooter && (
         <footer className="site-footer">
           <span>Credit: 公股銀行招考討論區Jack</span>
