@@ -19,10 +19,10 @@ import type { CandidateProfile, InterviewQuestion } from '../data/types';
 import { AdSlot, AD_ENABLED } from '../AdSlot';
 
 // Interleave a banner ad among the questions: one after every AD_EVERY
-// questions, capped at MAX_FEED_ADS so a long result list doesn't become an ad
-// wall. Nothing above the first question — keep the top recommendation clean.
-const AD_EVERY = 6;
-const MAX_FEED_ADS = 3;
+// questions, capped at MAX_FEED_ADS. Higher density for exposure (banners are
+// unobtrusive). Nothing above the first question — keep the top result clean.
+const AD_EVERY = 4;
+const MAX_FEED_ADS = 5;
 
 interface AnswerRatingProps {
   questionId: number;
@@ -321,7 +321,7 @@ export function SelectorPage() {
                       index % AD_EVERY === 0 &&
                       index / AD_EVERY <= MAX_FEED_ADS && (
                         <div className="question-ad">
-                          <AdSlot slot="home-feed" label="贊助" />
+                          <AdSlot slot="home-feed" label="贊助" variant={index / AD_EVERY - 1} />
                         </div>
                       )}
                     <article className="question-card">

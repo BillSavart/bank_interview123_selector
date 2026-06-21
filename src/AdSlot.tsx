@@ -30,12 +30,24 @@ type NativeUnit = {
   key: string; // 容器 hash，對應 <div id="container-${key}">
   src: string; // 整段 async invoke.js 的網址（含子網域）
 };
-type AdUnit = BannerUnit | NativeUnit;
+// 內容中可重複插入的 banner：實際 spec 從 FEED_BANNERS 池依 variant 輪流取用。
+type FeedBannerUnit = { format: 'feed-banner' };
+type AdUnit = BannerUnit | NativeUnit | FeedBannerUnit;
 
 const DEFAULT_BANNER_HOST = 'www.highperformanceformat.com';
 
 const BANNER_300x250: BannerSpec = { key: '51df605e351cba0f6ceb784cc9233022', width: 300, height: 250 };
 const BANNER_320x50: BannerSpec = { key: '0c7ff4a858fd628149179a6084782ae2', width: 320, height: 50 };
+
+// 內插 banner 池：題目列表 / 文章內每個內插位置，依序輪流取用池中的下一個
+// （variant % 長度）。⚠️ 現在只有 1 個 → 全部用同一個 key，Adsterra 可能只穩定
+// 填第一個、其餘空白或重複同素材。等你在 Adsterra 建好更多獨立 300×250 單元，
+// 把每個 spec 加進這個陣列即可——內插廣告會自動分散到不同 key，穩定填充又不重複。
+const FEED_BANNERS: BannerSpec[] = [
+  BANNER_300x250,
+  // { key: '（新單元 key）', width: 300, height: 250 },
+  // { key: '（新單元 key）', width: 300, height: 250 },
+];
 
 // 設計重點（高曝光但不吵，手機尤其）：上/下「固定版位」每台裝置只會看到一個
 // 300×250 + 一個 320×50，大的 300×250 放在該裝置最不擾人的位置——
@@ -43,17 +55,14 @@ const BANNER_320x50: BannerSpec = { key: '0c7ff4a858fd628149179a6084782ae2', wid
 //   手機：上方只放 320×50 細條（不擋首屏）；300×250 改放下方。
 // 上下版位的桌機/手機尺寸剛好相反，確保同一裝置同一頁不會出現兩個相同 key
 // （Adsterra 偏好每頁版位唯一）。site-top 與 landing-top 不會同頁出現，共用設定。
-//
-// home-feed / article-mid 為內容中插入的 300×250 banner。⚠️ 目前沿用同一個
-// 300×250 key——Adsterra 偏好每個版位用獨立單元，重複使用同一 key 可能只填第一個
-// 或重複同一則素材。之後幫每個內插版位建獨立單元就能穩定填充（見檔尾說明/對話）。
+// home-feed / article-mid 為內容中插入的 banner，取自 FEED_BANNERS 池（見上）。
 // key 留空 = 該版位在正式環境不顯示（本地仍會顯示佔位框供檢視）。
 const AD_UNITS: Record<string, AdUnit> = {
   'landing-top': { format: 'banner', desktop: BANNER_300x250, mobile: BANNER_320x50 },
   'site-top': { format: 'banner', desktop: BANNER_300x250, mobile: BANNER_320x50 },
   'site-bottom': { format: 'banner', desktop: BANNER_320x50, mobile: BANNER_300x250 },
-  'home-feed': { format: 'banner', desktop: BANNER_300x250 },
-  'article-mid': { format: 'banner', desktop: BANNER_300x250 },
+  'home-feed': { format: 'feed-banner' },
+  'article-mid': { format: 'feed-banner' },
 };
 // ==========================================================================
 
@@ -72,12 +81,22 @@ interface AdSlotProps {
   slot: string;
   // 佔位框（本地）顯示的標籤文字。
   label?: string;
+  // 同一版位重複出現時的序號（0 起）。feed-banner 用它從 FEED_BANNERS 池輪流取 key。
+  variant?: number;
+}
+
+// 把 feed-banner 解析成實際的 banner 單元：依 variant 從 FEED_BANNERS 池輪流取用。
+function resolveUnit(unit: AdUnit | undefined, variant: number): BannerUnit | NativeUnit | undefined {
+  if (unit?.format !== 'feed-banner') return unit;
+  const pool = FEED_BANNERS;
+  if (pool.length === 0) return undefined;
+  return { format: 'banner', desktop: pool[variant % pool.length] };
 }
 
 // 非侵入式的內嵌廣告：只有 banner 與 native banner，沒有彈窗 / 插頁 / social bar。
 // 本地顯示佔位框；正式環境且該版位已設定 key 時才載入 Adsterra 程式碼。
-export function AdSlot({ slot, label = '廣告' }: AdSlotProps) {
-  const unit = AD_UNITS[slot];
+export function AdSlot({ slot, label = '廣告', variant = 0 }: AdSlotProps) {
+  const unit = resolveUnit(AD_UNITS[slot], variant);
 
   // 本地：顯示預留版位的佔位框（不載入任何 Adsterra 程式碼）。
   if (IS_DEV) {

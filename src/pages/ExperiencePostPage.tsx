@@ -22,6 +22,10 @@ const splitParagraphs = (content: string) =>
     .map((p) => p.trim())
     .filter(Boolean);
 
+// 每 AD_EVERY_PARAS 段插一個 banner，最多 MAX_ARTICLE_ADS 個（長文才會放好幾個）。
+const AD_EVERY_PARAS = 4;
+const MAX_ARTICLE_ADS = 3;
+
 export function ExperiencePostPage() {
   const { id = '' } = useParams();
   const [post, setPost] = useState<ExperiencePost | null>(null);
@@ -51,8 +55,6 @@ export function ExperiencePostPage() {
 
   const catLabel = post ? POST_CATEGORIES.find((c) => c.value === post.category)?.label || '' : '';
   const paragraphs = useMemo(() => (post ? splitParagraphs(post.content) : []), [post]);
-  // 把廣告插在內文中段（段落數一半處），單段文章則放在內文後。
-  const adAfter = paragraphs.length > 1 ? Math.ceil(paragraphs.length / 2) : paragraphs.length;
 
   return (
     <div className="container py-4 experience-post-page">
@@ -81,16 +83,21 @@ export function ExperiencePostPage() {
           <SharePanel post={post} />
 
           <div className="exp-article-body">
-            {paragraphs.map((para, i) => (
-              <div key={i}>
-                <p>{para}</p>
-                {i + 1 === adAfter && AD_ENABLED && (
-                  <div className="exp-article-ad">
-                    <AdSlot slot="article-mid" label="贊助" />
-                  </div>
-                )}
-              </div>
-            ))}
+            {paragraphs.map((para, i) => {
+              // 每 AD_EVERY_PARAS 段插一個廣告，最多 MAX_ARTICLE_ADS 個。
+              const adNum = (i + 1) % AD_EVERY_PARAS === 0 ? (i + 1) / AD_EVERY_PARAS : 0;
+              const showAd = AD_ENABLED && adNum > 0 && adNum <= MAX_ARTICLE_ADS;
+              return (
+                <div key={i}>
+                  <p>{para}</p>
+                  {showAd && (
+                    <div className="exp-article-ad">
+                      <AdSlot slot="article-mid" label="贊助" variant={adNum - 1} />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
 
           <div className="exp-article-vote">
