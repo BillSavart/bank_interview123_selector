@@ -48,12 +48,12 @@ export function AboutPage() {
       </p>
 
       <h2 className="about-h2">
-        <MessageSquare size={18} /> 關於內容與免責聲明
+        <MessageSquare size={18} /> 條款與免責
       </h2>
       <p className="about-text">
-        本站答題內容僅供準備方向參考，不會即時呼叫外部 AI；實際面試仍應以自身經歷、報考銀行與職缺內容為主。
-        行事曆日期請以各招考單位的正式公告為準。本站為非官方學習工具，與任何銀行或招考單位無關，
-        題庫內容整理自公開資源，著作權仍屬原作者。
+        本站為非官方學習工具，所有內容僅供準備方向參考，招考資訊請以各單位正式公告為準。
+        使用本站前，請一併閱讀 <Link to="/terms">服務條款</Link>、
+        <Link to="/disclaimer">免責聲明</Link> 與 <Link to="/privacy">隱私權政策</Link>。
       </p>
 
       <h2 className="about-h2">
@@ -152,7 +152,8 @@ export function AboutPage() {
 
       <p className="about-credit">Credit: 公股銀行招考討論區 Jack/聯合哥</p>
       <p className="about-updated">
-        最後更新：{lastUpdated()}（台灣時間）　·　<Link to="/privacy">隱私權政策</Link>
+        最後更新：{lastUpdated()}（台灣時間）　·　<Link to="/terms">服務條款</Link>　·
+        <Link to="/disclaimer">免責聲明</Link>　·　<Link to="/privacy">隱私權政策</Link>
       </p>
     </div>
   );

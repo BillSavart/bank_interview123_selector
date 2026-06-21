@@ -15,6 +15,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/check-game': '支票審查員',
   '/about': '關於我們',
   '/privacy': '隱私權政策',
+  '/terms': '服務條款',
+  '/disclaimer': '免責聲明',
   '/admin': '後台管理',
 };
 
@@ -43,7 +45,12 @@ export function Layout() {
         <footer className="site-footer">
           <span>Credit: 公股銀行招考討論區Jack</span>
           <span className="site-footer-note">本站推薦僅供準備方向參考，實際面試以報考銀行與職缺為準。</span>
-          <Link to="/privacy" className="site-footer-link">隱私權政策</Link>
+          <nav className="site-footer-links" aria-label="網站資訊">
+            <Link to="/about">關於我們</Link>
+            <Link to="/terms">服務條款</Link>
+            <Link to="/disclaimer">免責聲明</Link>
+            <Link to="/privacy">隱私權政策</Link>
+          </nav>
         </footer>
       )}
       <button

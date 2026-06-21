@@ -4,6 +4,7 @@ import {
   BookOpen,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   PenLine,
   Search,
@@ -37,6 +38,23 @@ const FILTERS: Array<{ value: Filter; label: string }> = [
 
 const catLabel = (c: PostCategory) => POST_CATEGORIES.find((x) => x.value === c)?.label || c;
 
+// 經驗分享列表一頁最多顯示幾篇，超過就分頁。
+const PAGE_SIZE = 3;
+
+// 算出分頁要顯示哪些頁碼：頁數少時全列，多時以省略號收合中段，
+// 永遠保留第一頁、最後一頁與目前頁的前後一頁。
+function pageWindow(current: number, total: number): Array<number | '…'> {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const out: Array<number | '…'> = [1];
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+  if (start > 2) out.push('…');
+  for (let i = start; i <= end; i++) out.push(i);
+  if (end < total - 1) out.push('…');
+  out.push(total);
+  return out;
+}
+
 export function ExperiencePage() {
   const [posts, setPosts] = useState<ExperiencePost[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -49,6 +67,8 @@ export function ExperiencePage() {
   const [myVotes, setMyVotes] = useState<Record<string, PostVote>>({});
   // 投稿視窗的開關。
   const [submitOpen, setSubmitOpen] = useState(false);
+  // 目前在第幾頁（1-based）。
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     setMyVotes(loadMyPostVotes());
@@ -81,6 +101,22 @@ export function ExperiencePage() {
     else sorted.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     return sorted;
   }, [matched, byCategory, filter, sort]);
+
+  // 換分類 / 排序 / 搜尋時都回到第 1 頁。
+  useEffect(() => {
+    setPage(1);
+  }, [filter, sort, query]);
+
+  // 依目前清單長度切出本頁要顯示的文章。safePage 夾在合法範圍內，
+  // 避免清單變短後 page 超出總頁數而顯示空白。
+  const totalPages = Math.max(1, Math.ceil(rightList.length / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const pageItems = rightList.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
+  const goPage = (n: number) => {
+    setPage(Math.min(Math.max(1, n), totalPages));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
   const handleVote = (post: ExperiencePost, dir: PostVote) => {
     const next: PostVote | 0 = myVotes[post.id] === dir ? 0 : dir;
@@ -193,7 +229,7 @@ export function ExperiencePage() {
           )}
 
           {state === 'ready' &&
-            rightList.map((p) => (
+            pageItems.map((p) => (
               <article key={p.id} className="exp-preview">
                 <div className="exp-preview-tags">
                   <span className="exp-preview-tag">{catLabel(p.category)}</span>
@@ -219,6 +255,48 @@ export function ExperiencePage() {
                 </div>
               </article>
             ))}
+
+          {state === 'ready' && totalPages > 1 && (
+            <nav className="exp-pager" aria-label="文章分頁">
+              <button
+                type="button"
+                className="exp-pager-btn"
+                disabled={safePage === 1}
+                onClick={() => goPage(safePage - 1)}
+              >
+                <ChevronLeft size={16} />
+                上一頁
+              </button>
+              <div className="exp-pager-pages">
+                {pageWindow(safePage, totalPages).map((n, i) =>
+                  n === '…' ? (
+                    <span key={`gap-${i}`} className="exp-pager-gap">
+                      …
+                    </span>
+                  ) : (
+                    <button
+                      key={n}
+                      type="button"
+                      className={`exp-pager-num ${n === safePage ? 'is-active' : ''}`}
+                      aria-current={n === safePage ? 'page' : undefined}
+                      onClick={() => goPage(n)}
+                    >
+                      {n}
+                    </button>
+                  ),
+                )}
+              </div>
+              <button
+                type="button"
+                className="exp-pager-btn"
+                disabled={safePage === totalPages}
+                onClick={() => goPage(safePage + 1)}
+              >
+                下一頁
+                <ChevronRight size={16} />
+              </button>
+            </nav>
+          )}
         </section>
       </div>
 

@@ -5,6 +5,8 @@ import { LandingPage } from './pages/LandingPage';
 import { SelectorPage } from './pages/SelectorPage';
 import { AboutPage } from './pages/AboutPage';
 import { PrivacyPage } from './pages/PrivacyPage';
+import { TermsPage } from './pages/TermsPage';
+import { DisclaimerPage } from './pages/DisclaimerPage';
 import { CheckGamePage } from './pages/CheckGamePage';
 import { NumberTrainerPage } from './pages/NumberTrainerPage';
 import { CalendarPage } from './pages/CalendarPage';
@@ -37,6 +39,8 @@ export function App() {
         <Route path="selector" element={<SelectorPage />} />
         <Route path="about" element={<AboutPage />} />
         <Route path="privacy" element={<PrivacyPage />} />
+        <Route path="terms" element={<TermsPage />} />
+        <Route path="disclaimer" element={<DisclaimerPage />} />
         <Route path="check-game" element={<CheckGamePage />} />
         <Route path="number-trainer" element={<NumberTrainerPage />} />
         <Route path="calendar" element={<CalendarPage />} />

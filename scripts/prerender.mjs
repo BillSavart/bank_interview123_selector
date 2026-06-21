@@ -29,6 +29,8 @@ const ROUTES = [
   { path: '/check-game',     title: '支票審查員',     desc: '模擬支票審查小遊戲，練習辨識票據填寫錯誤。' },
   { path: '/about',          title: '關於我們',       desc: '公股銀行新手村是非官方的公股銀行招考準備工具，集中題目、行事曆、門檻與心得；附各功能使用說明。' },
   { path: '/privacy',        title: '隱私權政策',     desc: '公股銀行新手村的隱私權政策：資料收集、Cookie、第三方服務（Google Analytics／AdSense）與你的選擇。' },
+  { path: '/terms',          title: '服務條款',       desc: '公股銀行新手村的服務條款：服務說明、使用規範、投稿與留言規則、智慧財產權與責任限制。' },
+  { path: '/disclaimer',     title: '免責聲明',       desc: '公股銀行新手村為非官方學習工具，內容僅供參考；招考資訊以各單位正式公告為準，不保證錄取。' },
 ];
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');

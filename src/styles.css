@@ -1440,6 +1440,36 @@ select {
   color: #64748b;
 }
 
+/* 頁尾資訊連結：關於我們 · 服務條款 · 免責聲明 · 隱私權政策，以分隔線串成一列 */
+.site-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 0.5rem 0.9rem;
+  margin-top: 0.15rem;
+}
+
+.site-footer-links a {
+  position: relative;
+  font-size: 0.78rem;
+  color: #94a3b8;
+  text-decoration: underline;
+}
+
+.site-footer-links a:hover {
+  color: #64748b;
+}
+
+/* 用偽元素畫出連結之間的「·」分隔點 */
+.site-footer-links a:not(:last-child)::after {
+  content: '·';
+  position: absolute;
+  right: -0.55rem;
+  color: #cbd5e1;
+  text-decoration: none;
+}
+
 /* --- interview page --- */
 .interview-kicker {
   display: inline-flex;
@@ -4318,6 +4348,61 @@ select {
   align-items: center;
   justify-content: space-between;
   gap: 0.8rem;
+}
+
+/* 文章分頁列：上一頁／頁碼／下一頁 */
+.exp-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+}
+
+.exp-pager-pages {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.exp-pager-btn,
+.exp-pager-num {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  min-width: 2.1rem;
+  justify-content: center;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 999px;
+  padding: 0.35rem 0.7rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #475569;
+  cursor: pointer;
+}
+
+.exp-pager-btn:hover:not(:disabled),
+.exp-pager-num:hover:not(.is-active) {
+  border-color: #0f4f49;
+  color: #0f4f49;
+}
+
+.exp-pager-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.exp-pager-num.is-active {
+  border-color: #0f4f49;
+  background: #0f4f49;
+  color: #fff;
+}
+
+.exp-pager-gap {
+  padding: 0 0.2rem;
+  color: #94a3b8;
 }
 
 /* 讚 / 倒讚 */
