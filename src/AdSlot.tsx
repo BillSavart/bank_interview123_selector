@@ -36,31 +36,27 @@ type AdUnit = BannerUnit | NativeUnit | FeedBannerUnit;
 
 const DEFAULT_BANNER_HOST = 'www.highperformanceformat.com';
 
-const BANNER_300x250: BannerSpec = { key: '51df605e351cba0f6ceb784cc9233022', width: 300, height: 250 };
+// 目前全站統一使用最小的 320×50 banner（大尺寸素材品質差）。300×250 單元保留
+// 備用——要改回大尺寸時，把對應版位 / FEED_BANNERS 換成 BANNER_300x250 即可。
 const BANNER_320x50: BannerSpec = { key: '0c7ff4a858fd628149179a6084782ae2', width: 320, height: 50 };
+const BANNER_300x250: BannerSpec = { key: '51df605e351cba0f6ceb784cc9233022', width: 300, height: 250 };
 
 // 內插 banner 池：題目列表 / 文章內每個內插位置，依序輪流取用池中的下一個
-// （variant % 長度）。⚠️ 現在只有 1 個 → 全部用同一個 key，Adsterra 可能只穩定
-// 填第一個、其餘空白或重複同素材。等你在 Adsterra 建好更多獨立 300×250 單元，
-// 把每個 spec 加進這個陣列即可——內插廣告會自動分散到不同 key，穩定填充又不重複。
+// （variant % 長度）。⚠️ 現在只有 1 個 320×50 key → 內插位置全部共用它，Adsterra
+// 可能只穩定填第一個、其餘空白或重複同素材。建好更多獨立 320×50 單元後，把每個
+// spec 加進這個陣列即可——內插廣告會自動分散到不同 key，穩定填充又不重複。
 const FEED_BANNERS: BannerSpec[] = [
-  BANNER_300x250,
-  // { key: '（新單元 key）', width: 300, height: 250 },
-  // { key: '（新單元 key）', width: 300, height: 250 },
+  BANNER_320x50,
+  // { key: '（新單元 key）', width: 320, height: 50 },
 ];
 
-// 設計重點（高曝光但不吵，手機尤其）：上/下「固定版位」每台裝置只會看到一個
-// 300×250 + 一個 320×50，大的 300×250 放在該裝置最不擾人的位置——
-//   桌機：300×250 放上方（空間夠、高曝光、不擋內容）；320×50 放下方。
-//   手機：上方只放 320×50 細條（不擋首屏）；300×250 改放下方。
-// 上下版位的桌機/手機尺寸剛好相反，確保同一裝置同一頁不會出現兩個相同 key
-// （Adsterra 偏好每頁版位唯一）。site-top 與 landing-top 不會同頁出現，共用設定。
-// home-feed / article-mid 為內容中插入的 banner，取自 FEED_BANNERS 池（見上）。
+// 全站固定版位（上 / 下）與內插位置都用 320×50。⚠️ 因此整站只用到同一個 key，
+// 同一頁多個版位會共用它（同上：可能只填第一個）；要穩定填充就多建獨立單元。
 // key 留空 = 該版位在正式環境不顯示（本地仍會顯示佔位框供檢視）。
 const AD_UNITS: Record<string, AdUnit> = {
-  'landing-top': { format: 'banner', desktop: BANNER_300x250, mobile: BANNER_320x50 },
-  'site-top': { format: 'banner', desktop: BANNER_300x250, mobile: BANNER_320x50 },
-  'site-bottom': { format: 'banner', desktop: BANNER_320x50, mobile: BANNER_300x250 },
+  'landing-top': { format: 'banner', desktop: BANNER_320x50 },
+  'site-top': { format: 'banner', desktop: BANNER_320x50 },
+  'site-bottom': { format: 'banner', desktop: BANNER_320x50 },
   'home-feed': { format: 'feed-banner' },
   'article-mid': { format: 'feed-banner' },
 };
