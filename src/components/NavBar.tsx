@@ -10,8 +10,11 @@ const examItems = [
   { to: '/venues', label: '試場資訊' },
 ];
 
-// 經驗分享維持單一連結。
-const navItems = [{ to: '/experience', label: '經驗分享' }];
+// 經驗分享與年薪計算機維持單一連結。
+const navItems = [
+  { to: '/experience', label: '經驗分享' },
+  { to: '/salary', label: '年薪計算機' },
+];
 
 const gameItems = [
   { to: '/number-trainer', label: '大寫數字訓練器' },

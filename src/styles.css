@@ -2596,6 +2596,341 @@ select {
   }
 }
 
+/* === 年薪計算機 =========================================================== */
+.salary-page {
+  max-width: 1040px;
+}
+
+.salary-title {
+  font-size: clamp(1.8rem, 3.4vw, 2.6rem);
+  margin: 0.35rem 0 0.6rem;
+}
+
+.salary-intro {
+  color: #475569;
+  line-height: 1.75;
+  margin-bottom: 1.4rem;
+}
+
+.salary-intro strong {
+  color: #0f4f49;
+}
+
+.salary-card {
+  padding: 1.4rem 1.5rem;
+  border: 1px solid #e2e9e8;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 12px 30px -24px rgba(15, 79, 73, 0.55);
+  margin-bottom: 1.25rem;
+}
+
+.salary-h2 {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 1.18rem;
+  font-weight: 800;
+  color: #0f4f49;
+  margin: 0 0 1rem;
+}
+
+/* 設定區（只剩年資拉桿） */
+.salary-controls {
+  display: block;
+}
+
+.salary-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.salary-control-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-weight: 700;
+  color: #0f4f49;
+}
+
+.salary-control-value {
+  font-size: 1.3rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.salary-range {
+  width: 100%;
+  accent-color: #0f4f49;
+}
+
+.salary-range-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.8rem;
+  color: #94a3b8;
+}
+
+/* 總結三格 */
+.salary-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.salary-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1.2rem 1.3rem;
+  border: 1px solid #e2e9e8;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.salary-stat.is-primary {
+  background: #0f4f49;
+  border-color: #0f4f49;
+  color: #fff;
+}
+
+.salary-stat-icon {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: rgba(15, 79, 73, 0.1);
+  color: #0f4f49;
+}
+
+.salary-stat.is-primary .salary-stat-icon {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+.salary-stat-label {
+  font-size: 0.9rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.salary-stat.is-primary .salary-stat-label {
+  color: #cfe7e3;
+}
+
+.salary-stat-value {
+  font-size: 1.55rem;
+  font-weight: 800;
+  color: #0f4f49;
+  font-variant-numeric: tabular-nums;
+}
+
+.salary-stat.is-primary .salary-stat-value {
+  color: #fff;
+}
+
+.salary-stat-value small {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* 特定年份明細 */
+.salary-focus {
+  border-color: #bfe0db;
+  background: linear-gradient(180deg, #f3fbfa, #ffffff);
+}
+
+.salary-focus-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.salary-focus-eyebrow {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #0f8f82;
+  letter-spacing: 0.04em;
+}
+
+.salary-focus-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: #0f4f49;
+  margin: 0.1rem 0 0;
+}
+
+.salary-focus-monthly {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.salary-focus-total {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.salary-focus-total-label {
+  font-size: 0.85rem;
+  color: #64748b;
+  font-weight: 600;
+}
+
+.salary-focus-total-value {
+  font-size: 1.7rem;
+  font-weight: 800;
+  color: #0f4f49;
+  font-variant-numeric: tabular-nums;
+}
+
+.salary-focus-rows {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.6rem;
+}
+
+.salary-focus-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #e2e9e8;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.salary-focus-row-label {
+  display: flex;
+  flex-direction: column;
+  font-weight: 600;
+  color: #334155;
+}
+
+.salary-focus-row-label small {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #94a3b8;
+}
+
+.salary-focus-row-value {
+  font-weight: 800;
+  color: #0f4f49;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* 逐年表 */
+.salary-table-wrap {
+  overflow-x: auto;
+}
+
+.salary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.salary-table th,
+.salary-table td {
+  padding: 0.6rem 0.7rem;
+  text-align: left;
+  border-bottom: 1px solid #eef2f1;
+  font-size: 0.92rem;
+}
+
+.salary-table th {
+  color: #0f4f49;
+  font-weight: 700;
+  background: #f6faf9;
+  position: sticky;
+  top: 0;
+}
+
+.salary-table th.is-num,
+.salary-table td.is-num {
+  text-align: right;
+}
+
+.salary-table-total {
+  font-weight: 800;
+  color: #0f4f49;
+}
+
+.salary-table-hint {
+  margin: 0.7rem 0 0;
+  font-size: 0.82rem;
+  color: #94a3b8;
+}
+
+/* 機制說明 */
+.salary-mechanism-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  color: #334155;
+  line-height: 1.7;
+}
+
+.salary-mechanism-list strong {
+  color: #0f4f49;
+}
+
+.salary-mechanism-list b {
+  color: #0f8f82;
+}
+
+.salary-mechanism-note {
+  list-style: none;
+  margin-left: -1.1rem;
+  margin-top: 0.3rem;
+  padding: 0.7rem 0.9rem;
+  background: #f6faf9;
+  border-radius: 9px;
+  font-size: 0.9rem;
+  color: #475569;
+}
+
+.salary-disclaimer {
+  margin: 0 0 1rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px dashed #cbd5d4;
+  border-radius: 10px;
+  background: #fbfdfc;
+  color: #64748b;
+  font-size: 0.88rem;
+  line-height: 1.7;
+}
+
+.salary-disclaimer strong {
+  color: #b45309;
+}
+
+@media (max-width: 760px) {
+  .salary-stats {
+    grid-template-columns: 1fr;
+  }
+  .salary-focus-rows {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* === 招考行事曆（月曆） ===================================================== */
 .calendar-page {
   max-width: 980px;

@@ -9,6 +9,7 @@ import { TermsPage } from './pages/TermsPage';
 import { DisclaimerPage } from './pages/DisclaimerPage';
 import { CheckGamePage } from './pages/CheckGamePage';
 import { NumberTrainerPage } from './pages/NumberTrainerPage';
+import { SalaryCalculatorPage } from './pages/SalaryCalculatorPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { MapPage } from './pages/MapPage';
 import { VenuePage } from './pages/VenuePage';
@@ -43,6 +44,7 @@ export function App() {
         <Route path="disclaimer" element={<DisclaimerPage />} />
         <Route path="check-game" element={<CheckGamePage />} />
         <Route path="number-trainer" element={<NumberTrainerPage />} />
+        <Route path="salary" element={<SalaryCalculatorPage />} />
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="scores-map" element={<MapPage />} />
         <Route path="venues" element={<VenuePage />} />
