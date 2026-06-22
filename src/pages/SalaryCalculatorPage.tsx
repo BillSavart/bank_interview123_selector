@@ -15,7 +15,7 @@ import {
 } from '../lib/salary';
 
 export function SalaryCalculatorPage() {
-  const [years, setYears] = useState(10);
+  const [years, setYears] = useState(1);
 
   const summary = useMemo(() => summarize(years), [years]);
   // 「當年」＝拉桿設定的第 N 年；明細區跟著拉桿自動切換，不再另開選單。
