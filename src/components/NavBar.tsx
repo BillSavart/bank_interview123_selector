@@ -107,13 +107,6 @@ export function NavBar() {
               ))}
             </div>
           </div>
-          <NavLink
-            to="/about"
-            className={({ isActive }) => (isActive ? 'is-active' : '')}
-            onClick={closeNav}
-          >
-            關於我們
-          </NavLink>
           <a
             className="nav-pdf"
             href="https://forms.gle/2Yw4mvY91sj1uKcU8"
