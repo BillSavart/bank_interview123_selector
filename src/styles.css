@@ -2660,9 +2660,59 @@ select {
   font-variant-numeric: tabular-nums;
 }
 
+/* 自訂拉桿：iOS Safari 的 accent-color 只會染色軌道、把握把留成預設白色，
+   桌機 Chrome 卻會把握把染成 accent-color，造成手機上幾乎看不到握把。
+   這裡直接畫出灰色軌道＋品牌色握把，各平台外觀一致。 */
 .salary-range {
+  -webkit-appearance: none;
+  appearance: none;
   width: 100%;
-  accent-color: #0f4f49;
+  height: 22px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.salary-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 999px;
+  background: #d8e4e2;
+}
+
+.salary-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  margin-top: -8px; /* (軌道 6px − 握把 22px) / 2，讓握把垂直置中 */
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #0f4f49;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(15, 79, 73, 0.45);
+}
+
+.salary-range::-moz-range-track {
+  height: 6px;
+  border-radius: 999px;
+  background: #d8e4e2;
+}
+
+.salary-range::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #0f4f49;
+  border: 2px solid #fff;
+  box-shadow: 0 1px 4px rgba(15, 79, 73, 0.45);
+}
+
+.salary-range:focus-visible::-webkit-slider-thumb {
+  outline: 2px solid #0f4f49;
+  outline-offset: 2px;
+}
+
+.salary-range:focus-visible::-moz-range-thumb {
+  outline: 2px solid #0f4f49;
+  outline-offset: 2px;
 }
 
 .salary-range-scale {
