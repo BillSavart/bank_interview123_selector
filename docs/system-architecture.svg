@@ -1,0 +1,145 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="860" viewBox="0 0 1280 860" role="img" aria-labelledby="title desc">
+  <title id="title">公股銀行面試題目選擇器系統架構圖</title>
+  <desc id="desc">React SPA 經 Cloudflare 到 GCP e2-micro Docker Compose，Caddy 服務靜態檔並反向代理 Node API，資料保存在 Docker volume，GitHub Actions 建置並部署兩個容器映像。</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
+      <stop offset="0%" stop-color="#f8fbff"/>
+      <stop offset="100%" stop-color="#f3f7fb"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="8" stdDeviation="10" flood-color="#0f172a" flood-opacity="0.12"/>
+    </filter>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowSlate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <style>
+      .canvas { fill: url(#bg); }
+      .title { font: 800 30px -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", Arial, sans-serif; fill: #0f172a; }
+      .subtitle { font: 500 15px -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", Arial, sans-serif; fill: #475569; }
+      .section-title { font: 800 15px -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", Arial, sans-serif; fill: #334155; letter-spacing: .03em; }
+      .card-title { font: 800 18px -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", Arial, sans-serif; fill: #0f172a; }
+      .card-text { font: 500 13.5px -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", Arial, sans-serif; fill: #475569; }
+      .small { font: 600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", Arial, sans-serif; fill: #64748b; }
+      .label { font: 800 12px -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", Arial, sans-serif; fill: #2563eb; }
+      .label-slate { font: 800 12px -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", Arial, sans-serif; fill: #64748b; }
+      .section { stroke-width: 1.5; rx: 18; }
+      .card { fill: #ffffff; stroke: #dbe4ef; stroke-width: 1.4; rx: 12; filter: url(#shadow); }
+      .runtime { stroke: #2563eb; stroke-width: 3; fill: none; marker-end: url(#arrowBlue); }
+      .runtime-both { stroke: #2563eb; stroke-width: 3; fill: none; marker-start: url(#arrowBlue); marker-end: url(#arrowBlue); }
+      .build { stroke: #64748b; stroke-width: 3; stroke-dasharray: 8 7; fill: none; marker-end: url(#arrowSlate); }
+      .muted-line { stroke: #94a3b8; stroke-width: 2.5; stroke-dasharray: 6 6; fill: none; marker-end: url(#arrowSlate); }
+      .chip { fill: #eff6ff; stroke: #bfdbfe; stroke-width: 1; rx: 999; }
+      .chip-text { font: 800 11px -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", Arial, sans-serif; fill: #1d4ed8; }
+    </style>
+  </defs>
+
+  <rect class="canvas" width="1280" height="860"/>
+
+  <text class="title" x="60" y="54">公股銀行面試題目選擇器｜系統架構</text>
+  <text class="subtitle" x="60" y="82">CI 建置 web / api images；e2-micro 只跑 runtime；互動資料在 ratings_data volume 內逐步遷移到 SQLite。</text>
+  <rect class="chip" x="1055" y="38" width="74" height="28"/>
+  <text class="chip-text" x="1074" y="57">runtime</text>
+  <line class="runtime" x1="1140" y1="52" x2="1195" y2="52"/>
+  <rect class="chip" x="1055" y="72" width="98" height="28" fill="#f8fafc"/>
+  <text class="chip-text" x="1075" y="91" fill="#475569">build/deploy</text>
+  <line class="build" x1="1165" y1="86" x2="1220" y2="86"/>
+
+  <rect class="section" x="50" y="120" width="310" height="430" fill="#eef6ff" stroke="#bfdbfe"/>
+  <text class="section-title" x="80" y="152">CLIENT &amp; EDGE</text>
+
+  <rect class="card" x="80" y="180" width="250" height="115"/>
+  <text class="card-title" x="105" y="213">Browser / React SPA</text>
+  <text class="card-text" x="105" y="241">Routes: /selector, /admin, games</text>
+  <text class="card-text" x="105" y="263">localStorage: voterId, votes, token</text>
+
+  <line class="runtime" x1="205" y1="302" x2="205" y2="338"/>
+  <text class="label" x="219" y="324">HTTPS</text>
+
+  <rect class="card" x="80" y="340" width="250" height="140"/>
+  <text class="card-title" x="105" y="373">Cloudflare</text>
+  <text class="card-text" x="105" y="401">DNS, CDN, DDoS, Edge TLS</text>
+  <text class="card-text" x="105" y="423">Full strict origin TLS</text>
+  <text class="card-text" x="105" y="445">GET /api cache: s-maxage=10</text>
+
+  <rect class="section" x="400" y="120" width="820" height="430" fill="#eefdf6" stroke="#bbf7d0"/>
+  <text class="section-title" x="430" y="152">GCP E2-MICRO · DOCKER COMPOSE</text>
+
+  <path class="runtime" d="M330 410 C365 410, 365 265, 430 265"/>
+  <text class="label" x="382" y="392">80 / 443 origin</text>
+
+  <rect class="card" x="440" y="185" width="310" height="160"/>
+  <text class="card-title" x="465" y="218">web image: Caddy 2</text>
+  <text class="card-text" x="465" y="246">Serves /srv static SPA</text>
+  <text class="card-text" x="465" y="268">PDF, OG images, banks-data.json</text>
+  <text class="card-text" x="465" y="290">reverse_proxy /api/* and /e/*</text>
+  <text class="card-text" x="465" y="312">crawler SEO for /experience/*</text>
+
+  <rect class="card" x="850" y="185" width="330" height="175"/>
+  <text class="card-title" x="875" y="218">api image: Node HTTP</text>
+  <text class="card-text" x="875" y="246">server/ratings-api.mjs</text>
+  <text class="card-text" x="875" y="268">node:http, no web framework</text>
+  <text class="card-text" x="875" y="290">ratings, comments, posts, calendar</text>
+  <text class="card-text" x="875" y="312">leaderboards and admin APIs</text>
+  <text class="card-text" x="875" y="334">ADMIN_TOKEN gates writes</text>
+
+  <path class="runtime" d="M750 265 L840 265"/>
+  <text class="label" x="795" y="253" text-anchor="middle">reverse_proxy</text>
+
+  <rect class="card" x="440" y="405" width="310" height="105"/>
+  <text class="card-title" x="465" y="438">Caddy state</text>
+  <text class="card-text" x="465" y="466">caddy_data / caddy_config</text>
+  <text class="card-text" x="465" y="488">Cloudflare Origin Certificate in /certs</text>
+
+  <path class="muted-line" d="M595 348 L595 395"/>
+  <text class="label-slate" x="643" y="378" text-anchor="middle">certs / config</text>
+
+  <rect class="card" x="850" y="405" width="330" height="130"/>
+  <text class="card-title" x="875" y="438">ratings_data volume</text>
+  <text class="card-text" x="875" y="464">SQLite migrated stores: /data/app.db</text>
+  <text class="card-text" x="875" y="486">ratings, comments, posts</text>
+  <text class="card-text" x="875" y="508">calendar, leaderboards when enabled</text>
+  <text class="card-text" x="875" y="530">JSON / JSONL kept for import/rollback</text>
+
+  <path class="runtime-both" d="M1015 368 L1015 395"/>
+  <text class="label" x="1062" y="386" text-anchor="middle">read / write</text>
+
+  <rect class="section" x="50" y="600" width="1170" height="210" fill="#fff7ed" stroke="#fed7aa"/>
+  <text class="section-title" x="80" y="632">BUILD &amp; DEPLOY PIPELINE</text>
+
+  <rect class="card" x="80" y="660" width="270" height="110"/>
+  <text class="card-title" x="105" y="693">Source data</text>
+  <text class="card-text" x="105" y="721">PDF + bank123_pdftojson.json</text>
+  <text class="card-text" x="105" y="743">answer_bank.json</text>
+  <text class="card-text" x="105" y="765">Google Sheet + g0v GeoJSON</text>
+
+  <rect class="card" x="410" y="645" width="290" height="140"/>
+  <text class="card-title" x="435" y="678">GitHub Actions</text>
+  <text class="card-text" x="435" y="706">typecheck + vitest + banks-data check</text>
+  <text class="card-text" x="435" y="728">npm run build: dist + sitemap</text>
+  <text class="card-text" x="435" y="750">build web and api images</text>
+  <text class="card-text" x="435" y="772">main push, manual, daily 04:00 Taipei</text>
+
+  <rect class="card" x="760" y="660" width="190" height="110"/>
+  <text class="card-title" x="790" y="693">GHCR</text>
+  <text class="card-text" x="790" y="721">bank-interview-web</text>
+  <text class="card-text" x="790" y="743">bank-interview-api</text>
+
+  <rect class="card" x="1000" y="645" width="190" height="140"/>
+  <text class="card-title" x="1025" y="678">SSH deploy</text>
+  <text class="card-text" x="1025" y="706">git pull --ff-only</text>
+  <text class="card-text" x="1025" y="728">docker compose pull</text>
+  <text class="card-text" x="1025" y="750">docker compose up -d</text>
+  <text class="card-text" x="1025" y="772">VM never builds images</text>
+
+  <path class="build" d="M350 715 L400 715"/>
+  <text class="label-slate" x="375" y="701" text-anchor="middle">generate</text>
+  <path class="build" d="M700 715 L750 715"/>
+  <text class="label-slate" x="725" y="701" text-anchor="middle">push</text>
+  <path class="build" d="M950 715 L990 715"/>
+  <text class="label-slate" x="970" y="701" text-anchor="middle">pull</text>
+  <path class="build" d="M1095 645 C1095 595, 1115 570, 1115 540"/>
+  <text class="label-slate" x="1122" y="590">restart containers</text>
+</svg>
