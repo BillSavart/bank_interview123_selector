@@ -7,7 +7,10 @@ import {
   ANNUAL_RAISE,
   BONUS_MONTHS,
   FIRST_YEAR_BONUS_FACTOR,
-  MONTHLY_OVERTIME,
+  WORK_DAYS_PER_MONTH,
+  WORK_HOURS_PER_DAY,
+  OVERTIME_HOURS_PER_MONTH,
+  monthlyOvertimePay,
   ANNUAL_SAVINGS_INTEREST,
   MIN_YEARS,
   MAX_YEARS,
@@ -60,9 +63,12 @@ export function SalaryCalculatorPage() {
             八等 {formatNT(GRADE_BASE[8])}、九等 {formatNT(GRADE_BASE[9])} 元。
           </li>
           <li>
-            <strong>年薪組成：</strong>12 個月本薪 ＋ 獎金 <b>{BONUS_MONTHS}</b> 個月 ＋ 每月加班費{' '}
-            <b>{formatNT(MONTHLY_OVERTIME)}</b> 元（全年 {formatNT(MONTHLY_OVERTIME * 12)}）＋ 行儲利息每年{' '}
+            <strong>年薪組成：</strong>12 個月本薪 ＋ 獎金 <b>{BONUS_MONTHS}</b> 個月 ＋ 加班費（公式見下）＋ 行儲利息每年{' '}
             <b>{formatNT(ANNUAL_SAVINGS_INTEREST)}</b> 元。
+          </li>
+          <li>
+            <strong>加班費公式：</strong>時薪 ＝ 月薪 ÷ {WORK_DAYS_PER_MONTH} ÷ {WORK_HOURS_PER_DAY}；每月固定加班{' '}
+            <b>{OVERTIME_HOURS_PER_MONTH}</b> 小時，每月加班費 ＝ 時薪 × {OVERTIME_HOURS_PER_MONTH}（無條件捨去），全年再 × 12 個月。
           </li>
           <li>
             <strong>第一年獎金：</strong>新人首年考績多為乙等，獎金以 {BONUS_MONTHS} 個月再打八折（×
@@ -191,7 +197,11 @@ function FocusYearCard({ focus }: { focus: YearSalary }) {
   const rows: { label: string; value: number; hint?: string }[] = [
     { label: '12 個月本薪', value: focus.baseAnnual, hint: `月薪 ${formatNT(focus.monthly)} × 12` },
     { label: bonusLabel, value: focus.bonus, hint: bonusHint },
-    { label: '加班費（全年）', value: focus.overtime, hint: `每月 ${formatNT(MONTHLY_OVERTIME)} × 12` },
+    {
+      label: '加班費（全年）',
+      value: focus.overtime,
+      hint: `每月 ${formatNT(monthlyOvertimePay(focus.monthly))} 元（月薪÷30÷8×12時，捨去）× 12`,
+    },
     { label: '行儲利息', value: focus.savingsInterest, hint: '每年固定' },
   ];
 

@@ -14,7 +14,10 @@ export const GRADE_BASE: Record<number, number> = {
 export const ANNUAL_RAISE = 0.02; // 每年固定調薪 2%
 export const BONUS_MONTHS = 4; // 每年獎金固定 4 個月
 export const FIRST_YEAR_BONUS_FACTOR = 0.8; // 第一年新人考績多為乙等，獎金再打八折
-export const MONTHLY_OVERTIME = 3000; // 每月加班費固定（不隨調薪變動）
+// 加班費：時薪 = 月薪 / 30 / 8，每月固定加班 12 小時，每月加班費無條件捨去到元。
+export const WORK_DAYS_PER_MONTH = 30;
+export const WORK_HOURS_PER_DAY = 8;
+export const OVERTIME_HOURS_PER_MONTH = 12;
 export const ANNUAL_SAVINGS_INTEREST = 62400; // 每年行儲利息（固定）
 
 export const MIN_YEARS = 1;
@@ -37,7 +40,7 @@ export interface YearSalary {
   monthly: number; // 當年月薪（本薪，已四捨五入到元）
   baseAnnual: number; // 12 個月本薪
   bonus: number; // 獎金（第一年打八折）
-  overtime: number; // 全年加班費 = 3000 × 12
+  overtime: number; // 全年加班費 = 每月加班費 × 12
   savingsInterest: number; // 行儲利息
   total: number; // 年薪總計
 }
@@ -47,6 +50,16 @@ export interface SalarySummary {
   perYear: YearSalary[]; // 第 1 ~ N 年逐年明細
   total: number; // 這段期間的總年薪
   average: number; // 平均年薪
+}
+
+// 時薪 = 月薪 / 30 / 8。
+export function hourlyWage(monthly: number): number {
+  return monthly / WORK_DAYS_PER_MONTH / WORK_HOURS_PER_DAY;
+}
+
+// 每月加班費 = 時薪 × 每月加班時數，無條件捨去到元。
+export function monthlyOvertimePay(monthly: number): number {
+  return Math.floor(hourlyWage(monthly) * OVERTIME_HOURS_PER_MONTH);
 }
 
 // 找出年資第 `year` 年所屬的職等與該等起始年。
@@ -70,7 +83,7 @@ export function salaryForYear(year: number): YearSalary {
   // 第一年新人考績多為乙等，獎金（4 個月）再打八折計。
   const bonusFactor = year === 1 ? FIRST_YEAR_BONUS_FACTOR : 1;
   const bonus = Math.round(monthly * BONUS_MONTHS * bonusFactor);
-  const overtime = MONTHLY_OVERTIME * 12;
+  const overtime = monthlyOvertimePay(monthly) * 12;
   const savingsInterest = ANNUAL_SAVINGS_INTEREST;
   const total = baseAnnual + bonus + overtime + savingsInterest;
 

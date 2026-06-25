@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { salaryForYear, summarize, MAX_YEARS } from './salary';
+import { salaryForYear, summarize, monthlyOvertimePay, MAX_YEARS } from './salary';
 
 // 這些數字是依使用者給的調薪機制手算的對帳值。若機制改了，更新這裡才會發現。
 describe('salaryForYear — 職等與升等時程', () => {
@@ -29,14 +29,22 @@ describe('salaryForYear — 年薪組成', () => {
     const y1 = salaryForYear(1);
     expect(y1.baseAnnual).toBe(40900 * 12); // 490,800
     expect(y1.bonus).toBe(Math.round(40900 * 4 * 0.8)); // 130,880（4 個月 × 八折）
-    expect(y1.overtime).toBe(3000 * 12); // 36,000
+    // 時薪 40900/30/8 × 12 時 = 2045（無條件捨去）→ 全年 ×12
+    expect(y1.overtime).toBe(Math.floor((40900 / 30 / 8) * 12) * 12); // 2,045 × 12 = 24,540
     expect(y1.savingsInterest).toBe(62400);
-    expect(y1.total).toBe(490800 + 130880 + 36000 + 62400); // 720,080
+    expect(y1.total).toBe(490800 + 130880 + 24540 + 62400); // 708,620
   });
 
   it('第 2 年起獎金為全額 4 個月（不打折）', () => {
     const y2 = salaryForYear(2);
     expect(y2.bonus).toBe(Math.round(y2.monthly * 4));
+  });
+
+  it('加班費：時薪（月薪/30/8）× 12 時，無條件捨去後 × 12 月', () => {
+    const y2 = salaryForYear(2); // 月薪 41,718，× 12/240 = 2085.9 → 捨去 2085
+    expect(monthlyOvertimePay(y2.monthly)).toBe(Math.floor((y2.monthly / 30 / 8) * 12));
+    expect(monthlyOvertimePay(41718)).toBe(2085); // 確認是捨去而非四捨五入
+    expect(y2.overtime).toBe(monthlyOvertimePay(y2.monthly) * 12);
   });
 
   it('total 一定等於四項加總', () => {
