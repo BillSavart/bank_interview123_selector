@@ -10,6 +10,7 @@ import {
   UserX,
 } from 'lucide-react';
 import { VENUE_REPORTS, type VenueReport, type VenueStage } from '../data/venues';
+import { VenueMap } from '../components/VenueMap';
 
 const STAGE_LABEL: Record<VenueStage, string> = { written: '筆試', interview: '面試' };
 
@@ -63,6 +64,8 @@ export function VenuePage() {
           這裡的面試題目來自考生回報，<strong>會因面試官、考生背景與當下情況而異，僅供準備方向參考</strong>，不代表你會被問到相同題目。缺考人數與各項數據同樣以考生回報為準，可能與官方公告有出入。
         </p>
       </div>
+
+      <VenueMap />
 
       <div className="venue-layout">
         {/* 左側選單：銀行可收合，展開後列出各場次。新增資料會自動出現在這裡。 */}

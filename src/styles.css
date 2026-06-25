@@ -1515,6 +1515,314 @@ select {
   line-height: 1.6;
 }
 
+/* 試場地圖（Leaflet + OpenStreetMap，免金鑰免費） -------------------------- */
+.venue-map-section {
+  margin: 0 0 1.6rem;
+  padding: 1rem 1.1rem 1.1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.9rem;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.venue-map-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.venue-map-title svg {
+  color: #0f4f49;
+}
+
+.venue-map-hint {
+  margin: 0 0 0.9rem;
+  color: #475569;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+/* 地圖/清單分頁籤：只在手機版（≤768px）顯示，桌機隱藏。 */
+.venue-map-tabs {
+  display: none;
+  gap: 0.4rem;
+  margin-bottom: 0.7rem;
+  padding: 0.25rem;
+  background: #f1f5f9;
+  border-radius: 0.6rem;
+}
+
+.venue-map-tab {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  border-radius: 0.45rem;
+  padding: 0.45rem 0;
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: #475569;
+  cursor: pointer;
+}
+
+.venue-map-tab.is-active {
+  background: #fff;
+  color: #0f4f49;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.1);
+}
+
+.venue-map-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 248px;
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.venue-map-canvas {
+  height: 460px;
+  border-radius: 0.7rem;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  background: #eef2f6;
+  z-index: 0; /* 別蓋過站台其他浮層 */
+}
+
+.venue-map-list {
+  max-height: 460px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding-right: 0.2rem;
+}
+
+.venue-map-group-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-bottom: 0.3rem;
+  font-weight: 800;
+  font-size: 0.85rem;
+  color: #334155;
+}
+
+.venue-map-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.venue-map-group-count {
+  margin-left: auto;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.venue-map-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  text-align: left;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  border-radius: 0.55rem;
+  padding: 0.4rem 0.55rem;
+  margin-bottom: 0.3rem;
+  cursor: pointer;
+}
+
+.venue-map-item:hover {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+}
+
+.venue-map-item.is-active {
+  border-color: #0f4f49;
+  background: #e0f2f1;
+}
+
+.venue-map-num {
+  flex-shrink: 0;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.venue-map-item-body {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.venue-map-item-name {
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: #0f172a;
+}
+
+.venue-map-item-addr {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.venue-map-item-mrt {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  margin-top: 0.15rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #0f4f49;
+}
+
+.venue-map-item-mrt svg {
+  flex-shrink: 0;
+}
+
+/* 路線顏色小圓點（轉乘站會有多個）。 */
+.venue-line-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.12rem;
+}
+
+.venue-line-dots i {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.12); /* 黃線等淺色也看得到邊 */
+}
+
+.venue-map-credit {
+  margin: 0.7rem 0 0;
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+/* divIcon 淚滴形標記 */
+.venue-pin {
+  width: 28px;
+  height: 28px;
+  background: var(--pin, #0f4f49);
+  border: 2px solid #fff;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  box-shadow: 0 2px 5px rgba(15, 23, 42, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.venue-pin span {
+  transform: rotate(45deg);
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* Leaflet 彈出視窗內容 */
+.venue-popup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.venue-popup strong {
+  font-size: 0.95rem;
+  color: #0f172a;
+}
+
+.venue-popup-area {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #0f4f49;
+}
+
+.venue-popup-addr {
+  font-size: 0.8rem;
+  color: #475569;
+}
+
+.venue-popup-mrt {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #0f4f49;
+}
+
+.venue-popup-lines {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.1rem;
+}
+
+.venue-popup-lines .venue-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #334155;
+}
+
+.venue-popup-lines .venue-line i {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 999px;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.12);
+}
+
+.venue-popup-link {
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #0f4f49;
+}
+
+@media (max-width: 768px) {
+  .venue-map-tabs {
+    display: flex;
+  }
+
+  .venue-map-layout {
+    grid-template-columns: 1fr;
+  }
+
+  /* 手機版一次只顯示一個分頁：依 .view-map / .view-list 切換。 */
+  .venue-map-layout.view-map .venue-map-list {
+    display: none;
+  }
+
+  .venue-map-layout.view-list .venue-map-canvas {
+    display: none;
+  }
+
+  .venue-map-canvas {
+    height: 380px;
+  }
+
+  /* 清單頁籤改成隨頁面自然捲動，不要內部小捲軸方框。 */
+  .venue-map-list {
+    max-height: none;
+  }
+}
+
 /* 左選單 + 主內容兩欄；窄螢幕時選單收到上方。 */
 .venue-layout {
   display: grid;
