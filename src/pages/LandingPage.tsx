@@ -36,7 +36,7 @@ const features = [
     to: '/venues',
     icon: MapPin,
     title: '試場資訊',
-    desc: '各家招考的筆試缺考統計與面試考題，依試場彙整，掌握各場狀況。',
+    desc: '常用考場地圖（含最近捷運站），加上各家招考的筆試缺考統計與面試考題，依試場彙整。',
   },
   {
     to: '/experience',
