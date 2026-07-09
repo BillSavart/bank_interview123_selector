@@ -4,8 +4,8 @@ import {
   Banknote,
   BookOpen,
   CalendarDays,
-  Calculator,
   ClipboardList,
+  FileText,
   MapPin,
   MapPinned,
   Sparkles,
@@ -45,10 +45,10 @@ const features = [
     desc: '參考其他前輩的考試與工作經驗，還能在文章底下留言一起討論。',
   },
   {
-    to: '/salary',
-    icon: Calculator,
-    title: '年薪計算機',
-    desc: '設定 1～30 年年資，試算總薪資、當年年薪與平均月領，含調薪與升等機制。',
+    to: '/official-doc-practice',
+    icon: FileText,
+    title: '公文練習器',
+    desc: '練習公股銀行考古題中的簽與函，直接在公文稿上作答，並可對照 AI 參考答案。',
   },
 ];
 

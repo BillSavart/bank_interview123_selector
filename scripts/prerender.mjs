@@ -24,6 +24,7 @@ const ROUTES = [
   { path: '/calendar',       title: '招考行事曆',     desc: '八大公股銀行報名、筆試、面試與放榜日期，一頁掌握。',     image: { file: 'calendar.jpg',   w: 1200, h: 938 } },
   { path: '/scores-map',     title: '筆試門檻',       desc: '以台灣地圖呈現八大公股行庫歷年各考區的筆試錄取分數。', image: { file: 'scores-map.jpg', w: 1200, h: 1200 } },
   { path: '/venues',         title: '試場資訊',       desc: '各家公股銀行招考各試場的面試情報彙整，題目方向與考驗重點一頁掌握。' },
+  { path: '/official-doc-practice', title: '公文練習器', desc: '練習公股銀行與國營事業考試常見的簽與函題型，直接在真實公文格式中撰寫主旨與說明。' },
   { path: '/experience',     title: '經驗分享',       desc: '公股銀行考試篇與工作篇的第一手經驗分享。' },
   { path: '/salary',         title: '年薪計算機',     desc: '設定 1～30 年年資，試算公股銀行的總薪資、當年年薪與平均月領，含每年調薪 2% 與升等機制說明。' },
   { path: '/number-trainer', title: '大寫數字訓練器', desc: '練習壹貳參…金融大寫數字，銀行櫃檯與支票必備技能。' },

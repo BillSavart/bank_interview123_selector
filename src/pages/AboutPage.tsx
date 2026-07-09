@@ -5,6 +5,7 @@ import {
   SlidersHorizontal,
   ClipboardCheck,
   Calculator,
+  FileText,
   Hash,
   CalendarDays,
   MapPinned,
@@ -44,7 +45,7 @@ export function AboutPage() {
         讓新手用最短的時間抓到準備方向。
       </p>
       <p className="about-text">
-        這裡集合了面試題目篩選、招考行事曆、筆試門檻地圖、試場資訊、經驗分享、年薪計算機與練習小遊戲，全部免費使用。
+        這裡集合了面試題目篩選、招考行事曆、筆試門檻地圖、試場資訊、公文練習器、經驗分享、年薪計算機與練習小遊戲，全部免費使用。
         本站與任何銀行、招考單位或補習班皆無關，不販售課程、不代辦報名；所有內容整理自公開資源，僅供準備方向參考。
       </p>
 
@@ -114,6 +115,19 @@ export function AboutPage() {
         <li>每筆場次會標明「筆試」或「面試」，並列出試場數與缺考總人數。</li>
         <li>筆試以各試場缺考人數呈現；面試則在各試場卡片列出當場被問到的題目。</li>
         <li>面試題目會因面試官、考生背景與當下情況而異，僅供準備方向參考，不代表你會被問到相同題目；缺考等數據亦以考生回報為準，可能與官方公告有出入。</li>
+      </ol>
+
+      <h2 className="about-h2">
+        <FileText size={18} /> 公文練習器
+      </h2>
+      <p className="about-text">
+        <Link to="/official-doc-practice">公文練習器</Link>提供公股銀行考古題中的「簽」與「函」題型，讓考生直接在接近正式公文的版面上練習。
+      </p>
+      <ol className="about-list">
+        <li>在題目列表切換「簽」或「函」，選擇考古題後開始作答。</li>
+        <li>直接在公文紙的文字方塊中填寫主旨、說明、擬辦及相關欄位。</li>
+        <li>點選「AI 參考答案」可將作答稿與 GPT 5.5 參考稿並排對照。</li>
+        <li>完成後可下載 PDF 或儲存 PNG 截圖，保留自己的作答紀錄。</li>
       </ol>
 
       <h2 className="about-h2">

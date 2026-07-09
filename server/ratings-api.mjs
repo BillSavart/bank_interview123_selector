@@ -3,6 +3,11 @@ import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises
 import { dirname } from 'node:path';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { openDb, calendarColumns } from './db.mjs';
+import {
+  getOfficialDocQuestion,
+  initOfficialDocStore,
+  listOfficialDocQuestions,
+} from './official-doc.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const dataFile = process.env.RATINGS_FILE || '/data/ratings.json';
@@ -19,6 +24,12 @@ const dataFile = process.env.RATINGS_FILE || '/data/ratings.json';
 // DB (populated by the one-off migration) but are not wired up here yet.
 const useSqlite = process.env.USE_SQLITE === '1' || process.env.USE_SQLITE === 'true';
 const db = useSqlite ? openDb(process.env.DB_FILE || '/data/app.db') : null;
+const officialDocDbFile =
+  process.env.OFFICIAL_DOC_DB_FILE ||
+  process.env.DB_FILE ||
+  (process.env.NODE_ENV === 'production' ? '/data/app.db' : '.local-official-doc.db');
+let officialDocDb = db;
+let officialDocDbError = null;
 const maxQuestionId = Number(process.env.MAX_QUESTION_ID || 123);
 
 // --- Comments config -------------------------------------------------------
@@ -1279,6 +1290,25 @@ const parsePostCommentVote = (pathname) => {
   return { store: postComments, commentId: match[2] };
 };
 
+let officialDocSeeded = false;
+const getOfficialDocDbHandle = () => {
+  if (officialDocDbError) return null;
+  if (!officialDocDb) {
+    try {
+      officialDocDb = openDb(officialDocDbFile);
+    } catch (error) {
+      officialDocDbError = error;
+      console.warn(`Official document practice DB unavailable at ${officialDocDbFile}.`, error);
+      return null;
+    }
+  }
+  if (!officialDocSeeded) {
+    initOfficialDocStore(officialDocDb);
+    officialDocSeeded = true;
+  }
+  return officialDocDb;
+};
+
 await loadStore();
 await questionComments.load();
 await questionComments.loadVotes();
@@ -1290,6 +1320,7 @@ await Promise.all(Object.values(leaderboards).map((lb) => lb.load()));
 await loadCalendar();
 await loadPosts();
 await loadPostVotes();
+if (officialDocDb) getOfficialDocDbHandle();
 
 createServer(async (req, res) => {
   try {
@@ -1297,6 +1328,33 @@ createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/api/health') {
       sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    // --- 公文練習器 -------------------------------------------------------
+    if (req.method === 'GET' && url.pathname === '/api/official-doc/questions') {
+      const officialDb = getOfficialDocDbHandle();
+      if (!officialDb) {
+        sendJson(res, 503, { error: 'official document database unavailable' });
+        return;
+      }
+      sendJson(res, 200, { questions: listOfficialDocQuestions(officialDb) }, cacheRead);
+      return;
+    }
+
+    const officialDocQuestionMatch = url.pathname.match(/^\/api\/official-doc\/questions\/([^/]+)$/);
+    if (req.method === 'GET' && officialDocQuestionMatch) {
+      const officialDb = getOfficialDocDbHandle();
+      if (!officialDb) {
+        sendJson(res, 503, { error: 'official document database unavailable' });
+        return;
+      }
+      const question = getOfficialDocQuestion(officialDb, decodeURIComponent(officialDocQuestionMatch[1]));
+      if (!question) {
+        sendJson(res, 404, { error: 'question not found' });
+        return;
+      }
+      sendJson(res, 200, { question }, cacheRead);
       return;
     }
 

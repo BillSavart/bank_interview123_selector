@@ -8,6 +8,7 @@ const examItems = [
   { to: '/calendar', label: '招考行事曆' },
   { to: '/scores-map', label: '筆試門檻' },
   { to: '/venues', label: '試場資訊' },
+  { to: '/official-doc-practice', label: '公文練習器' },
 ];
 
 // 經驗分享與年薪計算機維持單一連結。

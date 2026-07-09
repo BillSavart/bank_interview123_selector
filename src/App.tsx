@@ -13,6 +13,7 @@ import { SalaryCalculatorPage } from './pages/SalaryCalculatorPage';
 import { CalendarPage } from './pages/CalendarPage';
 import { MapPage } from './pages/MapPage';
 import { VenuePage } from './pages/VenuePage';
+import { OfficialDocPracticePage } from './pages/OfficialDocPracticePage';
 import { ExperiencePage } from './pages/ExperiencePage';
 import { ExperiencePostPage } from './pages/ExperiencePostPage';
 import { AdminPage } from './pages/AdminPage';
@@ -48,6 +49,8 @@ export function App() {
         <Route path="calendar" element={<CalendarPage />} />
         <Route path="scores-map" element={<MapPage />} />
         <Route path="venues" element={<VenuePage />} />
+        <Route path="official-doc-practice" element={<OfficialDocPracticePage />} />
+        <Route path="official-doc-practice/:questionId" element={<OfficialDocPracticePage />} />
         <Route path="experience" element={<ExperiencePage />} />
         <Route path="experience/:id" element={<ExperiencePostPage />} />
         {allowAdminPath && <Route path="admin" element={<AdminPage />} />}

@@ -101,6 +101,31 @@ CREATE TABLE IF NOT EXISTS leaderboard (
   created_at TEXT    NOT NULL DEFAULT '',
   PRIMARY KEY (game, name)
 );
+
+CREATE TABLE IF NOT EXISTS official_doc_questions (
+  id TEXT PRIMARY KEY,
+  title TEXT NOT NULL,
+  difficulty TEXT NOT NULL DEFAULT 'medium',
+  document_type TEXT NOT NULL DEFAULT '函',
+  scenario_type TEXT NOT NULL DEFAULT 'EXTERNAL',
+  scenario TEXT NOT NULL,
+  sender TEXT NOT NULL,
+  receiver TEXT NOT NULL,
+  expected_purpose TEXT,
+  required_facts TEXT,
+  required_actions TEXT,
+  contact_person TEXT,
+  contact_phone TEXT,
+  contact_email TEXT,
+  expected_closing_phrase TEXT NOT NULL DEFAULT '請查照',
+  numbering_style TEXT NOT NULL DEFAULT 'ARABIC_DOT',
+  reference_answer_subject TEXT,
+  reference_answer_description TEXT,
+  reference_answer_method TEXT,
+  reference_answer_full_text TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 `;
 
 // The fixed calendar columns, paired with their JSON field names. Shared with
