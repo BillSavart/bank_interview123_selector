@@ -35,6 +35,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY server/ratings-api.mjs ./server/ratings-api.mjs
 COPY server/db.mjs ./server/db.mjs
 COPY server/official-doc.mjs ./server/official-doc.mjs
+COPY server/submission-email.mjs ./server/submission-email.mjs
 COPY server/migrate-to-sqlite.mjs ./server/migrate-to-sqlite.mjs
 COPY server/backup-db.mjs ./server/backup-db.mjs
 # Runtime heap cap (only the long-running server needs it; npm/compile must not

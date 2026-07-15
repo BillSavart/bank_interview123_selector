@@ -115,6 +115,22 @@ ADMIN_TOKEN=我的密碼 npm run api:local
 
 > 這個 `local-admin` 只是本機方便用的預設值，正式環境的 `ADMIN_TOKEN` 是另外在 VM 設定的長隨機字串，見 [deploy/CICD.md](deploy/CICD.md)，兩者互不影響。
 
+### 投稿 Email 通知（選用）
+
+公開投稿成功存成「待審核」後，API 可透過 Resend 寄一封管理員通知。通知預設停用；
+同時設定以下三個環境變數才會啟用：
+
+```bash
+RESEND_API_KEY=re_xxxxxxxxx \
+SUBMISSION_NOTIFY_EMAIL=你的收件信箱 \
+SUBMISSION_EMAIL_FROM='銀行面試考古題 <notifications@你的已驗證網域>' \
+npm run api:local
+```
+
+多個收件信箱可用逗號分隔。信中包含標題、作者、分類、投稿時間、投稿編號與後台連結，
+不包含投稿全文。寄信採 best-effort；即使郵件服務失敗，已儲存的投稿仍會正常顯示於後台。
+正式環境設定方式見 [deploy/CICD.md](deploy/CICD.md)。
+
 ### 常用本機指令
 
 | 指令 | 用途 |

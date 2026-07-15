@@ -8,6 +8,7 @@ import {
   initOfficialDocStore,
   listOfficialDocQuestions,
 } from './official-doc.mjs';
+import { createSubmissionEmailNotifier } from './submission-email.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const dataFile = process.env.RATINGS_FILE || '/data/ratings.json';
@@ -101,6 +102,10 @@ const siteBase = (process.env.SITE_BASE || 'https://bank-interview-advisor.com')
 // Shared secret for the admin API. If unset, all admin writes are rejected
 // (the calendar stays read-only) — set ADMIN_TOKEN in the VM's .env to enable.
 const adminToken = process.env.ADMIN_TOKEN || '';
+const submissionEmailNotifier = createSubmissionEmailNotifier();
+if (submissionEmailNotifier.partiallyConfigured) {
+  console.warn(`[submission-email] disabled; missing ${submissionEmailNotifier.missing.join(', ')}`);
+}
 
 const emptyStore = () => ({
   version: 1,
@@ -1504,6 +1509,12 @@ createServer(async (req, res) => {
       sortPosts(posts);
       await persistPosts();
       sendJson(res, 200, { ok: true });
+      // 通知是 best-effort：投稿已安全存檔後才寄，而且不延遲或改變投稿成功回應。
+      // Resend 暫時失敗時只記錄錯誤，投稿仍留在後台待審核。
+      void submissionEmailNotifier.notify(post).catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[submission-email] failed for post ${post.id}: ${message}`);
+      });
       return;
     }
 

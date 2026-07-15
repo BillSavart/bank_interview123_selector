@@ -6,6 +6,9 @@
 #   ADMIN_DOMAIN=admin.interview.example.com   # admin subdomain (add DNS record)
 #   ADMIN_TOKEN=a-long-random-secret           # gates the calendar admin API
 #   ADMIN_BASIC_HASH=                          # optional Caddy basic_auth bcrypt hash
+#   RESEND_API_KEY=re_xxx                      # optional submission email alerts
+#   SUBMISSION_NOTIFY_EMAIL=owner@example.com
+#   SUBMISSION_EMAIL_FROM=Website <notifications@example.com>
 
 services:
   api:
@@ -38,7 +41,11 @@ services:
       USE_SQLITE: ${USE_SQLITE:-}
       DB_FILE: /data/app.db
       SITE_BASE: ${SITE_BASE:-https://bank-interview-advisor.com}
+      ADMIN_BASE_URL: https://${ADMIN_DOMAIN:-admin.localhost}
       ADMIN_TOKEN: ${ADMIN_TOKEN}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      SUBMISSION_NOTIFY_EMAIL: ${SUBMISSION_NOTIFY_EMAIL:-}
+      SUBMISSION_EMAIL_FROM: ${SUBMISSION_EMAIL_FROM:-}
       COMMENT_HIDE_SCORE: "-100"
       MAX_QUESTION_ID: "123"
     volumes:

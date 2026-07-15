@@ -49,19 +49,23 @@ sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 ```
 
-放 compose 檔與環境變數：
+在 VM 的 repo 根目錄建立部署環境變數。GitHub Actions 會固定從這個 checkout 的
+`deploy/.env` 讀取設定：
 
 ```bash
-sudo mkdir -p /opt/bank-interview
-sudo cp deploy/docker-compose.yml /opt/bank-interview/docker-compose.yml
-
-sudo tee /opt/bank-interview/.env >/dev/null <<'EOF'
+cd /home/billwang_tech/bank_interview123_selector
+umask 077
+tee deploy/.env >/dev/null <<'EOF'
 REGISTRY=ghcr.io/你的github帳號
 DOMAIN=你的網域
 ADMIN_DOMAIN=admin.你的網域
 ADMIN_TOKEN=用一段夠長的隨機字串
 # 選用：邊界 Basic Auth 的 bcrypt hash（caddy hash-password 產生）
 ADMIN_BASIC_HASH=
+# 選用：使用者投稿成功後寄 Email 通知（以下三項須同時設定）
+RESEND_API_KEY=re_xxxxxxxxx
+SUBMISSION_NOTIFY_EMAIL=你的收件信箱
+SUBMISSION_EMAIL_FROM="銀行面試考古題 <notifications@你的網域>"
 EOF
 ```
 
@@ -69,7 +73,14 @@ EOF
 - `ADMIN_DOMAIN` 是管理後台子網域，例如 `admin.interview.example.com`。
 - `ADMIN_TOKEN` 是招考行事曆後台的管理金鑰，保護 `/api/admin/*` 寫入。
   產生方式例如：`openssl rand -hex 24`。**未設定時後台寫入一律拒絕**（行事曆變唯讀）。
-- 改完 `.env` 後 `docker compose up -d` 讓 api / web 重新讀取環境變數。
+- 投稿通知使用 Resend。先在 Resend 驗證寄件網域並建立 API key，再同時設定
+  `RESEND_API_KEY`、`SUBMISSION_NOTIFY_EMAIL`、`SUBMISSION_EMAIL_FROM`；缺少任何一項時
+  通知功能會保持停用，不影響投稿。多個收件信箱可用逗號分隔。
+- 通知只會在真實投稿成功存檔後寄出；蜜罐、格式錯誤、限流請求不會寄信。郵件服務失敗
+  也不會讓投稿失敗，可用 `docker compose logs api` 查看 `[submission-email]` 錯誤。
+- 改完 `deploy/.env` 後執行
+  `docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d`，讓 api / web
+  重新讀取環境變數。
 
 ### Origin Certificate（首次部署前必放）
 
@@ -147,10 +158,10 @@ echo "$CR_PAT" | docker login ghcr.io -u 你的github帳號 --password-stdin
 ## 驗證
 
 ```bash
-cd /opt/bank-interview
-docker compose ps
-docker compose logs -f web
-docker compose logs -f api
+cd /home/billwang_tech/bank_interview123_selector
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env ps
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env logs -f web
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env logs -f api
 curl -I https://你的網域
 ```
 
