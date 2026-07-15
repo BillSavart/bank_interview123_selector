@@ -12,6 +12,7 @@
 
 {$DOMAIN} {
 	encode zstd gzip
+	header Strict-Transport-Security "max-age=15552000"
 
 	# Serve the Cloudflare Origin Certificate (mounted at /certs) instead of
 	# provisioning Let's Encrypt. This removes the ACME inbound dependency, so
@@ -55,6 +56,7 @@
 
 {$ADMIN_DOMAIN:admin.localhost} {
 	encode zstd gzip
+	header Strict-Transport-Security "max-age=15552000"
 
 	# Same Cloudflare Origin Certificate as the main site (it covers the apex +
 	# a wildcard, or add the admin host when generating it). See note above.

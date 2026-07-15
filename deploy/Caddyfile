@@ -9,6 +9,7 @@
 
 YOUR_DOMAIN {
 	encode zstd gzip
+	header Strict-Transport-Security "max-age=15552000"
 
 	handle /api/* {
 		reverse_proxy 127.0.0.1:3000
@@ -49,6 +50,7 @@ YOUR_DOMAIN {
 # Optional extra hardening: uncomment basic_auth (hash via `caddy hash-password`).
 ADMIN_YOUR_DOMAIN {
 	encode zstd gzip
+	header Strict-Transport-Security "max-age=15552000"
 
 	# basic_auth {
 	# 	admin <bcrypt-hash-from-caddy-hash-password>

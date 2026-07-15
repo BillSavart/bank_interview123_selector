@@ -1,0 +1,4 @@
+Contact: https://forms.gle/2Yw4mvY91sj1uKcU8
+Expires: 2027-07-14T00:00:00.000Z
+Preferred-Languages: zh-TW, en
+Canonical: https://bank-interview-advisor.com/.well-known/security.txt
