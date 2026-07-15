@@ -3,7 +3,7 @@ import { ShieldCheck, Database, Cookie, Megaphone, Settings, Mail } from 'lucide
 
 // 隱私權政策最後修訂日期（手動維護——只有在政策內容變動時才更新，
 // 不要綁 build 時間，否則每次部署都會誤顯示成「政策已更新」）。
-const LAST_UPDATED = '2026 年 6 月 21 日';
+const LAST_UPDATED = '2026 年 7 月 15 日';
 const CONTACT_FORM = 'https://forms.gle/2Yw4mvY91sj1uKcU8';
 
 export function PrivacyPage() {
@@ -26,10 +26,11 @@ export function PrivacyPage() {
         <li>
           <strong>自動收集的使用資料：</strong>當你瀏覽本站時，我們透過 Google Analytics
           收集匿名的使用數據，例如造訪頁面、停留時間、來源網站、裝置與瀏覽器類型、概略地區等，
-          用於了解使用情形並改善內容。
+          用於了解使用情形並改善內容。當你投稿或留言時，Cloudflare Turnstile 也會處理 IP 位址、
+          瀏覽器與裝置訊號，以判斷請求是否來自真人並防止自動化濫用。
         </li>
         <li>
-          <strong>你主動提供的資料：</strong>當你在題目或文章下方留言、為留言投票、在小遊戲
+          <strong>你主動提供的資料：</strong>當你投稿經驗文章、在題目或文章下方留言、為留言投票、在小遊戲
           （支票審查員、大寫數字訓練器）輸入暱稱上傳排行榜，或透過聯絡表單與我們聯繫時，我們會收到
           你提供的內容。請勿在留言或暱稱中填寫真實姓名、電話等個人敏感資訊。
         </li>
@@ -65,6 +66,14 @@ export function PrivacyPage() {
         </li>
         <li>
           <strong>Google 表單</strong>（「聯絡我們」使用）。
+        </li>
+        <li>
+          <strong>Cloudflare Turnstile</strong>（投稿與留言的安全驗證、防止機器人濫用）。Cloudflare
+          會依其{' '}
+          <a href="https://www.cloudflare.com/privacypolicy/" target="_blank" rel="noreferrer">
+            隱私權政策
+          </a>{' '}
+          處理驗證所需的網路與裝置訊號。
         </li>
       </ul>
       <p className="about-text">

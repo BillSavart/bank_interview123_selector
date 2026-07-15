@@ -9,7 +9,8 @@ git push main
   |
   v
 GitHub Actions
-  |- npm run build
+  |- npm ci
+  |- typecheck / unit tests / banks-data validation
   |- docker build bank-interview-web
   |- docker build bank-interview-api
   |- push image to ghcr.io
@@ -20,7 +21,22 @@ SSH 到 GCP VM
   |- docker compose up -d
 ```
 
-VM 上跑 `web` container 與輕量 `api` container。Caddy 負責 HTTPS、靜態檔服務，並把 `/api/*` 反向代理到評分 API。
+VM 上跑 `web` container 與輕量 `api` container。Caddy 負責 HTTPS、靜態檔服務，並把 `/api/*` 反向代理到 Node API。使用者投稿先寫入 API 的持久層，再由 API container 透過 Resend HTTPS API 寄送管理員通知；Email provider 不在 VM 內運行。
+
+### 可重現的 dependency install
+
+- `package.json` 以 `packageManager` 固定 npm 10.8.2，`package-lock.json` 也用同一版本維護。
+- PR checks、main branch 的 deploy gate 與 frontend Docker build 都只執行
+  `npm ci --ignore-scripts --no-audit --no-fund`。這些階段不啟動 SQLite API，因此不需要編譯
+  `better-sqlite3`；停用 lifecycle scripts 可移除 runner 上約一分鐘的 native build。Audit 不放在每次
+  deploy 的 critical path，維護相依套件時應另外執行 `npm audit`。
+- workflow 不提供 `npm install` fallback；若 manifest 與 lockfile 不一致，CI 會立即失敗，避免重新解析
+  dependency tree 後仍繼續部署，也避免同一個 job 重複安裝。
+- `Dockerfile.api` 的 `npm install --no-save` 是刻意的例外：該 stage 只從 `package.json` 讀取已固定的
+  `better-sqlite3` 版本，為 Node 20 / glibc 編譯單一 native runtime dependency，不負責安裝完整專案。
+
+新增或升級套件時，請用 npm 10.8.2 執行 `npm install`，一併提交 `package.json` 與
+`package-lock.json`，並在 push 前以 `npm ci` 做一次 clean-install 驗證。
 
 ## VM 一次性設定
 
@@ -52,6 +68,9 @@ echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
 在 VM 的 repo 根目錄建立部署環境變數。GitHub Actions 會固定從這個 checkout 的
 `deploy/.env` 讀取設定：
 
+> 新環境可先參考 [`deploy/.env.example`](.env.example)；既有環境不要用 `cp` 覆蓋正式
+> `.env`，只補上需要的新欄位。
+
 ```bash
 cd /home/billwang_tech/bank_interview123_selector
 umask 077
@@ -65,7 +84,12 @@ ADMIN_BASIC_HASH=
 # 選用：使用者投稿成功後寄 Email 通知（以下三項須同時設定）
 RESEND_API_KEY=re_xxxxxxxxx
 SUBMISSION_NOTIFY_EMAIL=你的收件信箱
-SUBMISSION_EMAIL_FROM="銀行面試考古題 <notifications@你的網域>"
+SUBMISSION_EMAIL_FROM="銀行面試考古題 <notifications@send.你的網域>"
+# Cloudflare Turnstile：公開投稿／留言的前後端驗證（兩把 key 都必須設定）
+TURNSTILE_SITE_KEY=0x4AAAA...
+TURNSTILE_SECRET_KEY=0x4AAAA...
+TURNSTILE_EXPECTED_HOSTNAMES=你的網域,www.你的網域
+TURNSTILE_TIMEOUT_MS=5000
 EOF
 ```
 
@@ -73,14 +97,70 @@ EOF
 - `ADMIN_DOMAIN` 是管理後台子網域，例如 `admin.interview.example.com`。
 - `ADMIN_TOKEN` 是招考行事曆後台的管理金鑰，保護 `/api/admin/*` 寫入。
   產生方式例如：`openssl rand -hex 24`。**未設定時後台寫入一律拒絕**（行事曆變唯讀）。
-- 投稿通知使用 Resend。先在 Resend 驗證寄件網域並建立 API key，再同時設定
-  `RESEND_API_KEY`、`SUBMISSION_NOTIFY_EMAIL`、`SUBMISSION_EMAIL_FROM`；缺少任何一項時
-  通知功能會保持停用，不影響投稿。多個收件信箱可用逗號分隔。
-- 通知只會在真實投稿成功存檔後寄出；蜜罐、格式錯誤、限流請求不會寄信。郵件服務失敗
-  也不會讓投稿失敗，可用 `docker compose logs api` 查看 `[submission-email]` 錯誤。
+- 投稿通知三個變數的啟用條件、DNS 與失敗行為見下節；缺少任何一項時通知保持停用，不影響投稿。
+- Turnstile 的 Site key 可公開，Secret key 只能留在 `deploy/.env`／API container。兩把都未設定時刻意停用；只設定其中一把時公開投稿與留言會 fail closed。
 - 改完 `deploy/.env` 後執行
   `docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d`，讓 api / web
   重新讀取環境變數。
+
+### 投稿 Email 通知部署
+
+1. 在 Resend 新增獨立寄信子網域，例如 `send.你的網域`。
+2. 把 Resend dashboard 當下提供的 SPF／DKIM 等紀錄加入 Cloudflare，郵件紀錄維持
+   **DNS only**，並等 Resend sending status 顯示 `Verified`。不需要啟用 Cloudflare
+   Email Routing，因為它處理的是收信／轉寄。
+3. 建立權限為 `Sending access` 的 API Key，並限制到這個寄信網域；不要使用不必要的
+   Full access key。
+4. 在 `deploy/.env` 同時設定 `RESEND_API_KEY`、`SUBMISSION_NOTIFY_EMAIL`、
+   `SUBMISSION_EMAIL_FROM`。多個收件信箱可用逗號分隔。
+5. 只重建 API container 以重新讀取環境變數：
+
+   ```bash
+   DC="docker compose -f deploy/docker-compose.yml --env-file deploy/.env"
+   $DC up -d api
+   ```
+
+6. 不輸出 secret，只確認 container 內是否收到設定：
+
+   ```bash
+   $DC exec api node -e '
+   for (const key of ["RESEND_API_KEY", "SUBMISSION_NOTIFY_EMAIL", "SUBMISSION_EMAIL_FROM", "ADMIN_BASE_URL"]) {
+     console.log(`${key}: ${process.env[key] ? "set" : "missing"}`);
+   }'
+   ```
+
+通知只會在真實投稿成功存檔後觸發；honeypot、格式錯誤與 rate-limited request 都不會寄信。
+Email 採 best-effort，Resend 失敗不會回滾投稿。端到端測試後要在後台刪除測試投稿，避免正式
+資料殘留測資；故障時查看 `$DC logs --tail=100 api` 的 `[submission-email]` 訊息與 Resend Logs。
+
+完整 sequence、payload、idempotency、timeout、安全性、failure matrix 與未來 outbox 擴充方案見
+[投稿 Email 通知技術設計](../docs/submission-email-notifications.md)。
+
+### Turnstile 防濫用部署
+
+1. Cloudflare Turnstile 建立 `bank-interview-advisor` Managed widget，允許根網域與 `www`，不開 Pre-clearance。
+2. 將 Site/Secret key 與 expected hostnames 加到 VM 的 `deploy/.env`；不要把真實值 commit。
+3. 只重建 API container，環境變數即生效；前端會由 `/api/security-config` runtime 取得 public Site key，不需重建 web image：
+
+   ```bash
+   DC="docker compose -f deploy/docker-compose.yml --env-file deploy/.env"
+   $DC up -d api
+   ```
+
+4. 不顯示值，只確認 API container 收到設定：
+
+   ```bash
+   $DC exec api node -e '
+   for (const key of ["TURNSTILE_SITE_KEY", "TURNSTILE_SECRET_KEY", "TURNSTILE_EXPECTED_HOSTNAMES"]) {
+     console.log(`${key}: ${process.env[key] ? "set" : "missing"}`);
+   }'
+   ```
+
+5. `curl -s https://你的網域/api/security-config` 只能看到 `enabled` 與 Site key，絕不能包含 Secret key。
+6. 正式頁面完成 widget 後測試投稿／留言；缺 token 或重送同一 token 應被拒絕。測完刪除測資。
+
+詳細 threat model、request sequence、failure matrix 與金鑰輪替見
+[Turnstile 防濫用技術設計](../docs/turnstile-bot-protection.md)。
 
 ### Origin Certificate（首次部署前必放）
 

@@ -27,6 +27,10 @@ import {
   type PostInput,
   type PostVote,
 } from '../lib/posts';
+import {
+  TurnstileWidget,
+  type TurnstileChallenge,
+} from '../components/TurnstileWidget';
 
 type Filter = 'all' | PostCategory;
 type Sort = 'new' | 'top';
@@ -312,8 +316,11 @@ function SubmitModal({ onClose }: { onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+  const [turnstile, setTurnstile] = useState<TurnstileChallenge>({ required: null, token: '' });
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+  const turnstileReady = turnstile.required === false || Boolean(turnstile.token);
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!draft.title.trim()) {
       setError('標題不可為空。');
@@ -323,12 +330,21 @@ function SubmitModal({ onClose }: { onClose: () => void }) {
       setError('內容不可為空。');
       return;
     }
+    if (!turnstileReady) {
+      setError('請先完成安全驗證。');
+      return;
+    }
     setBusy(true);
     setError('');
-    submitPost({ ...draft, website })
-      .then(() => setDone(true))
-      .catch((err) => setError(err.message || '投稿失敗，請稍後再試。'))
-      .finally(() => setBusy(false));
+    try {
+      await submitPost({ ...draft, website, turnstileToken: turnstile.token });
+      setDone(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '投稿失敗，請稍後再試。');
+      if (turnstile.required) setTurnstileResetKey((current) => current + 1);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -418,10 +434,21 @@ function SubmitModal({ onClose }: { onClose: () => void }) {
               aria-hidden="true"
             />
 
+            <TurnstileWidget
+              action="post-submit"
+              challenge={turnstile}
+              onChange={setTurnstile}
+              resetKey={turnstileResetKey}
+            />
+
             {error && <p className="admin-error">{error}</p>}
 
             <div className="exp-submit-actions">
-              <button type="submit" className="admin-btn admin-btn-primary" disabled={busy}>
+              <button
+                type="submit"
+                className="admin-btn admin-btn-primary"
+                disabled={busy || !turnstileReady}
+              >
                 <Send size={16} /> {busy ? '送出中…' : '送出投稿'}
               </button>
               <button type="button" className="admin-btn admin-btn-ghost" onClick={onClose} disabled={busy}>

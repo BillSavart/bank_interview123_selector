@@ -1,6 +1,7 @@
 # Runs on the GCP VM. Pulls pre-built images from ghcr — never builds here.
 #
-# Needs an .env alongside this file (compose variable substitution):
+# Needs deploy/.env via `--env-file deploy/.env`; start from deploy/.env.example.
+# Relevant values (never commit the real .env):
 #   REGISTRY=ghcr.io/your-github-username
 #   DOMAIN=interview.example.com
 #   ADMIN_DOMAIN=admin.interview.example.com   # admin subdomain (add DNS record)
@@ -8,7 +9,9 @@
 #   ADMIN_BASIC_HASH=                          # optional Caddy basic_auth bcrypt hash
 #   RESEND_API_KEY=re_xxx                      # optional submission email alerts
 #   SUBMISSION_NOTIFY_EMAIL=owner@example.com
-#   SUBMISSION_EMAIL_FROM=Website <notifications@example.com>
+#   SUBMISSION_EMAIL_FROM=Website <notifications@send.example.com>
+#   TURNSTILE_SITE_KEY=0x4AAAA...           # public widget key
+#   TURNSTILE_SECRET_KEY=0x4AAAA...         # server-only Siteverify credential
 
 services:
   api:
@@ -46,6 +49,10 @@ services:
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       SUBMISSION_NOTIFY_EMAIL: ${SUBMISSION_NOTIFY_EMAIL:-}
       SUBMISSION_EMAIL_FROM: ${SUBMISSION_EMAIL_FROM:-}
+      TURNSTILE_SITE_KEY: ${TURNSTILE_SITE_KEY:-}
+      TURNSTILE_SECRET_KEY: ${TURNSTILE_SECRET_KEY:-}
+      TURNSTILE_EXPECTED_HOSTNAMES: ${TURNSTILE_EXPECTED_HOSTNAMES:-bank-interview-advisor.com,www.bank-interview-advisor.com}
+      TURNSTILE_TIMEOUT_MS: ${TURNSTILE_TIMEOUT_MS:-5000}
       COMMENT_HIDE_SCORE: "-100"
       MAX_QUESTION_ID: "123"
     volumes:

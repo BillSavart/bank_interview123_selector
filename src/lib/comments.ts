@@ -54,6 +54,7 @@ export async function submitCommentAt(
   base: string,
   text: string,
   name: string,
+  turnstileToken = '',
 ): Promise<SubmitCommentResult> {
   const response = await fetch(base, {
     method: 'POST',
@@ -62,7 +63,7 @@ export async function submitCommentAt(
       'Content-Type': 'application/json',
     },
     // `website` is the honeypot field — always sent empty by real users.
-    body: JSON.stringify({ text, name, website: '' }),
+    body: JSON.stringify({ text, name, website: '', turnstileToken }),
   });
 
   const payload = (await response.json().catch(() => ({}))) as { comment?: Comment; error?: string };
@@ -96,7 +97,7 @@ export async function voteCommentAt(
 
 // 面試篩選器題目留言：固定打 `/api/comments/<questionId>`。
 export const fetchComments = (questionId: number) => fetchCommentsAt(`/api/comments/${questionId}`);
-export const submitComment = (questionId: number, text: string, name: string) =>
-  submitCommentAt(`/api/comments/${questionId}`, text, name);
+export const submitComment = (questionId: number, text: string, name: string, turnstileToken = '') =>
+  submitCommentAt(`/api/comments/${questionId}`, text, name, turnstileToken);
 export const voteComment = (questionId: number, commentId: string, value: CommentVote | 0) =>
   voteCommentAt(`/api/comments/${questionId}`, commentId, value);

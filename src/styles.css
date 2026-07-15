@@ -1141,6 +1141,34 @@ select {
   font-size: 0.82rem;
 }
 
+/* Cloudflare Turnstile：投稿與留言共用，同一套狀態文字也支援小螢幕。 */
+.turnstile-challenge {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.3rem;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.comment-form .turnstile-challenge {
+  margin-top: 0.6rem;
+}
+
+.turnstile-status,
+.turnstile-error {
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.turnstile-status {
+  color: #64748b;
+}
+
+.turnstile-error {
+  color: #b91c1c;
+}
+
 @media (max-width: 575.98px) {
   .comment-form-row {
     flex-direction: column;

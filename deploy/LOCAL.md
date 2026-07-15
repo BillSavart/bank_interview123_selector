@@ -1,15 +1,20 @@
 # 本地測試（部署前）
 
-這個版本是純前端靜態站，不需要 LLM API key，也不用啟動 proxy server。
+題庫與主要畫面是靜態 SPA；評分、留言、投稿等完整互動仍需要 Node API。不需要 LLM API key。
 
 ## 開發模式
 
 ```bash
-npm install
+npm ci
 npm run dev
 ```
 
 打開 Vite 顯示的網址，通常是 `http://localhost:5173`。
+
+若要測完整互動，另開 terminal 執行 `npm run api:local`。本機預設不設定 Turnstile keys，因此
+`/api/security-config` 會回報停用、widget 不顯示，既有 honeypot／輸入驗證／rate limit 仍有效。
+真實 Turnstile 測試方式與 localhost hostname 注意事項見
+[Turnstile 防濫用技術設計](../docs/turnstile-bot-protection.md)。
 
 ## 驗證重點
 

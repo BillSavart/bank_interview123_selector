@@ -32,7 +32,8 @@ jobs:
         with:
           node-version: 20
           cache: npm
-      - run: npm ci || npm install
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
       - run: npm run check:banks-data

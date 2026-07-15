@@ -131,9 +131,12 @@ export async function fetchPosts(): Promise<ExperiencePost[]> {
 /**
  * 公開投稿一篇文章。送出後一律先存成「待審核」（hidden），要等管理員在後台
  * 開放後才會公開。成功不回傳文章本身（投稿者看不到尚未公開的內容）。
- * `website` 是給機器人用的蜜罐欄位，真實使用者一律留空。
+ * `website` 是給機器人用的蜜罐欄位，真實使用者一律留空；`turnstileToken`
+ * 由 Cloudflare widget 產生，後端仍會透過 Siteverify 驗證，不能只信任前端。
  */
-export async function submitPost(input: PostInput & { website?: string }): Promise<void> {
+export async function submitPost(
+  input: PostInput & { website?: string; turnstileToken?: string },
+): Promise<void> {
   const res = await fetch('/api/posts', {
     method: 'POST',
     headers: { Accept: 'application/json', 'Content-Type': 'application/json' },

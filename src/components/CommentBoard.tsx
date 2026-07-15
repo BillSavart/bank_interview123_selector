@@ -8,6 +8,7 @@ import {
   type Comment,
   type CommentVote,
 } from '../lib/comments';
+import { TurnstileWidget, type TurnstileChallenge } from './TurnstileWidget';
 
 // 同一個留言板元件服務兩種來源：面試篩選器題目（整數題號）與經驗分享文章
 // （文章 id 字串）。兩者只差在 API base 路徑與標題，其餘行為完全一致。
@@ -56,6 +57,9 @@ export function CommentBoard({ source }: CommentBoardProps) {
   const [showHidden, setShowHidden] = useState(false);
   const [myVotes, setMyVotes] = useState<Record<string, CommentVote>>(() => loadMyCommentVotes());
   const honeypotRef = useRef<HTMLInputElement>(null);
+  const [turnstile, setTurnstile] = useState<TurnstileChallenge>({ required: null, token: '' });
+  const [turnstileResetKey, setTurnstileResetKey] = useState(0);
+  const turnstileReady = turnstile.required === false || Boolean(turnstile.token);
 
   useEffect(() => {
     let isMounted = true;
@@ -113,22 +117,31 @@ export function CommentBoard({ source }: CommentBoardProps) {
 
     // Honeypot — if a bot filled this hidden field, drop silently.
     if (honeypotRef.current?.value) return;
+    if (!turnstileReady) {
+      setError('請先完成安全驗證。');
+      return;
+    }
 
     setSubmitting(true);
     setError(null);
 
     const trimmedName = name.trim();
-    const result = await submitCommentAt(base, trimmed, trimmedName);
+    try {
+      const result = await submitCommentAt(base, trimmed, trimmedName, turnstile.token);
 
-    if (result.comment) {
-      setComments((current) => [...current, result.comment as Comment]);
-      setText('');
-      if (trimmedName) localStorage.setItem(nameStorageKey, trimmedName);
-    } else {
-      setError(result.error ?? '留言失敗，請稍後再試。');
+      if (result.comment) {
+        setComments((current) => [...current, result.comment as Comment]);
+        setText('');
+        if (trimmedName) localStorage.setItem(nameStorageKey, trimmedName);
+      } else {
+        setError(result.error ?? '留言失敗，請稍後再試。');
+      }
+    } catch {
+      setError('留言失敗，請稍後再試。');
+    } finally {
+      if (turnstile.required) setTurnstileResetKey((current) => current + 1);
+      setSubmitting(false);
     }
-
-    setSubmitting(false);
   };
 
   const handleVote = async (comment: Comment, choice: CommentVote) => {
@@ -256,11 +269,21 @@ export function CommentBoard({ source }: CommentBoardProps) {
             rows={2}
             aria-label="留言內容"
           />
-          <button className="btn btn-dark comment-submit" type="submit" disabled={submitting || !text.trim()}>
+          <button
+            className="btn btn-dark comment-submit"
+            type="submit"
+            disabled={submitting || !text.trim() || !turnstileReady}
+          >
             <Send size={15} />
             {submitting ? '送出中' : '送出'}
           </button>
         </div>
+        <TurnstileWidget
+          action="comment-submit"
+          challenge={turnstile}
+          onChange={setTurnstile}
+          resetKey={turnstileResetKey}
+        />
         {error && <p className="comment-error" role="alert">{error}</p>}
       </form>
     </section>

@@ -1,12 +1,22 @@
 # 公股銀行面試題目選擇器
 
-React + Bootstrap + TypeScript 的靜態網站，適合部署到 Cloudflare 網域 + GCP e2-micro。題庫 PDF 放在 `public/20260515bank123.pdf`，語意標註資料放在 `bank123_pdftojson.json`，建置前會產生前端使用的題庫資料。
+React + Bootstrap + TypeScript 的 static-first 全端 side project，搭配輕量 Node API、SQLite、Cloudflare 與 GCP e2-micro。題庫 PDF 放在 `public/20260515bank123.pdf`，語意標註資料放在 `bank123_pdftojson.json`，建置前會產生前端使用的題庫資料。
 
 ## 系統架構
 
 ![系統架構圖](docs/system-architecture.svg)
 
-實線是 runtime 請求流，虛線是建置／部署流。資料層目前是 SQLite 遷移狀態：已切換的互動資料讀寫同一個 `ratings_data` volume 裡的 `/data/app.db`，原 JSON / JSONL 檔仍保留作為匯入來源與回滾安全網。圖上重點與詳細說明另存於 [docs/system-architecture.md](docs/system-architecture.md)。
+實線是 runtime 請求流，虛線是建置／部署流。資料層目前是 SQLite 遷移狀態：已切換的互動資料讀寫同一個 `ratings_data` volume 裡的 `/data/app.db`，原 JSON / JSONL 檔仍保留作為匯入來源與回滾安全網。使用者投稿成功持久化後，Node API 會以 best-effort 方式呼叫 Resend 通知管理員。圖上重點與詳細說明另存於 [docs/system-architecture.md](docs/system-architecture.md)。
+
+## 技術亮點
+
+- **Static-first hybrid architecture**：題庫與大部分 UI 在 Vite build time 產生，互動功能才走輕量 `node:http` API，讓 1GB e2-micro 也能穩定運行。
+- **可回滾的持久層演進**：同一套 domain model 支援 JSON／JSONL 與 SQLite backend，並以 parity test 驗證讀寫語意一致。
+- **安全的非同步通知**：投稿採 persist-first，Email 採 best-effort；Resend API Key 只存在後端環境變數，使用 UUID idempotency key 去重，供應商失敗不會造成投稿遺失。
+- **分層防濫用**：公開投稿與匿名留言由 Cloudflare Turnstile Managed widget + 後端 Siteverify 保護，後端再驗證 hostname/action，並疊加 honeypot、輸入限制、每 IP rate limit 與投稿待審核。
+- **Production-minded delivery**：Cloudflare edge、Caddy reverse proxy、Origin Certificate、Docker Compose、GHCR 與 GitHub Actions 組成完整 CI/CD；部署與故障排查皆有 runbook。
+
+投稿通知的 sequence、DNS 驗證、安全邊界、failure modes 與擴充方向見 [投稿 Email 通知技術設計](docs/submission-email-notifications.md)；公開寫入的 bot protection 見 [Cloudflare Turnstile 技術設計](docs/turnstile-bot-protection.md)。
 
 ## 功能
 
@@ -18,6 +28,7 @@ React + Bootstrap + TypeScript 的靜態網站，適合部署到 Cloudflare 網�
 - 參考答案旁可用 1-5 顆星評分，平均分數與評分人數會儲存在 VM 本機 Docker volume。
 - 每題答案下方有匿名留言板，支援讚、倒讚、依時間或分數排序；淨分數 `<= -100` 的留言預設隱藏，使用者可自行切換顯示。
 - 經驗分享文章底下也有一個獨立的匿名留言板（同樣支援讚／倒讚與排序），與題目留言分開存放、後台分開管理。
+- 使用者可投稿經驗文章；投稿與匿名留言先通過 Turnstile 後端驗證，新投稿再進入 `hidden + pending` 待審核狀態，成功持久化後可透過 Resend 寄送管理員 Email 通知。
 - 留言列表最多顯示約 5 則高度，超過後在留言區內部捲動，避免卡片被大量留言撐長。
 - 統計小卡可直接點擊篩選，例如點選「進階題」或「重要十大問題」會更新下方題目清單。
 - 手機版會把考生條件收進彈出式選單，保留更多空間給題目列表。
@@ -31,13 +42,17 @@ React + Bootstrap + TypeScript 的靜態網站，適合部署到 Cloudflare 網�
 
 ### 環境需求
 
-- Node.js 20 以上（Vite 8 / TypeScript 6 需要）。可用 `node -v` 確認。
-- npm（隨 Node 內建即可）。
-- 第一次 clone 後先安裝相依套件：
+- Node.js 20.19 以上或 22.12 以上（Vite 8 / TypeScript 6 需要）。可用 `node -v` 確認。
+- npm 10.8.2；版本固定在 `package.json` 的 `packageManager`，與 GitHub Actions 的 Node 20
+  runner 一致，避免不同 npm major 產生不相容的 lockfile metadata。
+- 第一次 clone 後依照 lockfile 安裝相依套件：
 
 ```bash
-npm install
+npm ci
 ```
+
+只有在刻意新增、升級或移除 dependency 時才執行 `npm install` 並提交更新後的
+`package-lock.json`；一般開發與 CI 都使用 `npm ci`，確保安裝可重現且 lockfile 漂移會直接失敗。
 
 整個系統分兩個部分，本機測試時通常會各開一個 terminal：
 
@@ -117,19 +132,39 @@ ADMIN_TOKEN=我的密碼 npm run api:local
 
 ### 投稿 Email 通知（選用）
 
-公開投稿成功存成「待審核」後，API 可透過 Resend 寄一封管理員通知。通知預設停用；
-同時設定以下三個環境變數才會啟用：
+公開投稿成功存成 `hidden + pending` 後，API 可透過 Resend 寄一封管理員通知。通知預設停用；同時設定以下三個環境變數才會啟用：
 
 ```bash
 RESEND_API_KEY=re_xxxxxxxxx \
 SUBMISSION_NOTIFY_EMAIL=你的收件信箱 \
-SUBMISSION_EMAIL_FROM='銀行面試考古題 <notifications@你的已驗證網域>' \
+SUBMISSION_EMAIL_FROM='銀行面試考古題 <notifications@send.你的已驗證網域>' \
 npm run api:local
 ```
 
-多個收件信箱可用逗號分隔。信中包含標題、作者、分類、投稿時間、投稿編號與後台連結，
-不包含投稿全文。寄信採 best-effort；即使郵件服務失敗，已儲存的投稿仍會正常顯示於後台。
-正式環境設定方式見 [deploy/CICD.md](deploy/CICD.md)。
+多個收件信箱可用逗號分隔。程式使用 Node 原生 `fetch` 呼叫 Resend `POST /emails`，並以 `submission-<post UUID>` 作為 idempotency key。信中包含標題、作者、分類、投稿時間、投稿編號與後台連結，不包含投稿全文。
+
+通知採 persist-first／best-effort：投稿先寫入 SQLite 或 JSON store、API 回傳成功，再於背景寄信；即使 DNS、API Key、網路或郵件服務暫時失敗，待審核投稿仍會保留。完整設計、Cloudflare DNS、部署、觀測與故障處理見：
+
+- [docs/submission-email-notifications.md](docs/submission-email-notifications.md)
+- [deploy/CICD.md](deploy/CICD.md)
+- [deploy/.env.example](deploy/.env.example)
+
+### Turnstile 防機器人（正式環境建議啟用）
+
+前端從 `/api/security-config` 取得公開 Site key 並產生單次 token；API 再以 Secret key 呼叫
+Cloudflare Siteverify，驗證 success、hostname 與 action 後才允許投稿／留言寫入。Secret 不會進入
+Vite bundle。正式環境在 `deploy/.env` 設定：
+
+```dotenv
+TURNSTILE_SITE_KEY=0x4AAAA...
+TURNSTILE_SECRET_KEY=0x4AAAA...
+TURNSTILE_EXPECTED_HOSTNAMES=bank-interview-advisor.com,www.bank-interview-advisor.com
+TURNSTILE_TIMEOUT_MS=5000
+```
+
+兩個 key 都沒設定時 widget 刻意停用，方便本機開發；只設定一個 key 則受保護寫入 fail closed。
+完整 threat model、request flow、failure matrix、rotation 與驗證方式見
+[docs/turnstile-bot-protection.md](docs/turnstile-bot-protection.md)。
 
 ### 常用本機指令
 
@@ -194,18 +229,21 @@ npm run make:answer-prompts -- 5
 
 ## GCP e2-micro 部署
 
-目前不使用 Vercel、Firebase 或外部資料庫。網域在 Cloudflare 託管並開橘雲（Proxied），A record 指向 GCP e2-micro 的外部 IP，VM 上用 Docker Compose 跑 Caddy 靜態前端與輕量 Node API；API 只負責參考答案評分、留言、留言投票與招考行事曆資料。
+目前不使用 Vercel、Firebase 或外部資料庫。網域在 Cloudflare 託管並開橘雲（Proxied），A record 指向 GCP e2-micro 的外部 IP，VM 上用 Docker Compose 跑 Caddy 靜態前端與輕量 Node API；互動資料持久化在 VM Docker volume，投稿通知則由 API 呼叫外部 Resend Email API。
 
 正式環境的幾個重點：
 
 - **TLS**：Caddy 用 Cloudflare **Origin Certificate**（15 年）終止 TLS，不跑 Let's Encrypt；Cloudflare SSL/TLS 模式為 **Full (strict)**。
 - **邊緣快取**：公開 GET API 帶 `s-maxage=10`，搭配 Cloudflare `/api/*` Cache Rule，由邊緣吸收重複讀取，e2-micro 在高流量下幾乎閒置。
 - **防火牆**：GCP 80/443 只允許 Cloudflare 網段，外人無法繞過 Cloudflare 直連 VM（取代 Cloudflare Tunnel，單機 e2-micro 用 Tunnel 並不省錢）。
+- **公開寫入保護**：Turnstile token 必須經 API server 呼叫 Siteverify 驗證，前端 widget 本身不構成信任邊界。
 
 部署細節見：
 
 - [deploy/README.md](deploy/README.md)
 - [deploy/CICD.md](deploy/CICD.md)
+- [docs/submission-email-notifications.md](docs/submission-email-notifications.md)
+- [docs/turnstile-bot-protection.md](docs/turnstile-bot-protection.md)
 
 `npm run build` 會先執行 `npm run extract:questions`，確保最新語意 JSON 或 PDF 會轉成網站資料。
 

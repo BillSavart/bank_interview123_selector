@@ -9,6 +9,7 @@ import {
   listOfficialDocQuestions,
 } from './official-doc.mjs';
 import { createSubmissionEmailNotifier } from './submission-email.mjs';
+import { createTurnstileVerifier } from './turnstile.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const dataFile = process.env.RATINGS_FILE || '/data/ratings.json';
@@ -105,6 +106,10 @@ const adminToken = process.env.ADMIN_TOKEN || '';
 const submissionEmailNotifier = createSubmissionEmailNotifier();
 if (submissionEmailNotifier.partiallyConfigured) {
   console.warn(`[submission-email] disabled; missing ${submissionEmailNotifier.missing.join(', ')}`);
+}
+const turnstileVerifier = createTurnstileVerifier();
+if (turnstileVerifier.partiallyConfigured) {
+  console.warn(`[turnstile] misconfigured; missing ${turnstileVerifier.missing.join(', ')}`);
 }
 
 const emptyStore = () => ({
@@ -1190,6 +1195,8 @@ setInterval(() => {
 }, commentWindowMs).unref();
 
 const getClientIp = (req) => {
+  const cloudflareIp = req.headers['cf-connecting-ip'];
+  if (typeof cloudflareIp === 'string' && cloudflareIp.length) return cloudflareIp.trim();
   const forwarded = req.headers['x-forwarded-for'];
   if (typeof forwarded === 'string' && forwarded.length) {
     return forwarded.split(',')[0].trim();
@@ -1333,6 +1340,13 @@ createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/api/health') {
       sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    // Runtime public configuration keeps the site key out of the frontend
+    // build pipeline. The secret key is never exposed by this endpoint.
+    if (req.method === 'GET' && url.pathname === '/api/security-config') {
+      sendJson(res, 200, { turnstile: turnstileVerifier.publicConfig });
       return;
     }
 
@@ -1495,6 +1509,15 @@ createServer(async (req, res) => {
       }
       if (!fields.content) {
         sendJson(res, 400, { error: '內容不可為空' });
+        return;
+      }
+      const turnstile = await turnstileVerifier.verify({
+        token: body.turnstileToken,
+        remoteIp: getClientIp(req),
+        action: 'post-submit',
+      });
+      if (!turnstile.ok) {
+        sendJson(res, turnstile.status, { error: turnstile.error });
         return;
       }
       const rate = checkRateLimit(getClientIp(req));
@@ -1968,6 +1991,16 @@ createServer(async (req, res) => {
 
       const rawName = sanitizeText(body.name ?? '', maxNameLength);
       const name = rawName || '匿名';
+
+      const turnstile = await turnstileVerifier.verify({
+        token: body.turnstileToken,
+        remoteIp: getClientIp(req),
+        action: 'comment-submit',
+      });
+      if (!turnstile.ok) {
+        sendJson(res, turnstile.status, { error: turnstile.error });
+        return;
+      }
 
       const rate = checkRateLimit(getClientIp(req));
       if (!rate.ok) {

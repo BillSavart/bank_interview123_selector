@@ -1,6 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="860" viewBox="0 0 1280 860" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="860" viewBox="0 0 1500 860" role="img" aria-labelledby="title desc">
   <title id="title">公股銀行面試題目選擇器系統架構圖</title>
-  <desc id="desc">React SPA 經 Cloudflare 到 GCP e2-micro Docker Compose，Caddy 服務靜態檔並反向代理 Node API，資料保存在 Docker volume，GitHub Actions 建置並部署兩個容器映像。</desc>
+  <desc id="desc">React SPA 經 Cloudflare 到 GCP e2-micro Docker Compose，Caddy 服務靜態檔並反向代理 Node API，資料保存在 Docker volume，投稿成功後由 Node API 呼叫 Resend，GitHub Actions 建置並部署兩個容器映像。</desc>
   <defs>
     <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
       <stop offset="0%" stop-color="#f8fbff"/>
@@ -63,6 +63,7 @@
   <text class="card-text" x="105" y="401">DNS, CDN, DDoS, Edge TLS</text>
   <text class="card-text" x="105" y="423">Full strict origin TLS</text>
   <text class="card-text" x="105" y="445">GET /api cache: s-maxage=10</text>
+  <text class="card-text" x="105" y="467">SPF / DKIM for send subdomain</text>
 
   <rect class="section" x="400" y="120" width="820" height="430" fill="#eefdf6" stroke="#bbf7d0"/>
   <text class="section-title" x="430" y="152">GCP E2-MICRO · DOCKER COMPOSE</text>
@@ -77,13 +78,14 @@
   <text class="card-text" x="465" y="290">reverse_proxy /api/* and /e/*</text>
   <text class="card-text" x="465" y="312">crawler SEO for /experience/*</text>
 
-  <rect class="card" x="850" y="185" width="330" height="175"/>
+  <rect class="card" x="850" y="185" width="330" height="190"/>
   <text class="card-title" x="875" y="218">api image: Node HTTP</text>
   <text class="card-text" x="875" y="246">server/ratings-api.mjs</text>
   <text class="card-text" x="875" y="268">node:http, no web framework</text>
   <text class="card-text" x="875" y="290">ratings, comments, posts, calendar</text>
   <text class="card-text" x="875" y="312">leaderboards and admin APIs</text>
   <text class="card-text" x="875" y="334">ADMIN_TOKEN gates writes</text>
+  <text class="card-text" x="875" y="356">persist-first submission notification</text>
 
   <path class="runtime" d="M750 265 L840 265"/>
   <text class="label" x="795" y="253" text-anchor="middle">reverse_proxy</text>
@@ -103,10 +105,25 @@
   <text class="card-text" x="875" y="508">calendar, leaderboards when enabled</text>
   <text class="card-text" x="875" y="530">JSON / JSONL kept for import/rollback</text>
 
-  <path class="runtime-both" d="M1015 368 L1015 395"/>
-  <text class="label" x="1062" y="386" text-anchor="middle">read / write</text>
+  <path class="runtime-both" d="M1015 383 L1015 395"/>
+  <text class="label" x="1062" y="391" text-anchor="middle">read / write</text>
 
-  <rect class="section" x="50" y="600" width="1170" height="210" fill="#fff7ed" stroke="#fed7aa"/>
+  <rect class="section" x="1240" y="120" width="210" height="430" fill="#f5f3ff" stroke="#ddd6fe"/>
+  <text class="section-title" x="1260" y="152">EXTERNAL SAAS</text>
+
+  <rect class="card" x="1260" y="185" width="170" height="190"/>
+  <text class="card-title" x="1280" y="218">Resend</text>
+  <text class="card-text" x="1280" y="246">POST /emails</text>
+  <text class="card-text" x="1280" y="268">API key via env</text>
+  <text class="card-text" x="1280" y="290">plain-text metadata</text>
+  <text class="card-text" x="1280" y="312">UUID idempotency</text>
+  <text class="card-text" x="1280" y="334">5s timeout</text>
+  <text class="card-text" x="1280" y="356">best-effort delivery</text>
+
+  <path class="runtime" d="M1180 280 L1250 280"/>
+  <text class="label" x="1215" y="268" text-anchor="middle">HTTPS</text>
+
+  <rect class="section" x="50" y="600" width="1400" height="210" fill="#fff7ed" stroke="#fed7aa"/>
   <text class="section-title" x="80" y="632">BUILD &amp; DEPLOY PIPELINE</text>
 
   <rect class="card" x="80" y="660" width="270" height="110"/>

@@ -5,10 +5,11 @@ FROM node:20-alpine AS build
 WORKDIR /app
 RUN apk add --no-cache curl unzip
 COPY package*.json ./
-# `npm ci` is the fast/reproducible path; fall back to `npm install` if the
-# lockfile is missing Linux-only optional deps (happens when it was last
-# regenerated on macOS). Self-heals so CI never breaks on that.
-RUN npm ci || npm install
+# Keep the image reproducible and fail immediately if package.json and the
+# committed lockfile drift apart. This frontend stage never loads the API's
+# better-sqlite3 binding, so lifecycle scripts are skipped to avoid compiling a
+# native dependency that is built separately in Dockerfile.api.
+RUN npm ci --ignore-scripts --no-audit --no-fund
 # prebuild (extract:questions) needs public/*.pdf and bank123_pdftojson.json,
 # so copy the full context before building.
 COPY . .

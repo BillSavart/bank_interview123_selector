@@ -1,6 +1,6 @@
 # 部署到 GCP e2-micro + Cloudflare 網域
 
-這個專案主體是靜態 SPA。答案在 build 後由前端規則與題庫標籤產生；參考答案評分、匿名留言與留言投票另外用一個輕量 Node API 儲存在 VM 本機 Docker volume，不需要 Firebase、外部資料庫、LLM key、Vercel 或後端 proxy。
+這個專案主體是靜態 SPA。答案在 build 後由前端規則與題庫標籤產生；參考答案評分、匿名留言、投稿與審核等互動功能由輕量 Node API 處理，資料儲存在 VM 本機 Docker volume，不需要 Firebase、外部資料庫、LLM key 或 Vercel。Runtime 外部整合只有 Cloudflare Turnstile（公開投稿／留言驗證）與選用的 Resend Email API（投稿持久化後通知管理員）。
 
 ## 架構
 
@@ -11,6 +11,7 @@
 Cloudflare（橘雲 Proxied / CDN）
   |- 邊緣快取公開 GET API（/api/* Cache Rule，吃 s-maxage=10）
   |- 邊緣 TLS、DDoS 防護、隱藏 origin IP
+  |- Turnstile Managed challenge（投稿／留言 token）
   |
   v   （只接受 Cloudflare IP；GCP 防火牆 80/443 鎖定 CF 網段）
 GCP e2-micro VM
@@ -18,9 +19,12 @@ GCP e2-micro VM
   |- Caddy web container -> /srv 靜態檔（主網域 + admin 子網域）
   |   └ 用 Cloudflare Origin Certificate（15 年）終止 TLS，不跑 Let's Encrypt
   |
-  `- ratings api container -> ratings_data/{ratings.json, comments.jsonl,
-       comment-votes.jsonl, comment-mods.jsonl, checkgame-top.json,
-       numbergame-top.json, calendar.json}
+  |- Node API container -> ratings_data/app.db（SQLite 模式）
+  |                      -> JSON / JSONL（遷移與回滾安全網）
+  |                          |
+  `--------------------------| HTTPS after persist
+                             v
+                    Resend Email API（external SaaS）
 ```
 
 > 安全/成本取捨:沒有使用 Cloudflare Tunnel。單台 e2-micro 移除外部 IP 後仍需 egress,只能靠外部 IP 或 Cloud NAT,後者反而更貴,所以保留外部 IP、改用「防火牆只放 Cloudflare + Origin Certificate」拿到等同 Tunnel 的隱藏 origin 效果,且零額外費用。
@@ -42,6 +46,17 @@ GCP e2-micro VM
 4. **SSL/TLS → Origin Server → Create Certificate**：產一張涵蓋 `你的網域` 與 `*.你的網域` 的 Origin Certificate，分別存成 `origin.pem`（憑證）與 `origin.key`（私鑰），放到 VM 的 `deploy/certs/`（compose 會以唯讀掛載到 web 容器的 `/certs`）。Caddy 用它終止 TLS，免去 Let's Encrypt 續期（續期需要 inbound，鎖防火牆後會失敗）。
 5. **SSL/TLS encryption mode 設 `Full (strict)`**（Origin Certificate 由 Cloudflare 簽發、受其信任，可通過 strict 驗證）。
 6. **Caching → Cache Rules** 新增一條：`URI Path` 符合 `/api/*` → `Eligible for cache`、Edge TTL 尊重 origin（用 cache-control header）。這樣公開 GET API（`/api/ratings`、`/api/comments/:id`、`/api/calendar`、`/api/*/leaderboard`，皆帶 `s-maxage=10`）會被邊緣快取吸收，origin 在高流量下幾乎閒置。寫入/admin/health 一律 `no-store`，不受影響。
+7. **Turnstile** 建立 Managed widget，加入根網域與 `www`，Pre-clearance 保持關閉；把 Site/Secret key 寫進 VM `deploy/.env`。
+8. **Security → Settings → Security.txt** 設定聯絡方式、到期日、語言與 canonical URL，並啟用開關。
+9. Cloudflare 帳戶的 **Profile → Authentication** 啟用 MFA；這是帳戶保護，與網站的 Turnstile 不同。
+
+若啟用投稿 Email 通知，另外在 Resend 建立 `send.你的網域` 等寄信子網域，並把 Resend
+提供的 SPF／DKIM 紀錄加到 Cloudflare（保持 DNS only）。這與 Cloudflare Email Routing
+無關，不需要開啟收信轉寄。完整步驟見
+[投稿 Email 通知技術設計](../docs/submission-email-notifications.md)。
+
+Turnstile 的 server-side 驗證、hostname/action allowlist、fail-closed 策略與 key rotation 見
+[Turnstile 防濫用技術設計](../docs/turnstile-bot-protection.md)。
 
 ## 安全性收尾（確認 Origin Certificate 生效後再做）
 
@@ -90,11 +105,13 @@ sudo systemctl reload caddy
 curl -I https://你的網域
 ```
 
-應該看到 `200` 或 `304`，且首頁能正常載入題庫、展開答案、參考答案評分與留言板。
+應該看到 `200` 或 `304`，且首頁能正常載入題庫、展開答案、參考答案評分與留言板。正式環境還要確認投稿／留言按鈕會等 Turnstile 完成、缺 token 的直接 API request 回 `400`。若啟用投稿通知，確認測試投稿同時出現在後台、收件信箱與 Resend Logs，完成後刪除測試投稿。
 
 ## 使用者資料
 
-使用者互動資料存在 Docker volume `ratings_data`：
+使用者互動資料存在 Docker volume `ratings_data`。`USE_SQLITE=1` 時下列 logical stores 由
+`/data/app.db` 管理；原 JSON／JSONL 檔仍保留作為遷移來源與回滾安全網。在 JSON fallback
+mode 中，主要對應檔案為：
 
 - `/data/ratings.json`：參考答案 1-5 顆星評分。同一瀏覽器同一題再次評分會覆蓋原本分數，因此不會重複增加人數。
 - `/data/comments.jsonl`：匿名留言，append-only JSONL。
@@ -103,9 +120,13 @@ curl -I https://你的網域
 - `/data/checkgame-top.json`、`/data/numbergame-top.json`：兩個小遊戲各自的排行榜，只保留前 10 名（每次寫入重寫並截斷，掉出前 10 直接捨棄），檔案大小固定不會成長。
 - `/data/calendar.json`：招考行事曆事件，由 admin API 維護；只保留「上個月～下下下個月」視窗內的事件，過期自動裁掉。
 
+經驗分享文章、文章投票與兩套留言板同樣位於這個 volume／SQLite database。Email 通知本身
+不寫入使用者資料層；待審核文章是 source of truth，Resend 只是管理員提示管道。
+
 留言淨分數 `<= COMMENT_HIDE_SCORE` 時會預設隱藏，Docker Compose 目前設定為 `-100`；使用者仍可在前端切換顯示隱藏留言。
 
-這個檔案式方案適合 e2-micro 和小型題庫網站；若未來評分量成長到幾十萬筆以上，再改 SQLite 會比較適合。
+SQLite 仍是 in-process、單機資料庫，適合 e2-micro 與目前流量；若未來需要多副本 API、跨機
+transaction 或 durable notification retry，再評估外部資料庫與 queue／transactional outbox。
 
 ## 磁碟保護
 
