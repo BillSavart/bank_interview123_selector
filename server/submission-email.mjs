@@ -6,6 +6,15 @@ const cleanSingleLine = (value, fallback) => {
   return cleaned || fallback;
 };
 
+const cleanMultiline = (value, fallback) => {
+  const cleaned = typeof value === 'string'
+    // 移除不適合出現在純文字郵件中的控制字元，但保留換行與 tab。
+    // eslint-disable-next-line no-control-regex
+    ? value.replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '').trim()
+    : '';
+  return cleaned || fallback;
+};
+
 const formatSubmittedAt = (value) => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return cleanSingleLine(value, '未知');
@@ -65,6 +74,7 @@ export function createSubmissionEmailNotifier({
 
       const title = cleanSingleLine(post?.title, '（未命名投稿）').slice(0, 100);
       const author = cleanSingleLine(post?.author, '匿名');
+      const content = cleanMultiline(post?.content, '（無文章內文）');
       const adminLine = normalizedAdminBaseUrl
         ? `審核後台：${normalizedAdminBaseUrl}`
         : '請登入網站管理後台進行審核。';
@@ -76,6 +86,9 @@ export function createSubmissionEmailNotifier({
         `分類：${categoryLabel(post?.category)}`,
         `投稿時間：${formatSubmittedAt(post?.createdAt)}`,
         `投稿編號：${cleanSingleLine(post?.id, '未知')}`,
+        '',
+        '文章內文：',
+        content,
         '',
         adminLine,
       ].join('\n');

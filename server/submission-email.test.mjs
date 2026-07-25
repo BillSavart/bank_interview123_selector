@@ -6,6 +6,7 @@ const post = {
   title: ' 第一銀行\n面試心得 ',
   author: '',
   category: 'work',
+  content: '第一段面試流程。\n\n第二段心得與建議。',
   createdAt: '2026-07-15T02:30:00.000Z',
 };
 
@@ -55,7 +56,27 @@ describe('submission email notifier', () => {
     expect(body.text).toContain('作者：匿名');
     expect(body.text).toContain('分類：工作篇');
     expect(body.text).toContain('投稿時間：2026/07/15 10:30');
+    expect(body.text).toContain('文章內文：\n第一段面試流程。\n\n第二段心得與建議。');
     expect(body.text).toContain('審核後台：https://admin.example.com');
+  });
+
+  it('uses a fallback when the submitted post has no content', async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'email-456' }),
+    }));
+    const notifier = createSubmissionEmailNotifier({
+      apiKey: 're_test_key',
+      from: '網站通知 <notifications@example.com>',
+      recipients: 'owner@example.com',
+      fetchImpl,
+    });
+
+    await notifier.notify({ ...post, content: ' \n ' });
+
+    const body = JSON.parse(fetchImpl.mock.calls[0][1].body);
+    expect(body.text).toContain('文章內文：\n（無文章內文）');
   });
 
   it('surfaces provider failures without exposing the API key', async () => {

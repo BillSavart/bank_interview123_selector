@@ -7,7 +7,7 @@
 這項功能刻意不做以下事情：
 
 - 不從瀏覽器直接呼叫郵件服務，避免 API Key 暴露。
-- 不把投稿全文寄給第三方郵件服務，只寄審核所需的 metadata。
+- 不省略投稿全文；內文會隨通知寄給 Resend 與管理員，以便直接在信中初步審閱。
 - 不要求 Cloudflare Email Routing；Email Routing 是收信／轉寄功能，本功能只需要 Resend 的寄信網域驗證。
 - 不把 Email 當成唯一待審核佇列；後台的 `pending` 投稿仍是 source of truth。
 
@@ -59,7 +59,7 @@ Request 包含：
 | `subject` | `[待審核投稿] <標題>`，標題壓成單行並截到 100 字元 |
 | `text` | 純文字通知，不使用 HTML template |
 
-信件只包含標題、作者、分類、台北時區投稿時間、投稿 UUID 與管理後台 URL。投稿全文、IP、管理員 token、API Key 都不會進入信件。API request 使用 5 秒 timeout；非 2xx response 會讀取最多 300 字元的錯誤內容供 log 診斷。
+信件包含標題、作者、分類、台北時區投稿時間、投稿 UUID、投稿全文與管理後台 URL。投稿內文保留原本換行並以純文字寄送；IP、管理員 token、API Key 都不會進入信件。API request 使用 5 秒 timeout；非 2xx response 會讀取最多 300 字元的錯誤內容供 log 診斷。
 
 Resend 的 idempotency key 保存 24 小時，因此相同 UUID 與 payload 在時限內重送不會寄出第二封。這是供應商層的短期去重，不是永久寄送紀錄。
 
@@ -152,7 +152,7 @@ for (const key of ["RESEND_API_KEY", "SUBMISSION_NOTIFY_EMAIL", "SUBMISSION_EMAI
 
 - Secret 只存在 VM `deploy/.env` 與 API container environment，不進前端 bundle、Git 或 Email。
 - 建議 API Key 採最小權限 `sending_access`，定期輪替；新舊 key 短暫並存，驗證新 key 後再刪舊 key。
-- 通知不含投稿全文，降低第三方處理的個資範圍。
+- 投稿全文會由 Resend 處理並寄至設定的管理員信箱；應只設定可信任的收件人，並依站方隱私政策管理信件留存。
 - Honeypot、驗證失敗、超量與 rate-limited request 都在寄信呼叫前返回，避免被濫用成寄信放大器。
 - Provider error 不包含 Authorization header；程式也不會把 API Key 寫入 log。
 - 多收件人會放在 Resend `to` 陣列；若收件人之間不應互相看到地址，應改用單一管理群組地址或未來切換成 BCC。

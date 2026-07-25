@@ -141,7 +141,7 @@ SUBMISSION_EMAIL_FROM='銀行面試考古題 <notifications@send.你的已驗證
 npm run api:local
 ```
 
-多個收件信箱可用逗號分隔。程式使用 Node 原生 `fetch` 呼叫 Resend `POST /emails`，並以 `submission-<post UUID>` 作為 idempotency key。信中包含標題、作者、分類、投稿時間、投稿編號與後台連結，不包含投稿全文。
+多個收件信箱可用逗號分隔。程式使用 Node 原生 `fetch` 呼叫 Resend `POST /emails`，並以 `submission-<post UUID>` 作為 idempotency key。信中包含標題、作者、分類、投稿時間、投稿編號、文章內文與後台連結。
 
 通知採 persist-first／best-effort：投稿先寫入 SQLite 或 JSON store、API 回傳成功，再於背景寄信；即使 DNS、API Key、網路或郵件服務暫時失敗，待審核投稿仍會保留。完整設計、Cloudflare DNS、部署、觀測與故障處理見：
 
