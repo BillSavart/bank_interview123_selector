@@ -20,28 +20,53 @@ YOUR_DOMAIN {
 		reverse_proxy 127.0.0.1:3000
 	}
 
-	# 經驗分享文章的動態 SEO：只有爬蟲 / 社群預覽的 UA 會被導到 API，由 API
-	# 回傳帶正確 <head> meta 的文章 HTML；一般使用者照舊走下方靜態 SPA。
+	# 經驗分享文章的動態 SEO：搜尋、AdSense 與社群預覽爬蟲會被導到 API，
+	# 取得相同文章的標題、canonical 與可直接閱讀的正文；一般使用者走 SPA。
 	@articlebot {
 		path /experience/*
-		header_regexp User-Agent (?i)(googlebot|bingbot|duckduckbot|baiduspider|yandex|facebookexternalhit|facebot|twitterbot|linebot|line/|slackbot|telegram|whatsapp|discordbot|applebot|pinterest|redditbot|embedly|skypeuripreview|w3c_validator)
+		header_regexp User-Agent (?i)(googlebot|mediapartners-google|google-display-ads-bot|bingbot|duckduckbot|baiduspider|yandex|facebookexternalhit|facebot|twitterbot|linebot|line/|slackbot|telegram|whatsapp|discordbot|applebot|pinterest|redditbot|embedly|skypeuripreview|w3c_validator)
 	}
 	handle @articlebot {
 		reverse_proxy 127.0.0.1:3000
 	}
 
-	# Static SPA
-	handle {
+	# Known public pages have a generated per-route HTML file. Restricting this
+	# matcher prevents arbitrary paths from returning a 200 homepage shell.
+	@publicpage path / /selector /selector/ /calendar /calendar/ /scores-map /scores-map/ /venues /venues/ /official-doc-practice /official-doc-practice/ /experience /experience/ /salary /salary/ /number-trainer /number-trainer/ /check-game /check-game/ /about /about/ /privacy /privacy/ /terms /terms/ /disclaimer /disclaimer/
+	handle @publicpage {
 		root * /var/www/bank-interview
 		try_files {path} {path}/index.html /index.html
+		header Cache-Control "no-cache"
+		file_server
+	}
+
+	@officialdocquestion path /official-doc-practice/sign-001 /official-doc-practice/sign-001/ /official-doc-practice/bot-001 /official-doc-practice/bot-001/ /official-doc-practice/bot-002 /official-doc-practice/bot-002/
+	handle @officialdocquestion {
+		root * /var/www/bank-interview
+		try_files /official-doc-practice/index.html
+		header Cache-Control "no-cache"
+		header X-Robots-Tag "noindex, follow"
+		file_server
+	}
+
+	@experiencepage path /experience/*
+	handle @experiencepage {
+		root * /var/www/bank-interview
+		try_files /index.html
+		header Cache-Control "no-cache"
+		file_server
+	}
+
+	# Unknown public paths and files are served without an SPA fallback, so a
+	# missing resource receives file_server's real 404 response.
+	handle {
+		root * /var/www/bank-interview
 		file_server
 	}
 
 	# long-cache the hashed assets, no-cache the HTML entrypoint
 	@assets path /assets/*
 	header @assets Cache-Control "public, max-age=31536000, immutable"
-	@html path /index.html /
-	header @html Cache-Control "no-cache"
 }
 
 # Admin subdomain — same SPA + API, a tidy separate entry point for the

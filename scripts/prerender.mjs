@@ -1,11 +1,9 @@
 // Post-build prerender: emit a per-route dist/<route>/index.html whose <head>
-// carries that page's title + Open Graph/Twitter meta. The SPA is client-
-// rendered, so without this every shared link (LINE/FB/…) would show the
-// homepage title — preview crawlers don't run our JS. Caddy's
-// `try_files {path} {path}/index.html /index.html` serves these directly.
-//
-// Runs in `npm run build` after `vite build`. Real users still get the full
-// SPA (the body is identical to index.html); only <head> differs per route.
+// carries that page's title + Open Graph/Twitter meta and whose #root contains
+// a concise, visible HTML version of the page's purpose and editorial guide.
+// React replaces this fallback when JavaScript loads, while crawlers and users
+// without JavaScript can still understand the page. Caddy serves these files
+// directly instead of treating every route as the homepage shell.
 //
 // Only the map and calendar pages carry a share image (public/og/*.jpg);
 // the rest get title + description text only, no thumbnail.
@@ -13,9 +11,17 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const DIST = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist');
+const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+const DIST = join(ROOT, 'dist');
 const BASE = 'https://bank-interview-advisor.com';
 const SITE = '公股銀行新手村';
+const PAGE_GUIDES = JSON.parse(await readFile(join(ROOT, 'src/data/page-guides.json'), 'utf8'));
+
+const HOME = {
+  path: '/',
+  title: '公股銀行招考一站式準備',
+  desc: '公股銀行招考一站式準備：面試口試題篩選、招考行事曆、筆試門檻地圖與上榜經驗分享，集中在一個地方。',
+};
 
 // Home is already correct in dist/index.html (the source index.html defaults),
 // so it's not regenerated here. `image` (optional) → public/og/<file>.
@@ -37,6 +43,70 @@ const ROUTES = [
 
 const esc = (s) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+const NAV_LINKS = [
+  ['/', '首頁'],
+  ['/selector', '面試題目'],
+  ['/calendar', '招考行事曆'],
+  ['/scores-map', '筆試門檻'],
+  ['/venues', '試場資訊'],
+  ['/official-doc-practice', '公文練習'],
+  ['/experience', '經驗分享'],
+];
+
+function renderGuide(path) {
+  const guide = PAGE_GUIDES[path];
+  if (!guide) return '';
+
+  const sections = guide.sections
+    .map((section) => {
+      const paragraphs = (section.paragraphs || []).map((p) => `<p>${esc(p)}</p>`).join('\n');
+      const bullets = section.bullets?.length
+        ? `<ul>${section.bullets.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>`
+        : '';
+      return `<section class="page-guide-section">
+<h3>${esc(section.heading)}</h3>
+${paragraphs}
+${bullets}
+</section>`;
+    })
+    .join('\n');
+
+  return `<section class="page-guide" aria-labelledby="page-guide-title">
+<div class="container py-5">
+<div class="page-guide-card">
+<div class="page-guide-eyebrow">${esc(guide.eyebrow)}</div>
+<h2 id="page-guide-title" class="page-guide-title">${esc(guide.heading)}</h2>
+<p class="page-guide-intro">${esc(guide.intro)}</p>
+<div class="page-guide-grid">${sections}</div>
+<p class="page-guide-meta">內容整理：公股銀行新手村編輯　·　方法說明更新：${esc(guide.reviewed)}</p>
+</div>
+</div>
+</section>`;
+}
+
+function renderFallback(route) {
+  const nav = NAV_LINKS.map(([href, label]) => `<a href="${href}">${esc(label)}</a>`).join('　');
+  return `<header class="container py-3"><nav aria-label="主要導覽">${nav}</nav></header>
+<main class="site-main">
+<article class="container py-4">
+<p class="interview-kicker">公股銀行招考準備</p>
+<h1 class="display-title mb-3">${esc(route.title)}</h1>
+<p class="page-intro">${esc(route.desc)}</p>
+</article>
+${renderGuide(route.path)}
+</main>
+<footer class="site-footer">
+<span>公股銀行新手村為非官方學習工具，正式資訊請以各招考單位公告為準。</span>
+<nav aria-label="網站資訊"><a href="/about">關於我們</a>　<a href="/terms">服務條款</a>　<a href="/disclaimer">免責聲明</a>　<a href="/privacy">隱私權政策</a></nav>
+</footer>`;
+}
+
+function setRootContent(html, content) {
+  const re = /<div id="root">[\s\S]*?<\/div>/;
+  if (!re.test(html)) throw new Error('prerender: #root not found in index.html');
+  return html.replace(re, `<div id="root">${content}</div>`);
+}
+
 // Replace the content="" of a <meta name|property="key"> tag.
 function setMeta(html, key, value) {
   const re = new RegExp(`(<meta (?:name|property)="${key}" content=")[^"]*(")`);
@@ -53,6 +123,11 @@ function setCanonical(html, url) {
 
 const template = await readFile(join(DIST, 'index.html'), 'utf8');
 
+// Vite's homepage output also starts as an empty SPA shell. Give it the same
+// crawlable, visible fallback as the other public routes.
+await writeFile(join(DIST, 'index.html'), setRootContent(template, renderFallback(HOME)));
+console.log(`prerendered homepage fallback — ${SITE}`);
+
 for (const r of ROUTES) {
   const fullTitle = `${r.title} | ${SITE}`;
   const url = `${BASE}${r.path}`;
@@ -65,6 +140,7 @@ for (const r of ROUTES) {
   html = setMeta(html, 'og:description', r.desc);
   html = setMeta(html, 'twitter:title', fullTitle);
   html = setMeta(html, 'twitter:description', r.desc);
+  html = setRootContent(html, renderFallback(r));
 
   // The template ships the brand share card (og/home.jpg) as the default; routes
   // with their own thumbnail just overwrite the image meta, others inherit it.

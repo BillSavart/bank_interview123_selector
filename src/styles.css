@@ -1440,6 +1440,96 @@ select {
   min-height: calc(100vh - 60px - 90px);
 }
 
+/* --- shared editorial guide: visible content that explains how to use each tool --- */
+.page-guide {
+  border-top: 1px solid #dfe9e7;
+  background: #f4f8f7;
+}
+
+.page-guide-card {
+  padding: clamp(1.4rem, 3vw, 2.1rem);
+  border: 1px solid #dbe7e4;
+  border-radius: 16px;
+  background: #fff;
+  box-shadow: 0 10px 30px rgba(15, 79, 73, 0.06);
+}
+
+.page-guide-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-bottom: 0.55rem;
+  color: #0f4f49;
+  font-size: 0.84rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.page-guide-title {
+  margin: 0;
+  color: #173a37;
+  font-size: clamp(1.35rem, 2.5vw, 1.8rem);
+  font-weight: 850;
+  line-height: 1.35;
+}
+
+.page-guide-intro {
+  max-width: 880px;
+  margin: 0.85rem 0 0;
+  color: #405b58;
+  line-height: 1.8;
+}
+
+.page-guide-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1.35rem;
+}
+
+.page-guide-section {
+  padding: 1rem 1.05rem;
+  border-radius: 12px;
+  background: #f7faf9;
+}
+
+.page-guide-section h3 {
+  margin: 0 0 0.6rem;
+  color: #214d48;
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.page-guide-section p,
+.page-guide-section li {
+  color: #4b625f;
+  font-size: 0.94rem;
+  line-height: 1.75;
+}
+
+.page-guide-section p {
+  margin: 0;
+}
+
+.page-guide-section ul {
+  display: grid;
+  gap: 0.45rem;
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.page-guide-meta {
+  margin: 1rem 0 0;
+  color: #7b918e;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 767.98px) {
+  .page-guide-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* --- footer --- */
 .site-footer {
   display: flex;

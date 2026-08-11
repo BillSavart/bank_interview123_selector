@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import { ArrowUp } from 'lucide-react';
 import { NavBar } from './NavBar';
+import { PageGuide } from './PageGuide';
 
 const SITE_NAME = '公股銀行新手村';
 // Per-route browser-tab title. Falls back to the bare site name for anything
@@ -41,6 +42,7 @@ export function Layout() {
       <NavBar />
       <main className="site-main">
         <Outlet />
+        <PageGuide />
       </main>
       {showFooter && (
         <footer className="site-footer">
