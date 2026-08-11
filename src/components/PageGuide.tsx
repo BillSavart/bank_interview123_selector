@@ -1,5 +1,5 @@
 import { BookOpenCheck } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import pageGuidesJson from '../data/page-guides.json';
 
 type GuideSection = {
@@ -13,6 +13,8 @@ type PageGuideContent = {
   heading: string;
   intro: string;
   sections: GuideSection[];
+  related?: Array<{ to: string; label: string }>;
+  showInApp?: boolean;
   reviewed: string;
 };
 
@@ -27,7 +29,7 @@ export function PageGuide() {
   const { pathname } = useLocation();
   const guide = pageGuides[guidePath(pathname)];
 
-  if (!guide) return null;
+  if (!guide || guide.showInApp === false) return null;
 
   return (
     <section className="page-guide" aria-labelledby="page-guide-title">
@@ -59,6 +61,12 @@ export function PageGuide() {
           <p className="page-guide-meta">
             內容整理：公股銀行新手村編輯　·　方法說明更新：{guide.reviewed}
           </p>
+          {guide.related && (
+            <nav className="page-guide-related" aria-label="延伸閱讀">
+              <strong>延伸閱讀</strong>
+              {guide.related.map((item) => <Link key={item.to} to={item.to}>{item.label}</Link>)}
+            </nav>
+          )}
         </div>
       </div>
     </section>

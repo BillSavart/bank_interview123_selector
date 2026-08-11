@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import {
   ArrowRight,
   Banknote,
+  BookMarked,
   BookOpen,
   CalendarDays,
   ClipboardList,
@@ -13,6 +14,12 @@ import {
 
 // 經營理念：一個入口看懂整站在做什麼，再把人導到各功能。卡片順序＝重要性。
 const features = [
+  {
+    to: '/interview-guide',
+    icon: BookMarked,
+    title: '面試準備指南',
+    desc: '從履歷素材、自我介紹、報考動機到客訴與法遵情境，依四週節奏完成一輪面試準備。',
+  },
   {
     to: '/selector',
     icon: ClipboardList,
@@ -83,6 +90,9 @@ export function LandingPage() {
               </Link>
               <Link to="/calendar" className="landing-cta-ghost">
                 查看招考行事曆
+              </Link>
+              <Link to="/interview-guide" className="landing-cta-ghost">
+                閱讀面試指南
               </Link>
             </div>
           </div>

@@ -44,7 +44,7 @@
 	# Known public pages have a generated dist/<route>/index.html containing a
 	# crawlable HTML fallback. Restricting the matcher prevents arbitrary paths
 	# from returning a 200 homepage shell (soft 404).
-	@publicpage path / /selector /selector/ /calendar /calendar/ /scores-map /scores-map/ /venues /venues/ /official-doc-practice /official-doc-practice/ /experience /experience/ /salary /salary/ /number-trainer /number-trainer/ /check-game /check-game/ /about /about/ /privacy /privacy/ /terms /terms/ /disclaimer /disclaimer/
+	@publicpage path / /interview-guide /interview-guide/ /methodology /methodology/ /selector /selector/ /calendar /calendar/ /scores-map /scores-map/ /venues /venues/ /official-doc-practice /official-doc-practice/ /experience /experience/ /salary /salary/ /number-trainer /number-trainer/ /check-game /check-game/ /about /about/ /privacy /privacy/ /terms /terms/ /disclaimer /disclaimer/
 	handle @publicpage {
 		root * /srv
 		try_files {path} {path}/index.html /index.html

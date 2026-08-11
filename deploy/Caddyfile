@@ -32,7 +32,7 @@ YOUR_DOMAIN {
 
 	# Known public pages have a generated per-route HTML file. Restricting this
 	# matcher prevents arbitrary paths from returning a 200 homepage shell.
-	@publicpage path / /selector /selector/ /calendar /calendar/ /scores-map /scores-map/ /venues /venues/ /official-doc-practice /official-doc-practice/ /experience /experience/ /salary /salary/ /number-trainer /number-trainer/ /check-game /check-game/ /about /about/ /privacy /privacy/ /terms /terms/ /disclaimer /disclaimer/
+	@publicpage path / /interview-guide /interview-guide/ /methodology /methodology/ /selector /selector/ /calendar /calendar/ /scores-map /scores-map/ /venues /venues/ /official-doc-practice /official-doc-practice/ /experience /experience/ /salary /salary/ /number-trainer /number-trainer/ /check-game /check-game/ /about /about/ /privacy /privacy/ /terms /terms/ /disclaimer /disclaimer/
 	handle @publicpage {
 		root * /var/www/bank-interview
 		try_files {path} {path}/index.html /index.html

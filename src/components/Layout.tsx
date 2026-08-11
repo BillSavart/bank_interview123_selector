@@ -12,6 +12,10 @@ const PAGE_TITLES: Record<string, string> = {
   '/calendar': '招考行事曆',
   '/scores-map': '筆試門檻',
   '/venues': '試場資訊',
+  '/official-doc-practice': '公文練習器',
+  '/experience': '經驗分享',
+  '/interview-guide': '公股銀行面試準備指南',
+  '/methodology': '資料來源與編輯方法',
   '/number-trainer': '大寫數字訓練器',
   '/check-game': '支票審查員',
   '/salary': '年薪計算機',
@@ -50,6 +54,7 @@ export function Layout() {
           <span className="site-footer-note">本站推薦僅供準備方向參考，實際面試以報考銀行與職缺為準。</span>
           <nav className="site-footer-links" aria-label="網站資訊">
             <Link to="/about">關於我們</Link>
+            <Link to="/methodology">資料與編輯方法</Link>
             <Link to="/terms">服務條款</Link>
             <Link to="/disclaimer">免責聲明</Link>
             <Link to="/privacy">隱私權政策</Link>

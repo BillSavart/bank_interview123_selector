@@ -6,10 +6,13 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DIST = join(ROOT, 'dist');
 const BASE = 'https://bank-interview-advisor.com';
 const guides = JSON.parse(await readFile(join(ROOT, 'src/data/page-guides.json'), 'utf8'));
+const resourceGuides = JSON.parse(await readFile(join(ROOT, 'src/data/resource-guides.json'), 'utf8'));
 const sitemap = await readFile(join(DIST, 'sitemap.xml'), 'utf8');
-const paths = [...sitemap.matchAll(/<loc>https:\/\/bank-interview-advisor\.com([^<]*)<\/loc>/g)].map((match) => match[1] || '/');
+const sitemapPaths = [...sitemap.matchAll(/<loc>https:\/\/bank-interview-advisor\.com([^<]*)<\/loc>/g)].map((match) => match[1] || '/');
+const noindexPaths = ['/privacy', '/terms', '/disclaimer'];
+const paths = [...sitemapPaths, ...noindexPaths];
 
-if (!paths.length) throw new Error('check-prerender: sitemap contains no public routes');
+if (!sitemapPaths.length) throw new Error('check-prerender: sitemap contains no public routes');
 
 const bodyText = (html) => {
   const body = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)?.[1] || '';
@@ -38,6 +41,24 @@ for (const path of paths) {
   if (guide && (!text.includes(guide.heading) || text.length < 300)) {
     throw new Error(`check-prerender: editorial guide missing or incomplete for ${path}`);
   }
+
+  const resourceGuide = resourceGuides[path];
+  if (resourceGuide && (!text.includes(resourceGuide.title) || text.length < 1000)) {
+    throw new Error(`check-prerender: long-form resource missing or incomplete for ${path}`);
+  }
+
+  if (noindexPaths.includes(path)) {
+    if (!html.includes('<meta name="robots" content="noindex, follow"')) {
+      throw new Error(`check-prerender: missing noindex directive for ${path}`);
+    }
+    if (sitemapPaths.includes(path)) throw new Error(`check-prerender: noindex route is present in sitemap: ${path}`);
+  }
 }
 
-console.log(`checked prerendered HTML — ${paths.length} routes contain canonical, h1 and crawlable body content`);
+for (const path of Object.keys(resourceGuides)) {
+  if (!sitemapPaths.includes(path)) throw new Error(`check-prerender: resource guide missing from sitemap: ${path}`);
+}
+
+console.log(
+  `checked prerendered HTML — ${sitemapPaths.length} indexable routes plus ${noindexPaths.length} policy routes contain canonical, h1 and crawlable body content`,
+);

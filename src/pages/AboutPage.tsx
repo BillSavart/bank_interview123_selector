@@ -48,6 +48,10 @@ export function AboutPage() {
         這裡集合了面試題目篩選、招考行事曆、筆試門檻地圖、試場資訊、公文練習器、經驗分享、年薪計算機與練習小遊戲，全部免費使用。
         本站與任何銀行、招考單位或補習班皆無關，不販售課程、不代辦報名；所有內容整理自公開資源，僅供準備方向參考。
       </p>
+      <p className="about-text">
+        想了解不同資料的來源、更新與更正方式，可閱讀<Link to="/methodology">資料來源與編輯方法</Link>；
+        第一次準備口試，也可以先從<Link to="/interview-guide">公股銀行面試準備指南</Link>開始。
+      </p>
 
       <h2 className="about-h2">
         <MessageSquare size={18} /> 條款與免責

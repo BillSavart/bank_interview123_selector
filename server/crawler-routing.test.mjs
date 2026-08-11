@@ -16,4 +16,10 @@ describe.each(configs)('$file crawler routing', ({ text }) => {
   it('keeps unknown public paths out of the SPA homepage fallback', () => {
     expect(text).toContain('# Unknown public paths and files are served without an SPA fallback');
   });
+
+  it('serves both long-form resource routes from generated HTML', () => {
+    const publicPages = text.match(/@publicpage path[^\n]+/)?.[0] || '';
+    expect(publicPages).toContain('/interview-guide');
+    expect(publicPages).toContain('/methodology');
+  });
 });

@@ -4,6 +4,7 @@ import { ChevronDown, Download, Mail, Menu, X } from 'lucide-react';
 
 // 考試相關的三個功能收進「考試專區」下拉，navbar 才不會太長。
 const examItems = [
+  { to: '/interview-guide', label: '面試準備指南' },
   { to: '/selector', label: '面試題目篩選' },
   { to: '/calendar', label: '招考行事曆' },
   { to: '/scores-map', label: '筆試門檻' },
