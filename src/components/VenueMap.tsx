@@ -57,11 +57,13 @@ export function VenueMap() {
     });
     mapRef.current = map;
 
-    // CARTO Voyager 圖磚：免費、清爽、不需金鑰；標註版權即可。
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+    // CARTO raster 圖磚已要求金鑰；改用免金鑰的 OSM Standard，保留來源標示與預設快取。
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution:
-        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>',
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
       maxZoom: 19,
+      // OSM 要求 Referer；僅圖磚送出網站來源，避免繼承全站的 no-referrer。
+      referrerPolicy: 'strict-origin',
     }).addTo(map);
 
     markersRef.current = EXAM_VENUES.map((v, i) => {

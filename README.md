@@ -35,7 +35,7 @@ React + Bootstrap + TypeScript 的 static-first 全端 side project，搭配輕�
 - 首屏提供免責提醒，推薦結果僅供準備方向參考，仍應以自身經歷為主。
 - 畫面左下角顯示 `Credit: 公股銀行招考討論區 Jack/聯合哥`，右下角提供回到頂端按鈕。
 - 題庫 PDF 保留在 `public`，網站上可直接開啟原始 PDF。
-- 試場資訊（`/venues`）彙整各家招考的試場情報：頁面上方為**試場地圖**，用 Leaflet + OpenStreetMap（CARTO Voyager 圖磚、免金鑰）標出台北市與新北（板橋／中和／永和）常用考場，marker 依分區上色編號、與側欄清單連動，彈窗附最近捷運站、路線色與「在 Google 地圖開啟」；下方依銀行分組列出筆試各試場缺考統計與面試各試場考題。考場資料在 `src/data/examVenues.ts`，地圖元件在 `src/components/VenueMap.tsx`。
+- 試場資訊（`/venues`）彙整各家招考的試場情報：頁面上方為**試場地圖**，用 Leaflet + OpenStreetMap（Standard 圖磚、免金鑰，遵守[圖磚使用政策](https://operations.osmfoundation.org/policies/tiles/)）標出台北市與新北（板橋／中和／永和）常用考場，marker 依分區上色編號、與側欄清單連動，彈窗附最近捷運站、路線色與「在 Google 地圖開啟」；下方依銀行分組列出筆試各試場缺考統計與面試各試場考題。考場資料在 `src/data/examVenues.ts`，地圖元件在 `src/components/VenueMap.tsx`。
 - 年薪計算機（`/salary`）依職等、調薪與升等機制試算年資 1～30 年的年薪：拉桿設定年資即顯示總薪資、當年年薪與平均月領，並附逐年明細（固定列出 1～30 年）。月薪五等 40,900 元起、每年調薪 2%，升等時程為五→六、六→七各 2 年、七→八 3 年、八→九 6 年（九等自第 14 年起）；年薪含 12 個月本薪、獎金 4 個月、加班費（時薪＝月薪÷30÷8，每月加班 12 小時、無條件捨去）與行儲利息，第一年獎金因新人考績打八折。計算邏輯集中在 `src/lib/salary.ts`（附 `salary.test.ts` 對帳測試）。
 
 ## 本機開發
