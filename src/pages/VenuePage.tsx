@@ -144,7 +144,7 @@ function VenueReportBlock({ report }: { report: VenueReport }) {
       {/* 統計摘要：試場數，以及（有資料時）缺考總人數。 */}
       <div className="venue-summary">
         <span className="venue-summary-chip">
-          {report.sessions.length} 個試場
+          {report.sessions.length > 0 ? `${report.sessions.length} 個試場` : '未標示試場'}
         </span>
         {hasAbsentData && (
           <span className="venue-summary-chip venue-summary-absent">
@@ -154,37 +154,41 @@ function VenueReportBlock({ report }: { report: VenueReport }) {
         )}
       </div>
 
-      <div className="venue-grid">
-        {report.sessions.map((s) => (
-          <article key={s.room} className="venue-card">
-            <div className="venue-card-head">
-              <span className="venue-room">{s.room}</span>
-              {s.grade && <span className="venue-badge venue-badge-grade">{s.grade}</span>}
-              {typeof s.absent === 'number' &&
-                (s.absent > 0 ? (
-                  <span className="venue-badge venue-badge-absent">
-                    <UserX size={12} />
-                    缺 {s.absent} 人
-                  </span>
-                ) : (
-                  <span className="venue-badge venue-badge-none">無缺考</span>
-                ))}
-            </div>
-            {s.questions && s.questions.length > 0 && (
-              <ul className="venue-qlist">
-                {s.questions.map((q, i) => (
-                  <li key={i}>{q}</li>
-                ))}
-              </ul>
-            )}
-            {s.note && <p className="venue-card-note">{s.note}</p>}
-          </article>
-        ))}
-      </div>
+      {report.sessions.length > 0 && (
+        <div className="venue-grid">
+          {report.sessions.map((s) => (
+            <article key={s.room} className="venue-card">
+              <div className="venue-card-head">
+                <span className="venue-room">{s.room}</span>
+                {s.grade && <span className="venue-badge venue-badge-grade">{s.grade}</span>}
+                {typeof s.absent === 'number' &&
+                  (s.absent > 0 ? (
+                    <span className="venue-badge venue-badge-absent">
+                      <UserX size={12} />
+                      缺 {s.absent} 人
+                    </span>
+                  ) : (
+                    <span className="venue-badge venue-badge-none">無缺考</span>
+                  ))}
+              </div>
+              {s.questions && s.questions.length > 0 && (
+                <ul className="venue-qlist">
+                  {s.questions.map((q, i) => (
+                    <li key={i}>{q}</li>
+                  ))}
+                </ul>
+              )}
+              {s.note && <p className="venue-card-note">{s.note}</p>}
+            </article>
+          ))}
+        </div>
+      )}
 
       {report.extras && report.extras.length > 0 && (
         <div className="venue-extras">
-          <h3 className="venue-extras-title">其他未標示試場的考題</h3>
+          <h3 className="venue-extras-title">
+            {report.sessions.length > 0 ? '其他未標示試場的考題' : '未標示試場的考題與回報'}
+          </h3>
           <ul className="venue-qlist">
             {report.extras.map((q, i) => (
               <li key={i}>{q}</li>
