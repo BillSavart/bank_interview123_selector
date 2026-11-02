@@ -1,0 +1,1314 @@
+[
+  {
+    "branch_id": "012",
+    "branch_name": "基隆分行",
+    "city": "基隆市",
+    "phone": "02-24247113",
+    "address": "基隆市中正區義一路16號",
+    "disabled": false
+  },
+  {
+    "branch_id": "003",
+    "branch_name": "營業部",
+    "city": "台北市",
+    "phone": "02-23493456",
+    "address": "台北市中正區重慶南路一段120號",
+    "disabled": false
+  },
+  {
+    "branch_id": "007",
+    "branch_name": "館前分行",
+    "city": "台北市",
+    "phone": "02-23812949",
+    "address": "台北市中正區館前路49號",
+    "disabled": false
+  },
+  {
+    "branch_id": "019",
+    "branch_name": "延平分行",
+    "city": "台北市",
+    "phone": "02-25522859",
+    "address": "台北市大同區南京西路406號",
+    "disabled": false
+  },
+  {
+    "branch_id": "020",
+    "branch_name": "中山分行",
+    "city": "台北市",
+    "phone": "02-25423434",
+    "address": "台北市中山區中山北路一段150號",
+    "disabled": false
+  },
+  {
+    "branch_id": "033",
+    "branch_name": "南門分行",
+    "city": "台北市",
+    "phone": "02-23512121",
+    "address": "台北市中正區南昌路一段120號",
+    "disabled": true
+  },
+  {
+    "branch_id": "034",
+    "branch_name": "公館分行",
+    "city": "台北市",
+    "phone": "02-23672581",
+    "address": "台北市中正區羅斯福路四段120號",
+    "disabled": true
+  },
+  {
+    "branch_id": "036",
+    "branch_name": "北投分行",
+    "city": "台北市",
+    "phone": "02-28951200",
+    "address": "台北市北投區中央南路一段152號",
+    "disabled": false
+  },
+  {
+    "branch_id": "045",
+    "branch_name": "城中分行",
+    "city": "台北市",
+    "phone": "02-23218934",
+    "address": "台北市中正區青島東路47號",
+    "disabled": false
+  },
+  {
+    "branch_id": "046",
+    "branch_name": "民權分行",
+    "city": "台北市",
+    "phone": "02-25530121",
+    "address": "台北市大同區承德路二段239號",
+    "disabled": false
+  },
+  {
+    "branch_id": "050",
+    "branch_name": "松江分行",
+    "city": "台北市",
+    "phone": "02-25069421",
+    "address": "台北市中山區松江路115號",
+    "disabled": false
+  },
+  {
+    "branch_id": "052",
+    "branch_name": "龍山分行",
+    "city": "台北市",
+    "phone": "02-23088111",
+    "address": "台北市萬華區康定路380號",
+    "disabled": false
+  },
+  {
+    "branch_id": "053",
+    "branch_name": "忠孝分行",
+    "city": "台北市",
+    "phone": "02-27516091",
+    "address": "台北市大安區敦化南路一段202號",
+    "disabled": false
+  },
+  {
+    "branch_id": "054",
+    "branch_name": "信義分行",
+    "city": "台北市",
+    "phone": "02-23515486",
+    "address": "台北市大安區信義路二段88號",
+    "disabled": false
+  },
+  {
+    "branch_id": "064",
+    "branch_name": "松山分行",
+    "city": "台北市",
+    "phone": "02-27293111",
+    "address": "台北市信義區忠孝東路四段560號",
+    "disabled": false
+  },
+  {
+    "branch_id": "070",
+    "branch_name": "士林分行",
+    "city": "台北市",
+    "phone": "02-28367080",
+    "address": "台北市士林區中山北路六段197號",
+    "disabled": false
+  },
+  {
+    "branch_id": "080",
+    "branch_name": "民生分行",
+    "city": "台北市",
+    "phone": "02-27192081",
+    "address": "台北市松山區復興北路167號",
+    "disabled": false
+  },
+  {
+    "branch_id": "085",
+    "branch_name": "臺北世貿中心分行",
+    "city": "台北市",
+    "phone": "02-27200315",
+    "address": "台北市信義區基隆路一段333號3樓301室",
+    "disabled": false
+  },
+  {
+    "branch_id": "086",
+    "branch_name": "大安分行",
+    "city": "台北市",
+    "phone": "02-27553121",
+    "address": "台北市大安區敦化南路2段69號",
+    "disabled": false
+  },
+  {
+    "branch_id": "106",
+    "branch_name": "敦化分行",
+    "city": "台北市",
+    "phone": "02-25455111",
+    "address": "台北市松山區敦化北路205號1樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "107",
+    "branch_name": "南港分行",
+    "city": "台北市",
+    "phone": "02-26516706",
+    "address": "台北市南港區南港路二段95號1樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "108",
+    "branch_name": "和平分行",
+    "city": "台北市",
+    "phone": "02-23687027",
+    "address": "台北市大安區和平東路一段180號",
+    "disabled": false
+  },
+  {
+    "branch_id": "110",
+    "branch_name": "中崙分行",
+    "city": "台北市",
+    "phone": "02-27698618",
+    "address": "台北市松山區南京東路五段184號1樓、188號2樓之8、188號2樓之9",
+    "disabled": true
+  },
+  {
+    "branch_id": "122",
+    "branch_name": "仁愛分行",
+    "city": "台北市",
+    "phone": "02-23975936",
+    "address": "台北市中正區仁愛路二段99號",
+    "disabled": false
+  },
+  {
+    "branch_id": "124",
+    "branch_name": "圓山分行",
+    "city": "台北市",
+    "phone": "02-25976699",
+    "address": "台北市中山區林森北路577號",
+    "disabled": false
+  },
+  {
+    "branch_id": "142",
+    "branch_name": "天母分行",
+    "city": "台北市",
+    "phone": "02-28755222",
+    "address": "台北市士林區中山北路七段18號",
+    "disabled": false
+  },
+  {
+    "branch_id": "153",
+    "branch_name": "內湖分行",
+    "city": "台北市",
+    "phone": "02-87977933",
+    "address": "台北市內湖區內湖路一段396號",
+    "disabled": false
+  },
+  {
+    "branch_id": "162",
+    "branch_name": "群賢分行",
+    "city": "台北市",
+    "phone": "02-23411001",
+    "address": "台北市中正區中山南路1號1樓(備註：位於立法院管制區內，進出應配戴立院識別證)",
+    "disabled": false
+  },
+  {
+    "branch_id": "165",
+    "branch_name": "文山分行",
+    "city": "台北市",
+    "phone": "02-86633456",
+    "address": "台北市文山區羅斯福路六段218號1、2樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "193",
+    "branch_name": "永吉簡易型分行",
+    "city": "台北市",
+    "phone": "02-27209856",
+    "address": "台北市信義區松仁路3號3樓",
+    "disabled": true
+  },
+  {
+    "branch_id": "194",
+    "branch_name": "東門簡易型分行",
+    "city": "台北市",
+    "phone": "02-23943168",
+    "address": "台北市中正區東門里15鄰紹興南街21號(位於中華電信管制區內，進出應配帶園區識別證。)",
+    "disabled": true
+  },
+  {
+    "branch_id": "195",
+    "branch_name": "愛國簡易型分行",
+    "city": "台北市",
+    "phone": "02-23960017",
+    "address": "台北市大安區愛國東路31號(位於中華電信管制區內，進出應配帶園區識別證。)",
+    "disabled": true
+  },
+  {
+    "branch_id": "198",
+    "branch_name": "臺電簡易型分行",
+    "city": "台北市",
+    "phone": "02-23667506",
+    "address": "台北市中正區羅斯福路3段242號",
+    "disabled": true
+  },
+  {
+    "branch_id": "223",
+    "branch_name": "東湖分行",
+    "city": "台北市",
+    "phone": "02-26305768",
+    "address": "台北市內湖區成功路5段458號",
+    "disabled": false
+  },
+  {
+    "branch_id": "225",
+    "branch_name": "南港軟體園區分行",
+    "city": "台北市",
+    "phone": "02-27833009",
+    "address": "台北市南港區三重路66號2樓之2",
+    "disabled": false
+  },
+  {
+    "branch_id": "229",
+    "branch_name": "木柵分行",
+    "city": "台北市",
+    "phone": "02-86615115",
+    "address": "台北市文山區新光路1段145號",
+    "disabled": false
+  },
+  {
+    "branch_id": "236",
+    "branch_name": "武昌分行",
+    "city": "台北市",
+    "phone": "02-23493456",
+    "address": "台北市中正區武昌街一段49號",
+    "disabled": false
+  },
+  {
+    "branch_id": "238",
+    "branch_name": "臺北分行",
+    "city": "台北市",
+    "phone": "02-25435790",
+    "address": "台北市中山區松江路80號",
+    "disabled": false
+  },
+  {
+    "branch_id": "239",
+    "branch_name": "金山分行",
+    "city": "台北市",
+    "phone": "02-23413006",
+    "address": "台北市大安區金山南路二段189號",
+    "disabled": false
+  },
+  {
+    "branch_id": "240",
+    "branch_name": "信安分行",
+    "city": "台北市",
+    "phone": "02-27057905",
+    "address": "台北市大安區信義路三段132號1至3樓及地下1樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "241",
+    "branch_name": "劍潭分行",
+    "city": "台北市",
+    "phone": "02-28831633",
+    "address": "台北市士林區承德路四段174號",
+    "disabled": false
+  },
+  {
+    "branch_id": "242",
+    "branch_name": "萬華分行",
+    "city": "台北市",
+    "phone": "02-23830066",
+    "address": "台北市萬華區貴陽街二段26號",
+    "disabled": false
+  },
+  {
+    "branch_id": "270",
+    "branch_name": "新湖分行",
+    "city": "台北市",
+    "phone": "02-87927988",
+    "address": "台北市內湖區瑞光路102號1樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "279",
+    "branch_name": "臺北國際機場分行",
+    "city": "台北市",
+    "phone": "02-27187628",
+    "address": "台北市松山區敦化北路340之9號",
+    "disabled": true
+  },
+  {
+    "branch_id": "027",
+    "branch_name": "板橋分行",
+    "city": "新北市",
+    "phone": "02-29680172",
+    "address": "新北市板橋區府中路21號",
+    "disabled": false
+  },
+  {
+    "branch_id": "042",
+    "branch_name": "三重分行",
+    "city": "新北市",
+    "phone": "02-29719621",
+    "address": "新北市三重區重新路四段39號",
+    "disabled": false
+  },
+  {
+    "branch_id": "048",
+    "branch_name": "連城分行",
+    "city": "新北市",
+    "phone": "02-82272611",
+    "address": "新北市中和區建一路186號一、二樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "066",
+    "branch_name": "中和分行",
+    "city": "新北市",
+    "phone": "02-22488980",
+    "address": "新北市中和區中山路二段253號",
+    "disabled": false
+  },
+  {
+    "branch_id": "071",
+    "branch_name": "新莊分行",
+    "city": "新北市",
+    "phone": "02-22056699",
+    "address": "新北市新莊區新泰路85號",
+    "disabled": false
+  },
+  {
+    "branch_id": "074",
+    "branch_name": "樹林分行",
+    "city": "新北市",
+    "phone": "02-26866511",
+    "address": "新北市樹林區文化街29號",
+    "disabled": false
+  },
+  {
+    "branch_id": "075",
+    "branch_name": "新店分行",
+    "city": "新北市",
+    "phone": "02-29180795",
+    "address": "新北市新店區寶中路45號",
+    "disabled": false
+  },
+  {
+    "branch_id": "087",
+    "branch_name": "華江分行",
+    "city": "新北市",
+    "phone": "02-29610101",
+    "address": "新北市板橋區中山路一段293-2號",
+    "disabled": false
+  },
+  {
+    "branch_id": "111",
+    "branch_name": "土城分行",
+    "city": "新北市",
+    "phone": "02-22703791",
+    "address": "新北市土城區中央路二段344號",
+    "disabled": false
+  },
+  {
+    "branch_id": "135",
+    "branch_name": "五股分行",
+    "city": "新北市",
+    "phone": "02-22936699",
+    "address": "新北市五股區中興路四段42號",
+    "disabled": false
+  },
+  {
+    "branch_id": "148",
+    "branch_name": "淡水分行",
+    "city": "新北市",
+    "phone": "02-26281111",
+    "address": "新北市淡水區中山路93號",
+    "disabled": false
+  },
+  {
+    "branch_id": "156",
+    "branch_name": "汐止分行",
+    "city": "新北市",
+    "phone": "02-86926822",
+    "address": "新北市汐止區大同路二段175號1樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "187",
+    "branch_name": "蘆洲分行",
+    "city": "新北市",
+    "phone": "02-82868686",
+    "address": "新北市蘆洲區三民路50號",
+    "disabled": false
+  },
+  {
+    "branch_id": "205",
+    "branch_name": "北府簡易型分行",
+    "city": "新北市",
+    "phone": "02-89535968",
+    "address": "新北市板橋區中山路一段161號地下一樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "218",
+    "branch_name": "臺北港分行",
+    "city": "新北市",
+    "phone": "02-26196269",
+    "address": "新北市八里區商港路123號2樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "243",
+    "branch_name": "板新分行",
+    "city": "新北市",
+    "phone": "02-22540560",
+    "address": "新北市板橋區文化路一段268號",
+    "disabled": false
+  },
+  {
+    "branch_id": "244",
+    "branch_name": "新永和分行",
+    "city": "新北市",
+    "phone": "02-29211808",
+    "address": "新北市永和區仁愛路97號",
+    "disabled": false
+  },
+  {
+    "branch_id": "245",
+    "branch_name": "南新莊分行",
+    "city": "新北市",
+    "phone": "02-29012999",
+    "address": "新北市新莊區中正路653號",
+    "disabled": false
+  },
+  {
+    "branch_id": "280",
+    "branch_name": "新莊副都心分行",
+    "city": "新北市",
+    "phone": "02-22773000",
+    "address": "新北市新莊區頭前路119號1樓及121號1-3樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "026",
+    "branch_name": "桃園分行",
+    "city": "桃園市",
+    "phone": "03-3352801",
+    "address": "桃園市桃園區中正路46號",
+    "disabled": false
+  },
+  {
+    "branch_id": "041",
+    "branch_name": "中壢分行",
+    "city": "桃園市",
+    "phone": "03-4252160",
+    "address": "桃園市中壢區延平路580號",
+    "disabled": false
+  },
+  {
+    "branch_id": "115",
+    "branch_name": "桃園國際機場分行",
+    "city": "桃園市",
+    "phone": "03-3982166",
+    "address": "桃園市大園區埔心里航站南路15號",
+    "disabled": true
+  },
+  {
+    "branch_id": "121",
+    "branch_name": "平鎮分行",
+    "city": "桃園市",
+    "phone": "03-4945688",
+    "address": "桃園市平鎮區環南路二段11號",
+    "disabled": false
+  },
+  {
+    "branch_id": "123",
+    "branch_name": "南崁分行",
+    "city": "桃園市",
+    "phone": "03-3529191",
+    "address": "桃園市蘆竹區南崁路一段81號",
+    "disabled": false
+  },
+  {
+    "branch_id": "144",
+    "branch_name": "內壢分行",
+    "city": "桃園市",
+    "phone": "03-4618519",
+    "address": "桃園市中壢區興農路125號",
+    "disabled": false
+  },
+  {
+    "branch_id": "172",
+    "branch_name": "建國分行",
+    "city": "桃園市",
+    "phone": "03-4670081",
+    "address": "桃園市中壢區健行路169號",
+    "disabled": false
+  },
+  {
+    "branch_id": "186",
+    "branch_name": "東桃園分行",
+    "city": "桃園市",
+    "phone": "03-3263888",
+    "address": "桃園市桃園區經國路300號",
+    "disabled": false
+  },
+  {
+    "branch_id": "226",
+    "branch_name": "龍潭分行",
+    "city": "桃園市",
+    "phone": "03-4790888",
+    "address": "桃園市龍潭區東龍路142號",
+    "disabled": false
+  },
+  {
+    "branch_id": "228",
+    "branch_name": "林口分行",
+    "city": "桃園市",
+    "phone": "03-3277299",
+    "address": "桃園市龜山區復興一路368號",
+    "disabled": false
+  },
+  {
+    "branch_id": "247",
+    "branch_name": "新明分行",
+    "city": "桃園市",
+    "phone": "03-4951301",
+    "address": "桃園市中壢區新明路7號",
+    "disabled": false
+  },
+  {
+    "branch_id": "297",
+    "branch_name": "亞矽創新分行",
+    "city": "桃園市",
+    "phone": "03-2873970",
+    "address": "桃園市中壢區青峰路一段37號",
+    "disabled": false
+  },
+  {
+    "branch_id": "068",
+    "branch_name": "竹北分行",
+    "city": "新竹縣",
+    "phone": "03-5513111",
+    "address": "新竹縣竹北市光明六路16號",
+    "disabled": false
+  },
+  {
+    "branch_id": "248",
+    "branch_name": "六家分行",
+    "city": "新竹縣",
+    "phone": "03-6585858",
+    "address": "新竹縣竹北市文興路二段32號",
+    "disabled": false
+  },
+  {
+    "branch_id": "015",
+    "branch_name": "新竹分行",
+    "city": "新竹市",
+    "phone": "03-5266161",
+    "address": "新竹市東區林森路29號",
+    "disabled": false
+  },
+  {
+    "branch_id": "073",
+    "branch_name": "新竹科學園區分行",
+    "city": "新竹市",
+    "phone": "03-5770050",
+    "address": "新竹市東區工業東六路5號2樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "164",
+    "branch_name": "北大路分行",
+    "city": "新竹市",
+    "phone": "03-5354381",
+    "address": "新竹市東區民權路267號",
+    "disabled": false
+  },
+  {
+    "branch_id": "029",
+    "branch_name": "苗栗分行",
+    "city": "苗栗縣",
+    "phone": "037-326791",
+    "address": "苗栗縣苗栗市中正路510號",
+    "disabled": false
+  },
+  {
+    "branch_id": "043",
+    "branch_name": "頭份分行",
+    "city": "苗栗縣",
+    "phone": "037-663451",
+    "address": "苗栗縣頭份市中正路65號",
+    "disabled": false
+  },
+  {
+    "branch_id": "010",
+    "branch_name": "臺中分行",
+    "city": "台中市",
+    "phone": "04-22224001",
+    "address": "台中市西區自由路一段140號",
+    "disabled": false
+  },
+  {
+    "branch_id": "030",
+    "branch_name": "豐原分行",
+    "city": "台中市",
+    "phone": "04-25278686",
+    "address": "台中市豐原區中正路302號",
+    "disabled": false
+  },
+  {
+    "branch_id": "037",
+    "branch_name": "霧峰分行",
+    "city": "台中市",
+    "phone": "04-23302216",
+    "address": "台中市霧峰區中正路838號",
+    "disabled": false
+  },
+  {
+    "branch_id": "047",
+    "branch_name": "潭子分行",
+    "city": "台中市",
+    "phone": "04-25323133",
+    "address": "台中市潭子區建國路1號",
+    "disabled": true
+  },
+  {
+    "branch_id": "055",
+    "branch_name": "復興分行",
+    "city": "台中市",
+    "phone": "04-22244181",
+    "address": "台中市東區復興路四段102號",
+    "disabled": false
+  },
+  {
+    "branch_id": "057",
+    "branch_name": "臺中港分行",
+    "city": "台中市",
+    "phone": "04-26562311",
+    "address": "台中市梧棲區四維路2號",
+    "disabled": false
+  },
+  {
+    "branch_id": "065",
+    "branch_name": "健行分行",
+    "city": "台中市",
+    "phone": "04-22242141",
+    "address": "台中市中區臺灣大道一段276號",
+    "disabled": false
+  },
+  {
+    "branch_id": "072",
+    "branch_name": "大甲分行",
+    "city": "台中市",
+    "phone": "04-26868111",
+    "address": "台中市大甲區民生路61號",
+    "disabled": false
+  },
+  {
+    "branch_id": "079",
+    "branch_name": "黎明分行",
+    "city": "台中市",
+    "phone": "04-22551178",
+    "address": "台中市南屯區大業路607號",
+    "disabled": false
+  },
+  {
+    "branch_id": "090",
+    "branch_name": "大雅分行",
+    "city": "台中市",
+    "phone": "04-25683330",
+    "address": "台中市大雅區中清路三段1080號1至5樓及地下1樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "092",
+    "branch_name": "臺中工業區分行",
+    "city": "台中市",
+    "phone": "04-23597850",
+    "address": "台中市西屯區工業區一路196號",
+    "disabled": false
+  },
+  {
+    "branch_id": "109",
+    "branch_name": "水湳分行",
+    "city": "台中市",
+    "phone": "04-22468130",
+    "address": "台中市北屯區崇德路二段416號",
+    "disabled": false
+  },
+  {
+    "branch_id": "136",
+    "branch_name": "大里分行",
+    "city": "台中市",
+    "phone": "04-24180211",
+    "address": "台中市大里區國光路二段481號",
+    "disabled": false
+  },
+  {
+    "branch_id": "141",
+    "branch_name": "西屯分行",
+    "city": "台中市",
+    "phone": "04-23128528",
+    "address": "台中市西屯區青海路二段41號",
+    "disabled": false
+  },
+  {
+    "branch_id": "157",
+    "branch_name": "梧棲分行",
+    "city": "台中市",
+    "phone": "04-26565111",
+    "address": "台中市梧棲區建五路2號一、二樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "170",
+    "branch_name": "太平分行",
+    "city": "台中市",
+    "phone": "04-22736666",
+    "address": "台中市太平區中興東路146號",
+    "disabled": false
+  },
+  {
+    "branch_id": "171",
+    "branch_name": "德芳分行",
+    "city": "台中市",
+    "phone": "04-24853280",
+    "address": "台中市大里區德芳路一段63號",
+    "disabled": false
+  },
+  {
+    "branch_id": "220",
+    "branch_name": "臺中科學園區分行",
+    "city": "台中市",
+    "phone": "04-25658111",
+    "address": "台中市大雅區中科路6號2樓之5、之6",
+    "disabled": false
+  },
+  {
+    "branch_id": "249",
+    "branch_name": "北臺中分行",
+    "city": "台中市",
+    "phone": "04-22077412",
+    "address": "台中市北區進化北路369號1樓、2樓、3樓。",
+    "disabled": false
+  },
+  {
+    "branch_id": "278",
+    "branch_name": "中都分行",
+    "city": "台中市",
+    "phone": "04-22589611",
+    "address": "台中市西屯區臺灣大道三段99號一樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "289",
+    "branch_name": "臺中國際機場分行",
+    "city": "台中市",
+    "phone": "04-26152668",
+    "address": "台中市沙鹿區中航路1段168號",
+    "disabled": true
+  },
+  {
+    "branch_id": "290",
+    "branch_name": "臺中精密園區分行",
+    "city": "台中市",
+    "phone": "04-23554777",
+    "address": "台中市南屯區精科東路17號",
+    "disabled": false
+  },
+  {
+    "branch_id": "016",
+    "branch_name": "彰化分行",
+    "city": "彰化縣",
+    "phone": "04-7225191",
+    "address": "彰化縣彰化市成功路130號",
+    "disabled": false
+  },
+  {
+    "branch_id": "049",
+    "branch_name": "員林分行",
+    "city": "彰化縣",
+    "phone": "04-8323191",
+    "address": "彰化縣員林市民生路63號",
+    "disabled": false
+  },
+  {
+    "branch_id": "143",
+    "branch_name": "鹿港分行",
+    "city": "彰化縣",
+    "phone": "04-7810168",
+    "address": "彰化縣鹿港鎮鹿工路2號1樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "013",
+    "branch_name": "中興新村分行",
+    "city": "南投縣",
+    "phone": "049-2332101",
+    "address": "南投縣南投市中興新村光華路11號",
+    "disabled": false
+  },
+  {
+    "branch_id": "032",
+    "branch_name": "南投分行",
+    "city": "南投縣",
+    "phone": "049-2232121",
+    "address": "南投縣南投市復興路101號",
+    "disabled": false
+  },
+  {
+    "branch_id": "059",
+    "branch_name": "埔里分行",
+    "city": "南投縣",
+    "phone": "049-2983991",
+    "address": "南投縣埔里鎮東榮路112號",
+    "disabled": false
+  },
+  {
+    "branch_id": "031",
+    "branch_name": "斗六分行",
+    "city": "雲林縣",
+    "phone": "05-5324155",
+    "address": "雲林縣斗六市文化路27號",
+    "disabled": false
+  },
+  {
+    "branch_id": "147",
+    "branch_name": "虎尾分行",
+    "city": "雲林縣",
+    "phone": "05-6337367",
+    "address": "雲林縣虎尾鎮林森路二段369號",
+    "disabled": false
+  },
+  {
+    "branch_id": "067",
+    "branch_name": "太保分行",
+    "city": "嘉義縣",
+    "phone": "05-3620016",
+    "address": "嘉義縣太保市祥和新村祥和一路東段2號",
+    "disabled": false
+  },
+  {
+    "branch_id": "014",
+    "branch_name": "嘉義分行",
+    "city": "嘉義市",
+    "phone": "05-2224471",
+    "address": "嘉義市西區中山路306號",
+    "disabled": false
+  },
+  {
+    "branch_id": "154",
+    "branch_name": "嘉北分行",
+    "city": "嘉義市",
+    "phone": "05-2718911",
+    "address": "嘉義市東區忠孝路602號",
+    "disabled": false
+  },
+  {
+    "branch_id": "252",
+    "branch_name": "嘉南分行",
+    "city": "嘉義市",
+    "phone": "05-2348686",
+    "address": "嘉義市西區中興路353號",
+    "disabled": false
+  },
+  {
+    "branch_id": "009",
+    "branch_name": "臺南分行",
+    "city": "台南市",
+    "phone": "06-2160168",
+    "address": "台南市中西區府前路一段155號",
+    "disabled": false
+  },
+  {
+    "branch_id": "028",
+    "branch_name": "新營分行",
+    "city": "台南市",
+    "phone": "06-6351111",
+    "address": "台南市新營區中正路10號",
+    "disabled": false
+  },
+  {
+    "branch_id": "040",
+    "branch_name": "安平分行",
+    "city": "台南市",
+    "phone": "06-2292181",
+    "address": "台南市中西區中正路240號",
+    "disabled": false
+  },
+  {
+    "branch_id": "081",
+    "branch_name": "永康分行",
+    "city": "台南市",
+    "phone": "06-3125411",
+    "address": "台南市永康區小東路513號",
+    "disabled": false
+  },
+  {
+    "branch_id": "137",
+    "branch_name": "安南分行",
+    "city": "台南市",
+    "phone": "06-3555111",
+    "address": "台南市安南區安和路2段298號",
+    "disabled": false
+  },
+  {
+    "branch_id": "146",
+    "branch_name": "臺南科學園區分行",
+    "city": "台南市",
+    "phone": "06-5051701",
+    "address": "台南市新市區南科三路15號1樓",
+    "disabled": true
+  },
+  {
+    "branch_id": "227",
+    "branch_name": "仁德分行",
+    "city": "台南市",
+    "phone": "06-2492389",
+    "address": "台南市仁德區中正路2段899號",
+    "disabled": false
+  },
+  {
+    "branch_id": "230",
+    "branch_name": "臺南創新園區分行",
+    "city": "台南市",
+    "phone": "06-3842585",
+    "address": "台南市安南區科技公園大道18號",
+    "disabled": false
+  },
+  {
+    "branch_id": "253",
+    "branch_name": "南都分行",
+    "city": "台南市",
+    "phone": "06-2219999",
+    "address": "台南市中西區忠義路二段180號",
+    "disabled": false
+  },
+  {
+    "branch_id": "272",
+    "branch_name": "六甲頂分行",
+    "city": "台南市",
+    "phone": "06-2810991",
+    "address": "台南市永康區中正南路41號",
+    "disabled": false
+  },
+  {
+    "branch_id": "011",
+    "branch_name": "高雄分行",
+    "city": "高雄市",
+    "phone": "07-2515131",
+    "address": "高雄市前金區中正四路264號",
+    "disabled": false
+  },
+  {
+    "branch_id": "021",
+    "branch_name": "高雄加工出口區分行",
+    "city": "高雄市",
+    "phone": "07-8215141",
+    "address": "高雄市前鎮區中一路1號一樓、二樓及地下一樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "025",
+    "branch_name": "鳳山分行",
+    "city": "高雄市",
+    "phone": "07-7416131",
+    "address": "高雄市鳳山區曹公路20號",
+    "disabled": false
+  },
+  {
+    "branch_id": "035",
+    "branch_name": "左營分行",
+    "city": "高雄市",
+    "phone": "07-5819141",
+    "address": "高雄市左營區左營大路19號",
+    "disabled": false
+  },
+  {
+    "branch_id": "044",
+    "branch_name": "前鎮分行",
+    "city": "高雄市",
+    "phone": "07-8115171",
+    "address": "高雄市前鎮區擴建路1之3號",
+    "disabled": false
+  },
+  {
+    "branch_id": "051",
+    "branch_name": "鼓山分行",
+    "city": "高雄市",
+    "phone": "07-5218291",
+    "address": "高雄市鼓山區臨海一路23號",
+    "disabled": false
+  },
+  {
+    "branch_id": "056",
+    "branch_name": "三民分行",
+    "city": "高雄市",
+    "phone": "07-3127143",
+    "address": "高雄市三民區九如二路567號",
+    "disabled": false
+  },
+  {
+    "branch_id": "060",
+    "branch_name": "岡山分行",
+    "city": "高雄市",
+    "phone": "07-6216141",
+    "address": "高雄市岡山區壽天路16號",
+    "disabled": false
+  },
+  {
+    "branch_id": "061",
+    "branch_name": "新興分行",
+    "city": "高雄市",
+    "phone": "07-2384611",
+    "address": "高雄市新興區民族二路133號",
+    "disabled": false
+  },
+  {
+    "branch_id": "062",
+    "branch_name": "苓雅分行",
+    "city": "高雄市",
+    "phone": "07-3358700",
+    "address": "高雄市苓雅區青年一路261號",
+    "disabled": false
+  },
+  {
+    "branch_id": "082",
+    "branch_name": "三多分行",
+    "city": "高雄市",
+    "phone": "07-3349341",
+    "address": "高雄市苓雅區新光路142號",
+    "disabled": false
+  },
+  {
+    "branch_id": "091",
+    "branch_name": "楠梓分行",
+    "city": "高雄市",
+    "phone": "07-3532115",
+    "address": "高雄市楠梓區楠梓路201號",
+    "disabled": false
+  },
+  {
+    "branch_id": "116",
+    "branch_name": "大昌分行",
+    "city": "高雄市",
+    "phone": "07-3891036",
+    "address": "高雄市三民區九如一路540號",
+    "disabled": false
+  },
+  {
+    "branch_id": "118",
+    "branch_name": "五甲分行",
+    "city": "高雄市",
+    "phone": "07-7170730",
+    "address": "高雄市鳳山區五甲二路168號",
+    "disabled": false
+  },
+  {
+    "branch_id": "119",
+    "branch_name": "博愛分行",
+    "city": "高雄市",
+    "phone": "07-5567690",
+    "address": "高雄市左營區裕誠路394號",
+    "disabled": false
+  },
+  {
+    "branch_id": "120",
+    "branch_name": "中庄分行",
+    "city": "高雄市",
+    "phone": "07-7038838",
+    "address": "高雄市大寮區鳳屏一路339號",
+    "disabled": false
+  },
+  {
+    "branch_id": "159",
+    "branch_name": "小港分行",
+    "city": "高雄市",
+    "phone": "07-8010399",
+    "address": "高雄市小港區宏平路410號",
+    "disabled": false
+  },
+  {
+    "branch_id": "191",
+    "branch_name": "高雄國際機場分行",
+    "city": "高雄市",
+    "phone": "07-8017564",
+    "address": "高雄市小港區中山四路2號國際航廈一樓",
+    "disabled": true
+  },
+  {
+    "branch_id": "221",
+    "branch_name": "高雄科學園區分行",
+    "city": "高雄市",
+    "phone": "07-6955268",
+    "address": "高雄市路竹區路科五路23號1-3樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "224",
+    "branch_name": "高榮分行",
+    "city": "高雄市",
+    "phone": "07-3432258",
+    "address": "高雄市左營區重信路415號",
+    "disabled": false
+  },
+  {
+    "branch_id": "255",
+    "branch_name": "北高雄分行",
+    "city": "高雄市",
+    "phone": "07-5581900",
+    "address": "高雄市左營區博愛二路106號",
+    "disabled": false
+  },
+  {
+    "branch_id": "256",
+    "branch_name": "成功分行",
+    "city": "高雄市",
+    "phone": "07-2512031",
+    "address": "高雄市苓雅區成功一路261號",
+    "disabled": false
+  },
+  {
+    "branch_id": "271",
+    "branch_name": "五福分行",
+    "city": "高雄市",
+    "phone": "07-7271606",
+    "address": "高雄市苓雅區四維二路52號",
+    "disabled": false
+  },
+  {
+    "branch_id": "283",
+    "branch_name": "仁武分行",
+    "city": "高雄市",
+    "phone": "07-3752999",
+    "address": "高雄市仁武區八德南路139號",
+    "disabled": false
+  },
+  {
+    "branch_id": "017",
+    "branch_name": "屏東分行",
+    "city": "屏東縣",
+    "phone": "08-7328141",
+    "address": "屏東縣屏東市中山路43號",
+    "disabled": false
+  },
+  {
+    "branch_id": "088",
+    "branch_name": "潮州分行",
+    "city": "屏東縣",
+    "phone": "08-7883084",
+    "address": "屏東縣潮州鎮新生路13-2號",
+    "disabled": false
+  },
+  {
+    "branch_id": "155",
+    "branch_name": "東港分行",
+    "city": "屏東縣",
+    "phone": "08-8323131",
+    "address": "屏東縣東港鎮新勝街105號1-3樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "160",
+    "branch_name": "中屏分行",
+    "city": "屏東縣",
+    "phone": "08-7677001",
+    "address": "屏東縣屏東市中華路9號",
+    "disabled": false
+  },
+  {
+    "branch_id": "176",
+    "branch_name": "屏東農科園區分行",
+    "city": "屏東縣",
+    "phone": "08-7626611",
+    "address": "屏東縣長治鄉德和村農科路23號",
+    "disabled": false
+  },
+  {
+    "branch_id": "022",
+    "branch_name": "宜蘭分行",
+    "city": "宜蘭縣",
+    "phone": "03-9355121",
+    "address": "宜蘭縣宜蘭市舊城南路50號",
+    "disabled": false
+  },
+  {
+    "branch_id": "058",
+    "branch_name": "羅東分行",
+    "city": "宜蘭縣",
+    "phone": "03-9576866",
+    "address": "宜蘭縣羅東鎮林森路68號、70號1樓、2樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "089",
+    "branch_name": "蘇澳分行",
+    "city": "宜蘭縣",
+    "phone": "03-9962566",
+    "address": "宜蘭縣蘇澳鎮中山路1段97號",
+    "disabled": false
+  },
+  {
+    "branch_id": "018",
+    "branch_name": "花蓮分行",
+    "city": "花蓮縣",
+    "phone": "03-8322151",
+    "address": "花蓮縣花蓮市公園路3號",
+    "disabled": false
+  },
+  {
+    "branch_id": "257",
+    "branch_name": "北花蓮分行",
+    "city": "花蓮縣",
+    "phone": "03-8361163",
+    "address": "花蓮縣花蓮市林森路281號一、二樓",
+    "disabled": false
+  },
+  {
+    "branch_id": "023",
+    "branch_name": "臺東分行",
+    "city": "台東縣",
+    "phone": "089-324201",
+    "address": "台東縣台東市中華路一段373號",
+    "disabled": false
+  },
+  {
+    "branch_id": "024",
+    "branch_name": "澎湖分行",
+    "city": "澎湖縣",
+    "phone": "06-9279935",
+    "address": "澎湖縣馬公市仁愛路24號",
+    "disabled": false
+  },
+  {
+    "branch_id": "039",
+    "branch_name": "馬祖分行",
+    "city": "連江縣",
+    "phone": "0836-26046",
+    "address": "連江縣南竿鄉介壽村258號",
+    "disabled": false
+  },
+  {
+    "branch_id": "038",
+    "branch_name": "金門分行",
+    "city": "金門縣",
+    "phone": "082-333711",
+    "address": "金門縣金湖鎮復興路4號",
+    "disabled": false
+  }
+]

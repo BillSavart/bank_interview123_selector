@@ -36,6 +36,7 @@ const ROUTES = [
   { path: '/official-doc-practice', title: '公文練習器', desc: '練習公股銀行與國營事業考試常見的簽與函題型，直接在真實公文格式中撰寫主旨與說明。' },
   { path: '/experience',     title: '經驗分享',       desc: '公股銀行考試篇與工作篇的第一手經驗分享。' },
   { path: '/salary',         title: '年薪計算機',     desc: '設定 1～30 年年資，試算公股銀行的總薪資、當年年薪與平均月領，含每年調薪 2% 與升等機制說明。' },
+  { path: '/branch-stats',   title: '叫號統計',       desc: '每日觀測並統計各分行各業務之平均等待人數、最高等待人數、最忙碌時段與總叫號人數。' },
   { path: '/number-trainer', title: '大寫數字訓練器', desc: '練習壹貳參…金融大寫數字，銀行櫃檯與支票必備技能。' },
   { path: '/check-game',     title: '支票審查員',     desc: '模擬支票審查小遊戲，練習辨識票據填寫錯誤。' },
   { path: '/about',          title: '關於我們',       desc: '公股銀行新手村是非官方的公股銀行招考準備工具，集中題目、行事曆、門檻與心得；附各功能使用說明。' },

@@ -20,6 +20,7 @@ const interactiveRoutes = [
   '/official-doc-practice',
   '/experience',
   '/salary',
+  '/branch-stats',
   '/number-trainer',
   '/check-game',
 ];
