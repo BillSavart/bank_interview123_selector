@@ -10,13 +10,14 @@
 // 2. 100% Factual Statistics Only (Zero modeled/estimated metrics):
 //    - Only records and aggregates actual observed waiting headcounts and total called numbers.
 
-import Database from 'better-sqlite3';
 import https from 'node:https';
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SEED_PATH = join(__dirname, 'bot-branches-seed.json');
 
@@ -208,8 +209,27 @@ export function isWithinBusinessHours(now = new Date(), startHm = '08:55', endHm
   return { allowed: true, reason: `Within business hours (${p.hm})` };
 }
 
+export function loadSeedBranches() {
+  if (!existsSync(SEED_PATH)) return [];
+  const seed = JSON.parse(readFileSync(SEED_PATH, 'utf8'));
+  const rawList = Array.isArray(seed) ? seed : Array.isArray(seed.branches) ? seed.branches : [];
+  return rawList.map((b) => {
+    const disabled = b.is_disabled_on_site || b.disabled ? 1 : 0;
+    return {
+      branch_id: String(b.branch_id),
+      branch_name: String(b.branch_name || ''),
+      city: String(b.city || ''),
+      phone: String(b.phone || ''),
+      address: String(b.address || ''),
+      is_disabled_on_site: disabled,
+      active: disabled ? 0 : 1,
+    };
+  });
+}
+
 export function openBotQueueDb(file = defaultBotQueueDbFile) {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
+  const Database = require('better-sqlite3');
   const db = new Database(file);
 
   const cols = db
@@ -243,10 +263,9 @@ export function openBotQueueDb(file = defaultBotQueueDbFile) {
 export function seedBranchesIfNeeded(db) {
   const countRow = db.prepare('SELECT COUNT(*) AS cnt FROM branches').get();
   if (countRow && countRow.cnt >= 160) return countRow.cnt;
-  if (!existsSync(SEED_PATH)) return 0;
+  const branches = loadSeedBranches();
+  if (branches.length === 0) return 0;
 
-  const seed = JSON.parse(readFileSync(SEED_PATH, 'utf8'));
-  const branches = Array.isArray(seed) ? seed : Array.isArray(seed.branches) ? seed.branches : [];
   const now = utcNowIso();
   const upsert = db.prepare(`
     INSERT INTO branches (
@@ -265,16 +284,14 @@ export function seedBranchesIfNeeded(db) {
 
   const tx = db.transaction((items) => {
     for (const b of items) {
-      const disabled = b.is_disabled_on_site || b.disabled ? 1 : 0;
-      const active = disabled ? 0 : 1;
       upsert.run(
-        String(b.branch_id),
-        String(b.branch_name || ''),
-        String(b.city || ''),
-        String(b.phone || ''),
-        String(b.address || ''),
-        disabled,
-        active,
+        b.branch_id,
+        b.branch_name,
+        b.city,
+        b.phone,
+        b.address,
+        b.is_disabled_on_site,
+        b.active,
         now,
         now,
       );
@@ -607,35 +624,58 @@ export function computeServiceDailyMetric(dateLocal, branchId, serviceCode, snap
 }
 
 export function aggregateDailyForDate(db, dateLocal) {
-  const rows = db
+  const branchRows = db
     .prepare(
       `
-      SELECT *
+      SELECT DISTINCT branch_id
       FROM queue_snapshots
       WHERE service_code != '__BRANCH__'
         AND (
           substr(source_reported_at, 1, 10) = ?
           OR (source_reported_at IS NULL AND substr(observed_at, 1, 10) = ?)
         )
-      ORDER BY observed_at ASC
+      ORDER BY branch_id ASC
     `,
     )
     .all(dateLocal, dateLocal);
 
-  const grouped = new Map();
-  for (const r of rows) {
-    const key = `${r.branch_id}:::${r.service_code}`;
-    const list = grouped.get(key) || [];
-    list.push(r);
-    grouped.set(key, list);
-  }
+  const selectBranchSnaps = db.prepare(
+    `
+      SELECT
+        branch_id,
+        service_code,
+        observed_at,
+        source_reported_at,
+        current_ticket_raw,
+        ticket_prefix,
+        ticket_number,
+        waiting_count,
+        status
+      FROM queue_snapshots
+      WHERE branch_id = ?
+        AND service_code != '__BRANCH__'
+        AND (
+          substr(source_reported_at, 1, 10) = ?
+          OR (source_reported_at IS NULL AND substr(observed_at, 1, 10) = ?)
+        )
+      ORDER BY observed_at ASC
+    `,
+  );
 
   const computed = [];
-  for (const [key, snapList] of grouped.entries()) {
-    const [branchId, serviceCode] = key.split(':::');
-    const metric = computeServiceDailyMetric(dateLocal, branchId, serviceCode, snapList);
-    if (metric.first_observed_at !== null) {
-      computed.push(metric);
+  for (const { branch_id: bId } of branchRows) {
+    const rows = selectBranchSnaps.all(bId, dateLocal, dateLocal);
+    const grouped = new Map();
+    for (const r of rows) {
+      const list = grouped.get(r.service_code) || [];
+      list.push(r);
+      grouped.set(r.service_code, list);
+    }
+    for (const [serviceCode, snapList] of grouped.entries()) {
+      const metric = computeServiceDailyMetric(dateLocal, bId, serviceCode, snapList);
+      if (metric.first_observed_at !== null) {
+        computed.push(metric);
+      }
     }
   }
 
