@@ -815,7 +815,7 @@ export function getBotQueueSummary(db, { date = '', city = '', branchId = '', se
   const lastRun = db
     .prepare(
       `
-      SELECT id, started_at, finished_at, mode, total_targets, success_count, failure_count, renew_hit_count
+      SELECT id, started_at, finished_at, mode, total_targets, success_count, failure_count, renew_hit_count, http_status_summary, error_summary
       FROM crawl_runs
       ORDER BY id DESC
       LIMIT 1
@@ -887,6 +887,9 @@ export function getBotBranchHistory(db, branchId) {
 
 // --- Low-impact HTTP client & Session-Pinned lbtRenew collector --------------
 
+const DEFAULT_USER_AGENT =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
 function requestHttp(urlStr, { method = 'GET', headers = {}, body = null, cookies = {}, timeoutMs = 12000 } = {}) {
   return new Promise((resolve, reject) => {
     const url = new URL(urlStr);
@@ -894,7 +897,7 @@ function requestHttp(urlStr, { method = 'GET', headers = {}, body = null, cookie
       .map(([k, v]) => `${k}=${v}`)
       .join('; ');
     const reqHeaders = {
-      'User-Agent': 'Mozilla/5.0 (compatible; BankInterviewSelectorQueueStats/1.0; +read-only)',
+      'User-Agent': DEFAULT_USER_AGENT,
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'zh-TW,zh;q=0.9,en;q=0.8',
       ...(cookieHeader ? { Cookie: cookieHeader } : {}),
@@ -979,89 +982,117 @@ async function fetchHttpWithRedirects(urlStr, opts = {}, maxRedirects = 5) {
       }
       continue;
     }
-    return { ...res, elapsedMs: totalElapsedMs };
+    return { ...res, finalUrl: currentUrl, elapsedMs: totalElapsedMs };
   }
   throw new Error('Too many redirects');
 }
 
-async function postForm(urlStr, hiddenFields, extraFields, cookies) {
-  const payload = { ...hiddenFields, ...extraFields };
-  payload.hfKEY = payload.hfKEY || '';
-  assertReadOnlyPost(payload);
+async function postForm(urlStr, formFields, cookies, referer = urlStr) {
+  assertReadOnlyPost(formFields);
 
-  const encoded = new URLSearchParams(payload).toString();
+  const encoded = new URLSearchParams(formFields).toString();
   return fetchHttpWithRedirects(urlStr, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',
       'Content-Length': String(Buffer.byteLength(encoded)),
-      Referer: urlStr,
+      Origin: 'https://ino.bot.com.tw',
+      Referer: referer,
     },
     body: encoded,
     cookies,
   });
 }
 
-async function fetchBranchServiceColdStart(branchId, searchKeyword = '分行') {
-  let totalElapsed = 0;
+export async function fetchBranchServiceColdStart(branchId, branchName = '') {
+  let maxStepElapsedMs = 0;
   const r1 = await fetchHttpWithRedirects(DEFAULT_URL);
-  totalElapsed += r1.elapsedMs;
+  maxStepElapsedMs = Math.max(maxStepElapsedMs, r1.elapsedMs);
+  const u1 = r1.finalUrl || DEFAULT_URL;
   const h1 = extractHiddenFields(r1.text);
 
-  const r2 = await postForm(
-    DEFAULT_URL,
-    h1,
-    { __EVENTTARGET: 'lbtImmOrder', __EVENTARGUMENT: '', hfKEY: '' },
-    r1.cookies,
-  );
-  totalElapsed += r2.elapsedMs;
+  await sleep(400);
+  const p1 = {
+    __EVENTTARGET: 'lbtImmOrder',
+    __EVENTARGUMENT: '',
+    __VIEWSTATE: h1.__VIEWSTATE || '',
+    __VIEWSTATEGENERATOR: h1.__VIEWSTATEGENERATOR || '',
+    __EVENTVALIDATION: h1.__EVENTVALIDATION || '',
+    txtPhone1: '',
+    txtPhone2: '',
+    txtCAPTCHA: '',
+    IMMORDER: '',
+    IMMORDER_BRN: '',
+    RSVORDER_BRN: '',
+    ACTION: '',
+  };
+  const r2 = await postForm(u1, p1, r1.cookies, u1);
+  maxStepElapsedMs = Math.max(maxStepElapsedMs, r2.elapsedMs);
+  const branchUrl = r2.finalUrl || BRANCH_URL;
   const h2 = extractHiddenFields(r2.text);
 
-  const kw = branchId === '003' ? '營業部' : searchKeyword;
-  const r3 = await postForm(
-    BRANCH_URL,
-    h2,
-    {
-      __EVENTTARGET: 'lbtSearch2',
-      __EVENTARGUMENT: '',
-      txtKey: kw,
-      ddlCity: '',
-      ddlArea: '',
-      hfBRNO: '',
-      hfKEY: '',
-    },
-    r2.cookies,
-  );
-  totalElapsed += r3.elapsedMs;
+  await sleep(400);
+  const kw = branchName || (branchId === '003' ? '營業部' : '分行');
+  const pKw = {
+    __EVENTTARGET: 'lbtSearch2',
+    __EVENTARGUMENT: '',
+    __VIEWSTATE: h2.__VIEWSTATE || '',
+    __VIEWSTATEGENERATOR: h2.__VIEWSTATEGENERATOR || '',
+    __EVENTVALIDATION: h2.__EVENTVALIDATION || '',
+    txtKey: kw,
+    selCity: '',
+    selArea: '',
+    selCity2: '',
+    selArea2: '',
+    txtaddr: '',
+    hfBRNO: '',
+    hfBRNO2: '',
+    hfCITY: '',
+    hfAREA: '',
+    hfLONG: '',
+    hfLATI: '',
+    hfTAB: '1',
+  };
+  const r3 = await postForm(branchUrl, pKw, r2.cookies, branchUrl);
+  maxStepElapsedMs = Math.max(maxStepElapsedMs, r3.elapsedMs);
+  const branchUrl2 = r3.finalUrl || branchUrl;
   const h3 = extractHiddenFields(r3.text);
 
-  const r4 = await postForm(
-    BRANCH_URL,
-    h3,
-    {
-      __EVENTTARGET: 'lbtCheck',
-      __EVENTARGUMENT: '',
-      txtKey: kw,
-      ddlCity: '',
-      ddlArea: '',
-      brn: branchId,
-      hfBRNO: branchId,
-      hfKEY: '',
-    },
-    r3.cookies,
-  );
-  totalElapsed += r4.elapsedMs;
+  await sleep(400);
+  const pCheck = {
+    __EVENTTARGET: 'lbtCheck',
+    __EVENTARGUMENT: '',
+    __VIEWSTATE: h3.__VIEWSTATE || '',
+    __VIEWSTATEGENERATOR: h3.__VIEWSTATEGENERATOR || '',
+    __EVENTVALIDATION: h3.__EVENTVALIDATION || '',
+    txtKey: kw,
+    selCity: '',
+    selArea: '',
+    brn: branchId,
+    selCity2: '',
+    selArea2: '',
+    txtaddr: '',
+    hfBRNO: branchId,
+    hfBRNO2: '',
+    hfCITY: '',
+    hfAREA: '',
+    hfLONG: '',
+    hfLATI: '',
+    hfTAB: '1',
+  };
+  const r4 = await postForm(branchUrl2, pCheck, r3.cookies, branchUrl2);
+  maxStepElapsedMs = Math.max(maxStepElapsedMs, r4.elapsedMs);
   return {
     statusCode: r4.statusCode,
     text: r4.text,
     cookies: r4.cookies,
     hiddenFields: extractHiddenFields(r4.text),
-    elapsedMs: totalElapsed,
+    elapsedMs: maxStepElapsedMs,
     usedRenewCache: false,
   };
 }
 
-export async function fetchBranchServiceWithCache(db, branchId) {
+export async function fetchBranchServiceWithCache(db, branchId, branchName = '') {
   const cached = db
     .prepare('SELECT cookies_json, hidden_fields_json FROM session_cache WHERE branch_id = ?')
     .get(branchId);
@@ -1071,14 +1102,17 @@ export async function fetchBranchServiceWithCache(db, branchId) {
       const cookies = JSON.parse(cached.cookies_json);
       const hidden = JSON.parse(cached.hidden_fields_json);
       if (hidden.__VIEWSTATE) {
-        const rRenew = await postForm(
-          SERVICE_URL,
-          hidden,
-          { __EVENTTARGET: 'lbtRenew', __EVENTARGUMENT: '', hfKEY: '' },
-          cookies,
-        );
+        const pRenew = {
+          __EVENTTARGET: 'lbtRenew',
+          __EVENTARGUMENT: '',
+          __VIEWSTATE: hidden.__VIEWSTATE || '',
+          __VIEWSTATEGENERATOR: hidden.__VIEWSTATEGENERATOR || '',
+          __EVENTVALIDATION: hidden.__EVENTVALIDATION || '',
+          hfKEY: '',
+        };
+        const rRenew = await postForm(SERVICE_URL, pRenew, cookies, SERVICE_URL);
         const parsed = parseServicePageHtml(rRenew.text, branchId);
-        if (parsed.status !== 'session_expired' && parsed.status !== 'parse_error') {
+        if ((parsed.status === 'ok' || parsed.status === 'closed') && parsed.services.length > 0) {
           const newHidden = extractHiddenFields(rRenew.text);
           db.prepare(
             `
@@ -1104,9 +1138,9 @@ export async function fetchBranchServiceWithCache(db, branchId) {
     }
   }
 
-  const cold = await fetchBranchServiceColdStart(branchId);
+  const cold = await fetchBranchServiceColdStart(branchId, branchName);
   const parsed = parseServicePageHtml(cold.text, branchId);
-  if (parsed.status !== 'session_expired' && parsed.status !== 'parse_error' && cold.hiddenFields.__VIEWSTATE) {
+  if ((parsed.status === 'ok' || parsed.status === 'closed') && parsed.services.length > 0 && cold.hiddenFields.__VIEWSTATE) {
     db.prepare(
       `
       INSERT INTO session_cache (branch_id, cookies_json, hidden_fields_json, updated_at)
@@ -1243,12 +1277,12 @@ export async function runCrawlOnce(db, { mode = 'all_enabled', forceOffHours = f
       mode === 'pilot'
         ? db
             .prepare(
-              `SELECT branch_id FROM branches WHERE active = 1 AND is_disabled_on_site = 0 AND branch_id IN (${pilotIds.map(() => '?').join(',')}) ORDER BY branch_id`,
+              `SELECT branch_id, branch_name FROM branches WHERE active = 1 AND is_disabled_on_site = 0 AND branch_id IN (${pilotIds.map(() => '?').join(',')}) ORDER BY branch_id`,
             )
             .all(...pilotIds)
         : db
             .prepare(
-              'SELECT branch_id FROM branches WHERE active = 1 AND is_disabled_on_site = 0 ORDER BY branch_id',
+              'SELECT branch_id, branch_name FROM branches WHERE active = 1 AND is_disabled_on_site = 0 ORDER BY branch_id',
             )
             .all();
 
@@ -1264,16 +1298,18 @@ export async function runCrawlOnce(db, { mode = 'all_enabled', forceOffHours = f
     let consecutiveSlow = 0;
     const statusSummary = {};
     const errors = [];
+    const todayLocal = getTaipeiNowParts().dateLocal;
 
     for (let i = 0; i < targetBranches.length; i++) {
       const branchId = targetBranches[i].branch_id;
+      const branchName = targetBranches[i].branch_name || '';
       if (i > 0) {
         const jitterMs = 1500 + Math.floor(Math.random() * 900);
         await sleep(jitterMs);
       }
 
       try {
-        const res = await fetchBranchServiceWithCache(db, branchId);
+        const res = await fetchBranchServiceWithCache(db, branchId, branchName);
         const codeKey = String(res.statusCode);
         statusSummary[codeKey] = (statusSummary[codeKey] || 0) + 1;
 
@@ -1300,6 +1336,10 @@ export async function runCrawlOnce(db, { mode = 'all_enabled', forceOffHours = f
           successCount += 1;
           consecutiveFailures = 0;
           if (res.usedRenewCache) renewHitCount += 1;
+          // Incrementally update daily_metrics so the webpage shows live progress without waiting for all 151 branches
+          if (successCount === 5 || successCount % 20 === 0) {
+            aggregateDailyForDate(db, todayLocal);
+          }
         } else {
           failureCount += 1;
           consecutiveFailures += 1;
@@ -1338,7 +1378,6 @@ export async function runCrawlOnce(db, { mode = 'all_enabled', forceOffHours = f
       crawlRunId,
     );
 
-    const todayLocal = getTaipeiNowParts().dateLocal;
     aggregateDailyForDate(db, todayLocal);
 
     // Keep raw snapshots bounded to 14 days so disk usage stays tiny while daily_metrics is kept forever.
