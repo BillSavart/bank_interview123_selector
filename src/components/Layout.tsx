@@ -19,7 +19,6 @@ const PAGE_TITLES: Record<string, string> = {
   '/number-trainer': '大寫數字訓練器',
   '/check-game': '支票審查員',
   '/salary': '年薪計算機',
-  '/branch-stats': '叫號統計',
   '/about': '關於我們',
   '/privacy': '隱私權政策',
   '/terms': '服務條款',

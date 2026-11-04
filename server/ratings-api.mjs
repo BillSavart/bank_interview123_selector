@@ -8,13 +8,6 @@ import {
   initOfficialDocStore,
   listOfficialDocQuestions,
 } from './official-doc.mjs';
-import {
-  defaultBotQueueDbFile,
-  getBotBranchHistory,
-  getBotQueueSummary,
-  openBotQueueDb,
-  startBotQueueScheduler,
-} from './bot-queue.mjs';
 import { createSubmissionEmailNotifier } from './submission-email.mjs';
 import { createTurnstileVerifier } from './turnstile.mjs';
 
@@ -1328,27 +1321,6 @@ const getOfficialDocDbHandle = () => {
   return officialDocDb;
 };
 
-let botQueueDb = null;
-let botQueueDbError = null;
-let botQueueSchedulerStarted = false;
-const getBotQueueDbHandle = () => {
-  if (botQueueDbError) return null;
-  if (!botQueueDb) {
-    try {
-      botQueueDb = openBotQueueDb(defaultBotQueueDbFile);
-    } catch (error) {
-      botQueueDbError = error;
-      console.warn(`BOT queue DB unavailable at ${defaultBotQueueDbFile}.`, error);
-      return null;
-    }
-  }
-  if (!botQueueSchedulerStarted) {
-    botQueueSchedulerStarted = true;
-    startBotQueueScheduler(botQueueDb);
-  }
-  return botQueueDb;
-};
-
 await loadStore();
 await questionComments.load();
 await questionComments.loadVotes();
@@ -1361,7 +1333,6 @@ await loadCalendar();
 await loadPosts();
 await loadPostVotes();
 if (officialDocDb) getOfficialDocDbHandle();
-getBotQueueDbHandle();
 
 createServer(async (req, res) => {
   try {
@@ -1403,38 +1374,6 @@ createServer(async (req, res) => {
         return;
       }
       sendJson(res, 200, { question }, cacheRead);
-      return;
-    }
-
-    // --- 臺灣銀行分行叫號與等待統計 ---------------------------------------
-    if (req.method === 'GET' && url.pathname === '/api/bot-queue/summary') {
-      const queueDb = getBotQueueDbHandle();
-      if (!queueDb) {
-        sendJson(res, 503, { error: 'bot queue database unavailable' });
-        return;
-      }
-      const date = (url.searchParams.get('date') || '').trim();
-      const city = (url.searchParams.get('city') || '').trim();
-      const branchId = (url.searchParams.get('branch_id') || '').trim();
-      const serviceName = (url.searchParams.get('service_name') || '').trim();
-      const payload = getBotQueueSummary(queueDb, { date, city, branchId, serviceName });
-      sendJson(res, 200, payload, cacheRead);
-      return;
-    }
-
-    const botBranchHistoryMatch = url.pathname.match(/^\/api\/bot-queue\/branch\/(\d{3})$/);
-    if (req.method === 'GET' && botBranchHistoryMatch) {
-      const queueDb = getBotQueueDbHandle();
-      if (!queueDb) {
-        sendJson(res, 503, { error: 'bot queue database unavailable' });
-        return;
-      }
-      const result = getBotBranchHistory(queueDb, botBranchHistoryMatch[1]);
-      if (!result) {
-        sendJson(res, 404, { error: 'branch not found' });
-        return;
-      }
-      sendJson(res, 200, result, cacheRead);
       return;
     }
 

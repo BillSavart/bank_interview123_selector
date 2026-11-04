@@ -6,7 +6,6 @@ import {
   BookOpen,
   CalendarDays,
   ClipboardList,
-  Clock,
   FileText,
   MapPin,
   MapPinned,
@@ -57,12 +56,6 @@ const features = [
     icon: FileText,
     title: '公文練習器',
     desc: '練習公股銀行考古題中的簽與函，直接在公文稿上作答，並可對照 AI 參考答案。',
-  },
-  {
-    to: '/branch-stats',
-    icon: Clock,
-    title: '叫號統計',
-    desc: '每日統計各分行各業務之平均等待人數、最高等待人數、最忙碌時段與總叫號人數，掌握各分行實際忙碌程度。',
   },
 ];
 

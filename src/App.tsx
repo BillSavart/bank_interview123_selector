@@ -18,7 +18,6 @@ import { ExperiencePage } from './pages/ExperiencePage';
 import { ExperiencePostPage } from './pages/ExperiencePostPage';
 import { AdminPage } from './pages/AdminPage';
 import { ResourceGuidePage } from './pages/ResourceGuidePage';
-import { BotQueuePage } from './pages/BotQueuePage';
 
 // In production the admin lives on its own subdomain (admin.你的網域). There the
 // whole site IS the admin panel — no public nav/footer.
@@ -55,7 +54,6 @@ export function App() {
         <Route path="official-doc-practice/:questionId" element={<OfficialDocPracticePage />} />
         <Route path="experience" element={<ExperiencePage />} />
         <Route path="experience/:id" element={<ExperiencePostPage />} />
-        <Route path="branch-stats" element={<BotQueuePage />} />
         <Route path="interview-guide" element={<ResourceGuidePage guidePath="/interview-guide" />} />
         <Route path="methodology" element={<ResourceGuidePage guidePath="/methodology" />} />
         {allowAdminPath && <Route path="admin" element={<AdminPage />} />}

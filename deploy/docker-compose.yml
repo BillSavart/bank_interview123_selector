@@ -43,7 +43,6 @@ services:
       # See deploy/SQLITE-CUTOVER.md for the full zero-loss runbook.
       USE_SQLITE: ${USE_SQLITE:-}
       DB_FILE: /data/app.db
-      BOT_QUEUE_DB_FILE: /data/bot_queue.db
       SITE_BASE: ${SITE_BASE:-https://bank-interview-advisor.com}
       ADMIN_BASE_URL: https://${ADMIN_DOMAIN:-admin.localhost}
       ADMIN_TOKEN: ${ADMIN_TOKEN}

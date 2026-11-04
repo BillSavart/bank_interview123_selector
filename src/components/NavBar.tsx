@@ -16,7 +16,6 @@ const examItems = [
 const navItems = [
   { to: '/experience', label: '經驗分享' },
   { to: '/salary', label: '年薪計算機' },
-  { to: '/branch-stats', label: '叫號統計' },
 ];
 
 const gameItems = [
