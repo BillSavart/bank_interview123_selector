@@ -117,7 +117,8 @@ ADMIN_YOUR_DOMAIN {
 	handle @adminpage {
 		root * /var/www/bank-interview
 		rewrite * /admin.html
-		header Cache-Control "no-store"
+		# Cloudflare skips JavaScript injection when the origin sends no-transform.
+		header Cache-Control "no-store, no-transform"
 		file_server
 	}
 

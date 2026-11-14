@@ -133,7 +133,8 @@
 	handle @adminpage {
 		root * /srv
 		rewrite * /admin.html
-		header Cache-Control "no-store"
+		# Cloudflare skips JavaScript injection when the origin sends no-transform.
+		header Cache-Control "no-store, no-transform"
 		file_server
 	}
 
