@@ -6,15 +6,20 @@
 // score in any year it has no value of its own. CSV export drops that, which made
 // combined-district years show up wrongly as 未開缺.
 //
-// Self-contained: downloads the XLSX + g0v county geojson into /tmp if missing.
+// Downloads the XLSX and a pinned county GeoJSON revision into a private directory.
 // Writes: public/banks-data.json
 import fs from "node:fs";
-import { execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 const SHEET_ID = "1vqqs2Ik2BrGqgusvdRKQZ_4Aij_9fPdiiMtffOwhpg0";
-const GEO = "/tmp/tw_full.json";
-const XLSX = "/tmp/banks.xlsx";
-const XDIR = "/tmp/banks_xlsx";
+const geoCommit = "85212c5cff73b706730e624024120b134c15f861";
+const workspace = fs.mkdtempSync(join(tmpdir(), "bank-map-"));
+process.on("exit", () => fs.rmSync(workspace, { recursive: true, force: true }));
+const GEO = join(workspace, "counties.json");
+const XLSX = join(workspace, "banks.xlsx");
+const XDIR = join(workspace, "xlsx");
 const OUT = new URL("../public/banks-data.json", import.meta.url);
 
 // Sheet (tab) names of the 8 banks to include, in display order.
@@ -38,35 +43,15 @@ function isValidXlsx(path) {
 }
 
 function prep() {
-  if (!fs.existsSync(GEO)) {
-    execSync(`curl -sfL "https://raw.githubusercontent.com/g0v/twgeojson/master/json/twCounty2010.geo.json" -o "${GEO}"`);
-  }
-  // Always try to re-pull the sheet so a rebuild reflects the latest edits, but
-  // download to a temp path first and only swap it in if it's a valid xlsx —
-  // a botched download must not clobber a good cached copy. If the fresh pull
-  // fails (offline/sandbox), fall back to the last good copy in /tmp.
-  const tmp = `${XLSX}.dl`;
-  try {
-    execSync(`curl -sfL "https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=xlsx" -o "${tmp}"`);
-    if (isValidXlsx(tmp)) {
-      fs.renameSync(tmp, XLSX);
-    } else {
-      console.warn("!! sheet download was not a valid xlsx; keeping cached copy if any");
-      fs.rmSync(tmp, { force: true });
-    }
-  } catch (e) {
-    console.warn(`!! sheet download failed (${e.message.split("\n")[0]}); keeping cached copy if any`);
-    fs.rmSync(tmp, { force: true });
-  }
+  const download = (url, path) =>
+    execFileSync("curl", ["-fsSL", "--proto", "=https", "--proto-redir", "=https", "--max-time", "30", "--max-filesize", "30000000", "-o", path, url]);
+  download(`https://raw.githubusercontent.com/g0v/twgeojson/${geoCommit}/json/twCounty2010.geo.json`, GEO);
+  download(`https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=xlsx`, XLSX);
   if (!isValidXlsx(XLSX)) {
-    throw new Error(
-      `No valid sheet xlsx at ${XLSX}. The download failed and no good cached ` +
-      `copy exists. Re-run with network access to fetch the Google Sheet.`,
-    );
+    throw new Error("Google Sheets export is not a valid XLSX file");
   }
-  fs.rmSync(XDIR, { recursive: true, force: true });
-  fs.mkdirSync(XDIR, { recursive: true });
-  execSync(`cd "${XDIR}" && unzip -oq "${XLSX}"`);
+  fs.mkdirSync(XDIR);
+  execFileSync("unzip", ["-oq", XLSX, "xl/*.xml", "xl/_rels/workbook.xml.rels", "-d", XDIR]);
 }
 prep();
 

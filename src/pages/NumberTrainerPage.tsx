@@ -1,135 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Trophy, Timer, Hash, RotateCcw, X } from 'lucide-react';
 import {
-  buildRound,
-  numberGameIntro,
-  scoreForAnswer,
-  SECONDS_PER_QUESTION,
-  type NumberQuestion,
+  numberGameIntro, SECONDS_PER_QUESTION, type GridQuestion, type CheckQuestion,
 } from '../data/numberGame';
 import { PLACE_HEADERS } from '../lib/chineseNumerals';
-import {
-  fetchLeaderboard,
-  loadPlayerName,
-  savePlayerName,
-  submitScore,
-  type LeaderboardEntry,
-} from '../lib/leaderboard';
+import type { LeaderboardEntry } from '../lib/leaderboard';
+import { useRankedGame } from '../lib/useRankedGame';
 
-type Phase = 'intro' | 'playing' | 'result';
+type NumberPrompt = Omit<GridQuestion, 'value'> | Omit<CheckQuestion, 'value'>;
 
 export function NumberTrainerPage() {
-  const [phase, setPhase] = useState<Phase>('intro');
-  const [name, setName] = useState(loadPlayerName());
-
-  // Per-round state
-  const [round, setRound] = useState<NumberQuestion[]>([]);
-  const [index, setIndex] = useState(0);
-  const [secondsLeft, setSecondsLeft] = useState(SECONDS_PER_QUESTION);
-  const [answer, setAnswer] = useState(''); // raw digits the user typed (no commas)
-  const [revealed, setRevealed] = useState(false);
-  const [secondsAtAnswer, setSecondsAtAnswer] = useState(0);
-  const [totalScore, setTotalScore] = useState(0);
-  const [lastGain, setLastGain] = useState(0);
-
-  // Leaderboard
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [myRank, setMyRank] = useState<number | null>(null);
-  const [submitState, setSubmitState] = useState<'idle' | 'submitting' | 'done' | 'error'>('idle');
-
-  const current = round[index];
-  const isLast = index === round.length - 1;
-
-  const enteredValue = answer ? Number(answer) : NaN;
-  const correct = revealed && current ? enteredValue === current.value : false;
-
-  const refreshLeaderboard = useCallback(() => {
-    fetchLeaderboard('numbergame')
-      .then(setLeaderboard)
-      .catch(() => {
-        /* leaderboard is best-effort; ignore network errors */
-      });
-  }, []);
-
-  useEffect(() => {
-    refreshLeaderboard();
-  }, [refreshLeaderboard]);
-
-  // --- Countdown timer -----------------------------------------------------
-  const revealAnswer = useCallback((remaining: number) => {
-    setSecondsAtAnswer(remaining);
-    setRevealed(true);
-  }, []);
-
-  useEffect(() => {
-    if (phase !== 'playing' || revealed) return;
-
-    if (secondsLeft <= 0) {
-      revealAnswer(0);
-      return;
-    }
-
-    const timer = window.setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
-    return () => window.clearTimeout(timer);
-  }, [phase, revealed, secondsLeft, revealAnswer]);
-
-  // Award score once when an answer is revealed.
-  useEffect(() => {
-    if (!revealed || !current) return;
-    const gain = scoreForAnswer(enteredValue === current.value, secondsAtAnswer);
-    setLastGain(gain);
-    setTotalScore((prev) => prev + gain);
-  }, [revealed]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const startGame = () => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    savePlayerName(trimmed);
-    setRound(buildRound());
-    setIndex(0);
-    setSecondsLeft(SECONDS_PER_QUESTION);
-    setAnswer('');
-    setRevealed(false);
-    setSecondsAtAnswer(0);
-    setTotalScore(0);
-    setLastGain(0);
-    setSubmitState('idle');
-    setMyRank(null);
-    setPhase('playing');
-  };
-
-  const submitAnswer = () => {
-    if (revealed) return;
-    revealAnswer(secondsLeft);
-  };
-
-  const next = () => {
-    if (isLast) {
-      finishGame();
-      return;
-    }
-    setIndex((i) => i + 1);
-    setSecondsLeft(SECONDS_PER_QUESTION);
-    setAnswer('');
-    setRevealed(false);
-    setSecondsAtAnswer(0);
-  };
-
-  const finishGame = () => {
-    setPhase('result');
-    setSubmitState('submitting');
-    submitScore('numbergame', name.trim(), totalScore)
-      .then((res) => {
-        if (res.error) {
-          setSubmitState('error');
-          return;
-        }
-        if (res.leaderboard) setLeaderboard(res.leaderboard);
-        setMyRank(res.rank ?? null);
-        setSubmitState('done');
-      })
-      .catch(() => setSubmitState('error'));
-  };
+  const game = useRankedGame<NumberPrompt, number>('numbergame');
+  const { phase, name, round, grade, busy, error } = game;
+  const [answer, setAnswer] = useState('');
+  const start = () => { setAnswer(''); game.start(); };
+  const next = () => { setAnswer(''); game.next(); };
 
   return (
     <div className="container py-4 checkgame-page">
@@ -140,23 +25,32 @@ export function NumberTrainerPage() {
 
       <div className="checkgame-layout">
         <div className="checkgame-main">
+          {error && (
+            <div className="mb-3">
+              <p className="text-danger" role="alert">{error}</p>
+              {phase === 'playing' && <button type="button" className="checkgame-btn" onClick={start}>重新開始</button>}
+            </div>
+          )}
           {phase === 'intro' && (
-            <IntroCard name={name} onNameChange={setName} onStart={startGame} intro={numberGameIntro} />
+            <IntroCard name={name} onNameChange={game.setName} onStart={start} intro={numberGameIntro} busy={busy} />
           )}
 
-          {phase === 'playing' && current && (
+          {phase === 'playing' && round && (
             <QuestionCard
-              question={current}
-              index={index}
-              total={round.length}
-              secondsLeft={secondsLeft}
+              question={round.question}
+              index={round.index}
+              total={round.total}
+              secondsLeft={game.secondsLeft}
               answer={answer}
               onAnswerChange={setAnswer}
-              revealed={revealed}
-              correct={correct}
-              lastGain={lastGain}
-              isLast={isLast}
-              onSubmit={submitAnswer}
+              revealed={!!grade}
+              correct={grade?.correct || false}
+              correctAnswer={grade?.answer}
+              timedOut={grade?.timedOut || false}
+              lastGain={grade?.gain || 0}
+              isLast={round.index + 1 === round.total}
+              busy={busy}
+              onSubmit={() => game.answer(answer ? Number(answer) : null)}
               onNext={next}
             />
           )}
@@ -164,16 +58,17 @@ export function NumberTrainerPage() {
           {phase === 'result' && (
             <ResultCard
               name={name}
-              totalScore={totalScore}
-              rank={myRank}
-              submitState={submitState}
-              onReplay={startGame}
+              totalScore={grade?.totalScore || 0}
+              rank={game.rank}
+              submitState={game.submitState}
+              onReplay={start}
+              busy={busy}
             />
           )}
         </div>
 
         <aside className="checkgame-side">
-          <LeaderboardPanel entries={leaderboard} playerName={name} />
+          <LeaderboardPanel entries={game.leaderboard} playerName={name} />
         </aside>
       </div>
     </div>
@@ -187,11 +82,13 @@ function IntroCard({
   onNameChange,
   onStart,
   intro,
+  busy,
 }: {
   name: string;
   onNameChange: (v: string) => void;
   onStart: () => void;
   intro: string;
+  busy: boolean;
 }) {
   return (
     <div className="checkgame-card checkgame-intro">
@@ -217,7 +114,7 @@ function IntroCard({
           placeholder="輸入暱稱（最多 24 字）"
           onChange={(e) => onNameChange(e.target.value)}
         />
-        <button type="submit" className="checkgame-btn checkgame-btn-primary" disabled={!name.trim()}>
+        <button type="submit" className="checkgame-btn checkgame-btn-primary" disabled={busy || !name.trim()}>
           開始挑戰
         </button>
       </form>
@@ -236,12 +133,15 @@ function QuestionCard({
   onAnswerChange,
   revealed,
   correct,
+  correctAnswer,
+  timedOut,
+  busy,
   lastGain,
   isLast,
   onSubmit,
   onNext,
 }: {
-  question: NumberQuestion;
+  question: NumberPrompt;
   index: number;
   total: number;
   secondsLeft: number;
@@ -249,6 +149,9 @@ function QuestionCard({
   onAnswerChange: (next: string) => void;
   revealed: boolean;
   correct: boolean;
+  correctAnswer?: number;
+  timedOut: boolean;
+  busy: boolean;
   lastGain: number;
   isLast: boolean;
   onSubmit: () => void;
@@ -326,11 +229,11 @@ function QuestionCard({
           aria-label="你的答案（阿拉伯數字）"
           placeholder="輸入金額"
           value={display}
-          disabled={revealed}
+          disabled={revealed || busy}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
             // Enter 送出答案（與「送出答案」按鈕相同）。
-            if (e.key === 'Enter' && !revealed) {
+            if (e.key === 'Enter' && !revealed && !busy) {
               e.preventDefault();
               onSubmit();
             }
@@ -340,7 +243,7 @@ function QuestionCard({
       </div>
 
       {!revealed && (
-        <button type="button" className="checkgame-btn checkgame-btn-primary numbergame-submit" onClick={onSubmit}>
+        <button type="button" className="checkgame-btn checkgame-btn-primary numbergame-submit" onClick={onSubmit} disabled={busy}>
           送出答案
         </button>
       )}
@@ -349,12 +252,12 @@ function QuestionCard({
         <div className={`checkgame-reveal ${correct ? 'is-correct' : 'is-wrong'}`}>
           <div className="checkgame-reveal-head">
             <span className="checkgame-reveal-verdict">
-              {correct ? '答對了！' : '答錯了'}
-              　正解：{question.value.toLocaleString('en-US')} 元
+              {timedOut ? '時間到！' : correct ? '答對了！' : '答錯了'}
+              　正解：{correctAnswer?.toLocaleString('en-US')} 元
             </span>
             <span className="checkgame-reveal-gain">+{lastGain} 分</span>
           </div>
-          <button type="button" className="checkgame-btn checkgame-btn-primary" onClick={onNext}>
+          <button type="button" className="checkgame-btn checkgame-btn-primary" onClick={onNext} disabled={busy}>
             {isLast ? '看結算' : '下一題'}
           </button>
         </div>
@@ -371,12 +274,14 @@ function ResultCard({
   rank,
   submitState,
   onReplay,
+  busy,
 }: {
   name: string;
   totalScore: number;
   rank: number | null;
   submitState: 'idle' | 'submitting' | 'done' | 'error';
   onReplay: () => void;
+  busy: boolean;
 }) {
   return (
     <div className="checkgame-card checkgame-result">
@@ -396,7 +301,7 @@ function ResultCard({
         <p className="checkgame-result-note is-error">成績上傳失敗，但不影響你再玩一次。</p>
       )}
 
-      <button type="button" className="checkgame-btn checkgame-btn-primary" onClick={onReplay}>
+      <button type="button" className="checkgame-btn checkgame-btn-primary" onClick={onReplay} disabled={busy}>
         <RotateCcw size={18} />
         再玩一次
       </button>

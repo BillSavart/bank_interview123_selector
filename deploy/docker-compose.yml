@@ -6,7 +6,6 @@
 #   DOMAIN=interview.example.com
 #   ADMIN_DOMAIN=admin.interview.example.com   # admin subdomain (add DNS record)
 #   ADMIN_TOKEN=a-long-random-secret           # gates the calendar admin API
-#   ADMIN_BASIC_HASH=                          # optional Caddy basic_auth bcrypt hash
 #   RESEND_API_KEY=re_xxx                      # optional submission email alerts
 #   SUBMISSION_NOTIFY_EMAIL=owner@example.com
 #   SUBMISSION_EMAIL_FROM=Website <notifications@send.example.com>
@@ -15,8 +14,11 @@
 
 services:
   api:
-    image: ${REGISTRY}/bank-interview-api:latest
+    image: ${API_IMAGE:-${REGISTRY}/bank-interview-api:latest}
     restart: unless-stopped
+    read_only: true
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
     logging:
       driver: json-file
       options:
@@ -46,6 +48,8 @@ services:
       SITE_BASE: ${SITE_BASE:-https://bank-interview-advisor.com}
       ADMIN_BASE_URL: https://${ADMIN_DOMAIN:-admin.localhost}
       ADMIN_TOKEN: ${ADMIN_TOKEN}
+      VOTER_SIGNING_KEY: ${VOTER_SIGNING_KEY:-}
+      TRUST_PROXY: "1"
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       SUBMISSION_NOTIFY_EMAIL: ${SUBMISSION_NOTIFY_EMAIL:-}
       SUBMISSION_EMAIL_FROM: ${SUBMISSION_EMAIL_FROM:-}
@@ -58,10 +62,17 @@ services:
     volumes:
       - ratings_data:/data
     mem_limit: 80m
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/api/health').then(r=>{ if (!r.ok) process.exitCode=1; },()=>{process.exitCode=1;})"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
 
   web:
-    image: ${REGISTRY}/bank-interview-web:latest
+    image: ${WEB_IMAGE:-${REGISTRY}/bank-interview-web:latest}
     restart: unless-stopped
+    security_opt: [no-new-privileges:true]
     logging:
       driver: json-file
       options:
@@ -70,7 +81,6 @@ services:
     environment:
       DOMAIN: ${DOMAIN}
       ADMIN_DOMAIN: ${ADMIN_DOMAIN:-admin.localhost}
-      ADMIN_BASIC_HASH: ${ADMIN_BASIC_HASH:-}
     ports:
       - "80:80"
       - "443:443"
@@ -86,7 +96,8 @@ services:
       - ./certs:/certs:ro
     mem_limit: 96m
     depends_on:
-      - api
+      api:
+        condition: service_healthy
 
 volumes:
   caddy_data:

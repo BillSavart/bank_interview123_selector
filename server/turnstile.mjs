@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 const siteverifyUrl = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 const defaultHostnames = 'bank-interview-advisor.com,www.bank-interview-advisor.com';
@@ -27,7 +27,9 @@ export function createTurnstileVerifier(options = {}) {
   const timeoutMs = Number(options.timeoutMs ?? process.env.TURNSTILE_TIMEOUT_MS ?? 5000);
   const fetchImpl = options.fetchImpl ?? fetch;
   const enabled = Boolean(siteKey && secretKey);
-  const partiallyConfigured = Boolean(siteKey || secretKey) && !enabled;
+  const partiallyConfigured = Boolean(options.required || siteKey || secretKey) && !enabled;
+  const used = new Map();
+  const replayLifetimeMs = 5 * 60_000;
 
   return {
     enabled,
@@ -51,6 +53,20 @@ export function createTurnstileVerifier(options = {}) {
       if (responseToken.length > 2048) {
         return failure(400, '安全驗證資料無效，請重新驗證。', 'invalid-token');
       }
+
+      const now = Date.now();
+      for (const [key, expiry] of used) {
+        if (expiry > now) break;
+        used.delete(key);
+      }
+      const tokenHash = createHash('sha256').update(responseToken).digest('hex');
+      if (used.has(tokenHash)) {
+        return failure(400, '安全驗證已使用，請重新驗證。', 'expired-or-duplicate');
+      }
+      if (used.size >= 8192) {
+        return failure(503, '安全驗證服務忙碌，請稍後再試。', 'busy');
+      }
+      used.set(tokenHash, now + replayLifetimeMs);
 
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), Number.isFinite(timeoutMs) ? timeoutMs : 5000);

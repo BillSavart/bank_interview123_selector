@@ -1,4 +1,4 @@
-import { getVoterId } from './ratings';
+import { voterWrite } from './voterSession';
 
 export interface Comment {
   id: string;
@@ -13,7 +13,7 @@ export interface Comment {
 
 export type CommentVote = 1 | -1;
 
-const myVotesStorageKey = 'bank-interview-comment-votes';
+const myVotesStorageKey = 'bank-interview-verified-comment-votes';
 
 export function loadMyCommentVotes(): Record<string, CommentVote> {
   try {
@@ -79,14 +79,7 @@ export async function voteCommentAt(
   commentId: string,
   value: CommentVote | 0,
 ): Promise<Comment | null> {
-  const response = await fetch(`${base}/${commentId}/vote`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ voterId: getVoterId(), value }),
-  });
+  const response = await voterWrite(`${base}/${commentId}/vote`, { value });
 
   if (!response.ok) return null;
   const payload = (await response.json()) as { comment?: Comment };

@@ -1,5 +1,6 @@
 // 招考行事曆的型別與 API 呼叫。公開讀取走 /api/calendar；後台編輯走
-// /api/admin/calendar/*，需帶上管理員 token（Authorization: Bearer）。
+// /api/admin/calendar/*，由管理員工作階段驗證。
+import { adminFetch } from './adminSession';
 
 export interface CalendarEvent {
   id: string;
@@ -46,25 +47,6 @@ export const emptyEventInput = (): CalendarEventInput => ({
   note: '',
 });
 
-const adminTokenKey = 'admin-token';
-
-export function loadAdminToken(): string {
-  try {
-    return localStorage.getItem(adminTokenKey) || '';
-  } catch {
-    return '';
-  }
-}
-
-export function saveAdminToken(token: string) {
-  try {
-    if (token) localStorage.setItem(adminTokenKey, token);
-    else localStorage.removeItem(adminTokenKey);
-  } catch {
-    // ignore storage failures
-  }
-}
-
 /** 公開讀取行事曆事件（已由後端依日期排序）。 */
 export async function fetchCalendar(): Promise<CalendarEvent[]> {
   const res = await fetch('/api/calendar', { headers: { Accept: 'application/json' } });
@@ -73,47 +55,37 @@ export async function fetchCalendar(): Promise<CalendarEvent[]> {
   return payload.events || [];
 }
 
-const authHeaders = (token: string) => ({
-  Accept: 'application/json',
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${token}`,
-});
-
-/** 用 token 取回事件清單，順帶驗證 token 是否有效（401 會丟錯）。 */
-export async function fetchAdminCalendar(token: string): Promise<CalendarEvent[]> {
-  const res = await fetch('/api/admin/calendar', { headers: authHeaders(token) });
+/** 取回管理員行事曆，同時確認工作階段有效。 */
+export async function fetchAdminCalendar(): Promise<CalendarEvent[]> {
+  const res = await adminFetch('/api/admin/calendar');
   if (res.status === 401) throw new Error('unauthorized');
   if (!res.ok) throw new Error('admin calendar fetch failed');
   const payload = (await res.json()) as { events?: CalendarEvent[] };
   return payload.events || [];
 }
 
-export async function createEvent(token: string, input: CalendarEventInput): Promise<CalendarEvent[]> {
-  const res = await fetch('/api/admin/calendar', {
+export async function createEvent(input: CalendarEventInput): Promise<CalendarEvent[]> {
+  const res = await adminFetch('/api/admin/calendar', {
     method: 'POST',
-    headers: authHeaders(token),
     body: JSON.stringify(input),
   });
   return handleWriteResponse(res);
 }
 
 export async function updateEvent(
-  token: string,
   id: string,
   input: CalendarEventInput,
 ): Promise<CalendarEvent[]> {
-  const res = await fetch(`/api/admin/calendar/${id}`, {
+  const res = await adminFetch(`/api/admin/calendar/${id}`, {
     method: 'PUT',
-    headers: authHeaders(token),
     body: JSON.stringify(input),
   });
   return handleWriteResponse(res);
 }
 
-export async function deleteEvent(token: string, id: string): Promise<CalendarEvent[]> {
-  const res = await fetch(`/api/admin/calendar/${id}`, {
+export async function deleteEvent(id: string): Promise<CalendarEvent[]> {
+  const res = await adminFetch(`/api/admin/calendar/${id}`, {
     method: 'DELETE',
-    headers: authHeaders(token),
   });
   return handleWriteResponse(res);
 }

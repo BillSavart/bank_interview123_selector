@@ -264,10 +264,13 @@ export function MapPage() {
   const roundLabel = bank && roundIdx >= 0 ? bank.rounds[roundIdx] : '選擇梯次';
 
   const selectRegion = (r: string) => setSelRegion(r);
-  const moveTip = (e: React.MouseEvent, html: string) => {
+  const moveTip = (e: React.MouseEvent, label: string, detail: string, extra?: string) => {
     const el = tipRef.current;
     if (!el) return;
-    el.innerHTML = html;
+    const strong = document.createElement('b');
+    strong.textContent = label;
+    el.replaceChildren(strong, `　${detail}`);
+    if (extra) el.append(document.createElement('br'), extra);
     el.style.left = `${e.clientX + 14}px`;
     el.style.top = `${e.clientY + 14}px`;
     el.style.opacity = '1';
@@ -464,7 +467,7 @@ export function MapPage() {
               const rec = reg ? rv[reg] : null;
               const v = rec ? rec.val : null;
               const group = reg ? regionDistrict.get(reg) : null;
-              const groupNote = group ? `<br>同考區：${group.join('、')}` : '';
+              const groupNote = group ? `同考區：${group.join('、')}` : '';
               return (
                 <path
                   key={cty}
@@ -472,7 +475,7 @@ export function MapPage() {
                   d={d}
                   fill={colorOf(v, colorScale)}
                   onMouseEnter={() => setHoverReg(v != null ? reg : null)}
-                  onMouseMove={(e) => moveTip(e, `<b>${reg ?? cty}</b>　${v != null ? `${v} 分` : '無資料'}${groupNote}`)}
+                  onMouseMove={(e) => moveTip(e, reg ?? cty, v != null ? `${v} 分` : '無資料', groupNote)}
                   onMouseLeave={() => { hideTip(); setHoverReg(null); }}
                   onClick={reg && v != null ? () => selectRegion(reg) : undefined}
                 />
@@ -530,7 +533,7 @@ export function MapPage() {
                   key={reg}
                   className={`map-island ${selRegion === reg ? 'is-sel' : ''}`}
                   onClick={v != null ? () => selectRegion(reg) : undefined}
-                  onMouseMove={(e) => moveTip(e, `<b>${reg}</b>　${v != null ? `${v} 分` : '無資料'}`)}
+                  onMouseMove={(e) => moveTip(e, reg, v != null ? `${v} 分` : '無資料')}
                   onMouseLeave={hideTip}
                 >
                   <svg viewBox={vb}>
@@ -599,7 +602,7 @@ function Sparkline({
 }: {
   bank: Bank;
   present: [number, number][];
-  onTip: (e: React.MouseEvent, html: string) => void;
+  onTip: (e: React.MouseEvent, label: string, detail: string) => void;
   clearTip: () => void;
 }) {
   const W = 420, H = 158, PX = 24, PY = 30;
@@ -630,7 +633,7 @@ function Sparkline({
           // Keep the label box inside the chart so it never spills past the edge.
           const lx = Math.min(W - labelWidth / 2, Math.max(labelWidth / 2, x));
           return (
-            <g key={p[0]} onMouseMove={(e) => onTip(e, `${bank.rounds[p[0]]}<br><b>${p[1]}</b> 分`)} onMouseLeave={clearTip}>
+            <g key={p[0]} onMouseMove={(e) => onTip(e, bank.rounds[p[0]], `${p[1]} 分`)} onMouseLeave={clearTip}>
               <line x1={x.toFixed(1)} y1={y.toFixed(1)} x2={lx.toFixed(1)} y2={labelY.toFixed(1)} className="map-spark-stem" />
               <circle
                 cx={x.toFixed(1)}

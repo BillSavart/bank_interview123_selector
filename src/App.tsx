@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { Route, Routes } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { LandingPage } from './pages/LandingPage';
@@ -16,25 +15,9 @@ import { VenuePage } from './pages/VenuePage';
 import { OfficialDocPracticePage } from './pages/OfficialDocPracticePage';
 import { ExperiencePage } from './pages/ExperiencePage';
 import { ExperiencePostPage } from './pages/ExperiencePostPage';
-import { AdminPage } from './pages/AdminPage';
 import { ResourceGuidePage } from './pages/ResourceGuidePage';
 
-// In production the admin lives on its own subdomain (admin.你的網域). There the
-// whole site IS the admin panel — no public nav/footer.
-const isAdminHost = typeof window !== 'undefined' && /^admin\./i.test(window.location.hostname);
-// The `/admin` path is only wired up in local dev (where there's no subdomain to
-// use). In a production build the route doesn't exist, so the main domain's
-// /admin just falls through to the home page — admin is reachable only via the
-// subdomain. (Security still comes from ADMIN_TOKEN on the API, not this routing.)
-const allowAdminPath = import.meta.env.DEV;
-
 export function App() {
-  useEffect(() => {
-    if (isAdminHost) document.title = '後台管理 | 公股銀行新手村';
-  }, []);
-
-  if (isAdminHost) return <AdminPage />;
-
   return (
     <Routes>
       <Route element={<Layout />}>
@@ -56,7 +39,6 @@ export function App() {
         <Route path="experience/:id" element={<ExperiencePostPage />} />
         <Route path="interview-guide" element={<ResourceGuidePage guidePath="/interview-guide" />} />
         <Route path="methodology" element={<ResourceGuidePage guidePath="/methodology" />} />
-        {allowAdminPath && <Route path="admin" element={<AdminPage />} />}
         <Route path="*" element={<LandingPage />} />
       </Route>
     </Routes>

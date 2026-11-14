@@ -1,7 +1,8 @@
 import { createServer } from 'node:http';
 import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
+import { isIP } from 'node:net';
 import { openDb, calendarColumns } from './db.mjs';
 import {
   getOfficialDocQuestion,
@@ -10,8 +11,13 @@ import {
 } from './official-doc.mjs';
 import { createSubmissionEmailNotifier } from './submission-email.mjs';
 import { createTurnstileVerifier } from './turnstile.mjs';
+import { createAdminSessions } from './admin-session.mjs';
+import { createRateLimit } from './rate-limit.mjs';
+import { createVoterSessions } from './voter-session.mjs';
+import { createGameRounds } from './game-rounds.mjs';
 
 const port = Number(process.env.PORT || 3000);
+const bindHost = process.env.BIND_HOST || (process.env.NODE_ENV === 'production' ? '0.0.0.0' : '127.0.0.1');
 const dataFile = process.env.RATINGS_FILE || '/data/ratings.json';
 
 // --- SQLite backend toggle (Phase 2 of the JSON → SQLite migration) ---------
@@ -72,11 +78,9 @@ const postCommentModFile = process.env.POST_COMMENT_MOD_FILE || '/data/post-comm
 // `/api/<game>/leaderboard` (GET) and `/api/<game>/score` (POST).
 const checkGameFile = process.env.CHECKGAME_FILE || '/data/checkgame-top.json';
 const checkGameTopN = Number(process.env.CHECKGAME_TOP_N || 10);
-const checkGameMaxScore = Number(process.env.CHECKGAME_MAX_SCORE || 100000);
 
 const numberGameFile = process.env.NUMBERGAME_FILE || '/data/numbergame-top.json';
 const numberGameTopN = Number(process.env.NUMBERGAME_TOP_N || 10);
-const numberGameMaxScore = Number(process.env.NUMBERGAME_MAX_SCORE || 100000);
 
 // --- 招考行事曆 (calendar) config ------------------------------------------
 // Events are managed through the admin API and stored as a single JSON file in
@@ -100,14 +104,30 @@ const postCategories = ['exam', 'work'];
 // Canonical site origin, used for og:url / canonical / sitemap in the
 // server-rendered article pages. Matches scripts/prerender.mjs's BASE.
 const siteBase = (process.env.SITE_BASE || 'https://bank-interview-advisor.com').replace(/\/$/, '');
-// Shared secret for the admin API. If unset, all admin writes are rejected
-// (the calendar stays read-only) — set ADMIN_TOKEN in the VM's .env to enable.
-const adminToken = process.env.ADMIN_TOKEN || '';
+const production = process.env.NODE_ENV === 'production';
+const adminOrigin = process.env.ADMIN_BASE_URL || '';
+if (production && (!adminOrigin || new URL(adminOrigin).protocol !== 'https:')) {
+  throw new Error('Production requires an HTTPS ADMIN_BASE_URL');
+}
+const adminSessions = createAdminSessions({ token: process.env.ADMIN_TOKEN || '', origin: adminOrigin });
+const allowAdminLogin = createRateLimit({ windowMs: 60_000, limit: 8 });
+const allowGlobalAdminLogin = createRateLimit({ windowMs: 60_000, limit: 60 });
+const trustProxy = process.env.TRUST_PROXY === '1';
+const voterSessions = createVoterSessions({
+  secret: process.env.VOTER_SIGNING_KEY || process.env.ADMIN_TOKEN || randomBytes(32),
+  secure: production,
+});
+const allowPublicWrite = createRateLimit({ windowMs: 60_000, limit: 60 });
+const allowGlobalWrite = createRateLimit({ windowMs: 1000, limit: 20 });
+const allowVoterEnrollment = createRateLimit({ windowMs: 60_000, limit: 12 });
+const allowGameStart = createRateLimit({ windowMs: 60_000, limit: 10 });
+const gameRounds = createGameRounds();
+const maxVotesPerTarget = 10_000;
 const submissionEmailNotifier = createSubmissionEmailNotifier();
 if (submissionEmailNotifier.partiallyConfigured) {
   console.warn(`[submission-email] disabled; missing ${submissionEmailNotifier.missing.join(', ')}`);
 }
-const turnstileVerifier = createTurnstileVerifier();
+const turnstileVerifier = createTurnstileVerifier({ required: production });
 if (turnstileVerifier.partiallyConfigured) {
   console.warn(`[turnstile] misconfigured; missing ${turnstileVerifier.missing.join(', ')}`);
 }
@@ -572,7 +592,7 @@ const postComments = makeCommentStore({
 const sortLeaderboard = (rows) =>
   rows.sort((a, b) => b.score - a.score || a.createdAt.localeCompare(b.createdAt));
 
-const makeLeaderboard = ({ game, file, topN, maxScore }) => {
+const makeLeaderboard = ({ game, file, topN }) => {
   let top = []; // [{ name, score, createdAt }], sorted desc, length <= topN
   let writeQueue = Promise.resolve();
 
@@ -665,13 +685,13 @@ const makeLeaderboard = ({ game, file, topN, maxScore }) => {
     return top.length < before;
   };
 
-  return { load, persist, record, remove, leaderboard: () => top, maxScore };
+  return { load, persist, record, remove, leaderboard: () => top };
 };
 
 // One leaderboard per mini-game, keyed by the URL slug used in /api/<game>/*.
 const leaderboards = {
-  checkgame: makeLeaderboard({ game: 'checkgame', file: checkGameFile, topN: checkGameTopN, maxScore: checkGameMaxScore }),
-  numbergame: makeLeaderboard({ game: 'numbergame', file: numberGameFile, topN: numberGameTopN, maxScore: numberGameMaxScore }),
+  checkgame: makeLeaderboard({ game: 'checkgame', file: checkGameFile, topN: checkGameTopN }),
+  numbergame: makeLeaderboard({ game: 'numbergame', file: numberGameFile, topN: numberGameTopN }),
 };
 
 // --- 招考行事曆 (calendar) store -------------------------------------------
@@ -824,6 +844,7 @@ const persistCalendar = () => {
 let posts = [];
 // id -> post，給投票 / 短網址等需要按 id 取用的地方做 O(1) 查找。
 const postById = new Map();
+const isPublicPost = (post) => Boolean(post && !post.hidden && !post.pending);
 let postsWriteQueue = Promise.resolve();
 let postVoteAppendQueue = Promise.resolve();
 
@@ -1139,7 +1160,7 @@ const render404Html = () =>
 // 經驗分享文章的動態 sitemap（robots.txt 會指向這裡）。
 const renderPostsSitemap = () => {
   const items = posts
-    .filter((p) => !p.hidden)
+    .filter(isPublicPost)
     .map((p) => {
       const lastmod = String(p.updatedAt || p.createdAt || '').slice(0, 10);
       return `  <url><loc>${siteBase}/experience/${p.id}</loc>${lastmod ? `<lastmod>${lastmod}</lastmod>` : ''}</url>`;
@@ -1153,25 +1174,16 @@ const sendHtml = (res, status, html, cacheControl = 'no-store') => {
   res.end(html);
 };
 
-// Constant-time check of the admin bearer token. Returns false when ADMIN_TOKEN
-// is unset, so the admin API is disabled-by-default rather than open.
-const isAdmin = (req) => {
-  if (!adminToken) return false;
-  const header = req.headers['authorization'] || '';
-  const provided = header.startsWith('Bearer ') ? header.slice(7) : '';
-  if (!provided) return false;
-  const a = Buffer.from(provided);
-  const b = Buffer.from(adminToken);
-  return a.length === b.length && timingSafeEqual(a, b);
-};
-
-// Per-IP rate limiting, in memory only (resets on restart — fine for this use).
+// Per-IP spacing for successfully verified posts and comments.
 const rateLog = new Map();
 
 const checkRateLimit = (ip) => {
   const now = Date.now();
   const history = (rateLog.get(ip) || []).filter((ts) => now - ts < commentWindowMs);
 
+  if (!rateLog.has(ip) && rateLog.size >= 2048) {
+    return { ok: false, reason: '目前留言量較大，請稍後再試。' };
+  }
   if (history.length && now - history[history.length - 1] < commentMinIntervalMs) {
     return { ok: false, reason: '留言太頻繁，請稍候幾秒再試。' };
   }
@@ -1195,13 +1207,22 @@ setInterval(() => {
 }, commentWindowMs).unref();
 
 const getClientIp = (req) => {
-  const cloudflareIp = req.headers['cf-connecting-ip'];
-  if (typeof cloudflareIp === 'string' && cloudflareIp.length) return cloudflareIp.trim();
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string' && forwarded.length) {
-    return forwarded.split(',')[0].trim();
-  }
+  const forwarded = req.headers['x-bank-client-ip'];
+  if (trustProxy && typeof forwarded === 'string' && isIP(forwarded)) return forwarded;
   return req.socket?.remoteAddress || 'unknown';
+};
+
+const enforceVoter = (req) => {
+  const id = voterSessions.read(req);
+  if (!id) throw Object.assign(new Error('請先完成評分與投票驗證。'), { status: 403 });
+  return id;
+};
+
+const checkVoteCapacity = (votes, voterId) => {
+  if (votes && Object.hasOwn(votes, voterId)) return;
+  if (votes && Object.keys(votes).length >= maxVotesPerTarget) {
+    throw Object.assign(new Error('投票數量已達上限，暫時無法接受新投票。'), { status: 429 });
+  }
 };
 
 // Strip control chars (keep newline + tab) and clamp length.
@@ -1251,17 +1272,34 @@ const sendJson = (res, status, payload, cacheControl = 'no-store') => {
 const readBody = (req) =>
   new Promise((resolve, reject) => {
     let body = '';
+    let oversized = false;
     req.setEncoding('utf8');
     req.on('data', (chunk) => {
+      if (oversized) return;
       body += chunk;
       if (body.length > 16384) {
+        oversized = true;
+        body = '';
         reject(Object.assign(new Error('Request body too large'), { status: 413 }));
-        req.destroy();
       }
     });
     req.on('end', () => resolve(body));
     req.on('error', reject);
   });
+
+const readJsonBody = async (req) => {
+  if (!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] || '')) {
+    throw Object.assign(new Error('Content-Type must be application/json'), { status: 415 });
+  }
+  const bodyText = await readBody(req);
+  try {
+    const body = JSON.parse(bodyText);
+    if (body && typeof body === 'object' && !Array.isArray(body)) return body;
+  } catch {
+    // Report malformed input without reflecting it.
+  }
+  throw Object.assign(new Error('Request body must be a JSON object'), { status: 400 });
+};
 
 const parseQuestionId = (pathname) => {
   const match = pathname.match(/^\/api\/ratings\/(\d+)$/);
@@ -1287,7 +1325,7 @@ const parseCommentVote = (pathname) => {
 
   const questionId = Number(match[1]);
   if (!Number.isInteger(questionId) || questionId < 1 || questionId > maxQuestionId) return null;
-  return { store: questionComments, commentId: match[2] };
+  return { store: questionComments, thread: questionId, commentId: match[2] };
 };
 
 // 文章留言：以文章 id（UUID）為 thread key，與題目留言的整數題號分流。
@@ -1299,7 +1337,7 @@ const parsePostCommentId = (pathname) => {
 const parsePostCommentVote = (pathname) => {
   const match = pathname.match(/^\/api\/post-comments\/([a-f0-9-]{36})\/([a-f0-9-]{36})\/vote$/);
   if (!match) return null;
-  return { store: postComments, commentId: match[2] };
+  return { store: postComments, thread: match[1], commentId: match[2] };
 };
 
 let officialDocSeeded = false;
@@ -1336,9 +1374,71 @@ if (officialDocDb) getOfficialDocDbHandle();
 
 createServer(async (req, res) => {
   try {
-    const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
+    const url = new URL(req.url || '/', 'http://localhost');
 
-    if (req.method === 'GET' && url.pathname === '/api/health') {
+    if (url.pathname === '/api/admin' || url.pathname.startsWith('/api/admin/')) {
+      if (!adminSessions.acceptsHost(req)) {
+        sendJson(res, 404, { error: 'not found' });
+        return;
+      }
+      if (!['GET', 'HEAD'].includes(req.method) && !adminSessions.acceptsOrigin(req)) {
+        sendJson(res, 403, { error: 'invalid origin' });
+        return;
+      }
+      if (url.pathname === '/api/admin/session' && req.method === 'POST') {
+        const ip = getClientIp(req);
+        if (!allowAdminLogin(ip) || !allowGlobalAdminLogin('login')) {
+          sendJson(res, 429, { error: '登入嘗試次數過多，請稍後再試。' });
+          return;
+        }
+        const body = await readJsonBody(req);
+        if (!adminSessions.matchesToken(body.token)) {
+          sendJson(res, 401, { error: '管理金鑰不正確，或後台未啟用。' });
+          return;
+        }
+        res.setHeader('Set-Cookie', adminSessions.start(req));
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+      if (url.pathname === '/api/admin/session' && req.method === 'DELETE') {
+        res.setHeader('Set-Cookie', adminSessions.end(req));
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+      if (!adminSessions.authenticated(req)) {
+        sendJson(res, 401, { error: 'unauthorized' });
+        return;
+      }
+    } else if (req.method === 'POST' && url.pathname.startsWith('/api/')) {
+      if (!allowPublicWrite(getClientIp(req)) || !allowGlobalWrite('write')) {
+        sendJson(res, 429, { error: '要求太頻繁，請稍後再試。' });
+        return;
+      }
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/voter-session') {
+      if (!allowVoterEnrollment(getClientIp(req))) {
+        sendJson(res, 429, { error: '驗證要求太頻繁，請稍後再試。' });
+        return;
+      }
+      const body = await readJsonBody(req);
+      if (!voterSessions.read(req)) {
+        const result = await turnstileVerifier.verify({
+          token: body.turnstileToken,
+          remoteIp: getClientIp(req),
+          action: 'voter-enroll',
+        });
+        if (!result.ok) {
+          sendJson(res, result.status, { error: result.error });
+          return;
+        }
+        res.setHeader('Set-Cookie', voterSessions.issue());
+      }
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+
+    if (['GET', 'HEAD'].includes(req.method) && url.pathname === '/api/health') {
       sendJson(res, 200, { ok: true });
       return;
     }
@@ -1390,34 +1490,19 @@ createServer(async (req, res) => {
       return;
     }
 
-    // Admin: verify the token (lets the admin UI confirm login before editing).
+    // Admin: fetch the calendar for a verified session.
     if (req.method === 'GET' && url.pathname === '/api/admin/calendar') {
-      if (!isAdmin(req)) {
-        sendJson(res, 401, { error: 'unauthorized' });
-        return;
-      }
       sendJson(res, 200, { events: calendarEvents });
       return;
     }
 
     // Admin: create an event.
     if (req.method === 'POST' && url.pathname === '/api/admin/calendar') {
-      if (!isAdmin(req)) {
-        sendJson(res, 401, { error: 'unauthorized' });
-        return;
-      }
       if (calendarEvents.length >= maxCalendarEvents) {
         sendJson(res, 400, { error: '行事曆事件數量已達上限' });
         return;
       }
-      const bodyText = await readBody(req);
-      let body = {};
-      try {
-        body = bodyText ? JSON.parse(bodyText) : {};
-      } catch {
-        sendJson(res, 400, { error: 'request body must be valid JSON' });
-        return;
-      }
+      const body = await readJsonBody(req);
       const fields = cleanCalendarInput(body);
       if (!fields.org) {
         sendJson(res, 400, { error: '機關/名稱不可為空' });
@@ -1436,10 +1521,6 @@ createServer(async (req, res) => {
     // Admin: update or delete a single event by id.
     const adminEventMatch = url.pathname.match(/^\/api\/admin\/calendar\/([a-f0-9-]{36})$/);
     if (adminEventMatch && (req.method === 'PUT' || req.method === 'DELETE')) {
-      if (!isAdmin(req)) {
-        sendJson(res, 401, { error: 'unauthorized' });
-        return;
-      }
       const id = adminEventMatch[1];
       const idx = calendarEvents.findIndex((e) => e.id === id);
       if (idx === -1) {
@@ -1454,14 +1535,7 @@ createServer(async (req, res) => {
         return;
       }
 
-      const bodyText = await readBody(req);
-      let body = {};
-      try {
-        body = bodyText ? JSON.parse(bodyText) : {};
-      } catch {
-        sendJson(res, 400, { error: 'request body must be valid JSON' });
-        return;
-      }
+      const body = await readJsonBody(req);
       const fields = cleanCalendarInput(body);
       if (!fields.org) {
         sendJson(res, 400, { error: '機關/名稱不可為空' });
@@ -1478,21 +1552,14 @@ createServer(async (req, res) => {
     // --- 經驗分享 (experience posts) -------------------------------------
     // Public read: visible posts only, newest first.
     if (req.method === 'GET' && url.pathname === '/api/posts') {
-      sendJson(res, 200, { posts: posts.filter((p) => !p.hidden).map(publicPost) }, cacheRead);
+      sendJson(res, 200, { posts: posts.filter(isPublicPost).map(publicPost) });
       return;
     }
 
     // Public 投稿：任何人都能投稿一篇文章，但一律先存成 hidden + pending（待審核），
     // 要等管理員在後台「顯示」後才會出現在 /api/posts。與後台發文走不同路徑。
     if (req.method === 'POST' && url.pathname === '/api/posts') {
-      const bodyText = await readBody(req);
-      let body = {};
-      try {
-        body = bodyText ? JSON.parse(bodyText) : {};
-      } catch {
-        sendJson(res, 400, { error: 'request body must be valid JSON' });
-        return;
-      }
+      const body = await readJsonBody(req);
       // Honeypot：真實使用者看不到 website 欄位，有填就當機器人，假裝成功不存。
       if (typeof body.website === 'string' && body.website.trim() !== '') {
         sendJson(res, 200, { ok: true });
@@ -1525,6 +1592,10 @@ createServer(async (req, res) => {
         sendJson(res, 429, { error: rate.reason });
         return;
       }
+      if (posts.length >= maxPosts) {
+        sendJson(res, 400, { error: '文章數量已達上限，暫時無法投稿。' });
+        return;
+      }
       const now = new Date().toISOString();
       const post = { id: randomUUID(), slug: uniqueSlug(), ...fields, hidden: true, pending: true, createdAt: now, updatedAt: now, votes: {} };
       posts.push(post);
@@ -1544,19 +1615,19 @@ createServer(async (req, res) => {
     // 動態 SEO：伺服器端渲染的單篇文章頁（Caddy 只把爬蟲 UA 導到這裡）。
     const articleMatch = url.pathname.match(/^\/experience\/([a-f0-9-]{36})$/);
     if (req.method === 'GET' && articleMatch) {
-      const post = posts.find((p) => p.id === articleMatch[1] && !p.hidden);
-      if (!post) {
+      const post = postById.get(articleMatch[1]);
+      if (!isPublicPost(post)) {
         sendHtml(res, 404, render404Html());
         return;
       }
-      sendHtml(res, 200, renderArticleHtml(post), 'public, max-age=0, s-maxage=60');
+      sendHtml(res, 200, renderArticleHtml(post));
       return;
     }
 
     // 短網址：/e/<slug> → 302 轉到 /experience/<id>（找不到就回文章列表）。
     const shortMatch = url.pathname.match(/^\/e\/([0-9A-Za-z]{6})$/);
     if (req.method === 'GET' && shortMatch) {
-      const post = posts.find((p) => p.slug === shortMatch[1] && !p.hidden);
+      const post = posts.find((p) => p.slug === shortMatch[1] && isPublicPost(p));
       res.writeHead(302, {
         Location: post ? `/experience/${post.id}` : '/experience',
         'Cache-Control': 'no-store',
@@ -1569,7 +1640,7 @@ createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/sitemap-posts.xml') {
       res.writeHead(200, {
         'Content-Type': 'application/xml; charset=utf-8',
-        'Cache-Control': 'public, max-age=0, s-maxage=300',
+        'Cache-Control': 'no-store',
       });
       res.end(renderPostsSitemap());
       return;
@@ -1578,76 +1649,58 @@ createServer(async (req, res) => {
     // Public read: a single visible post by id (powers the per-article URL).
     const postReadMatch = url.pathname.match(/^\/api\/posts\/([a-f0-9-]{36})$/);
     if (req.method === 'GET' && postReadMatch) {
-      const post = posts.find((p) => p.id === postReadMatch[1] && !p.hidden);
-      if (!post) {
+      const post = postById.get(postReadMatch[1]);
+      if (!isPublicPost(post)) {
         sendJson(res, 404, { error: 'post not found' });
         return;
       }
-      sendJson(res, 200, { post: publicPost(post) }, cacheRead);
+      sendJson(res, 200, { post: publicPost(post) });
       return;
     }
 
     // 對文章按讚 / 倒讚。value: 1（讚）, -1（倒讚）, 0（取消）。
     const postVoteMatch = url.pathname.match(/^\/api\/posts\/([a-f0-9-]{36})\/vote$/);
     if (req.method === 'POST' && postVoteMatch) {
-      const bodyText = await readBody(req);
-      let body = {};
-      try {
-        body = bodyText ? JSON.parse(bodyText) : {};
-      } catch {
-        sendJson(res, 400, { error: 'request body must be valid JSON' });
-        return;
-      }
-      const voterId = typeof body.voterId === 'string' ? body.voterId.trim() : '';
+      const body = await readJsonBody(req);
+      const voterId = enforceVoter(req);
       const value = Number(body.value);
-      if (!/^[a-zA-Z0-9_-]{12,80}$/.test(voterId)) {
-        sendJson(res, 400, { error: 'voterId is invalid' });
-        return;
-      }
       if (![1, 0, -1].includes(value)) {
         sendJson(res, 400, { error: 'value must be 1, 0, or -1' });
         return;
       }
       const post = postById.get(postVoteMatch[1]);
-      if (!post || post.hidden) {
+      if (!isPublicPost(post)) {
         sendJson(res, 404, { error: 'post not found' });
         return;
       }
-      if (value === 0) delete post.votes[voterId];
-      else post.votes[voterId] = value;
-      await appendPostVote({ postId: post.id, voterId, value });
-      sendJson(res, 200, { post: publicPost(post) });
+      if (value !== 0) checkVoteCapacity(post.votes, voterId);
+      if ((post.votes[voterId] || 0) !== value) {
+        if (value === 0) delete post.votes[voterId];
+        else post.votes[voterId] = value;
+        await appendPostVote({ postId: post.id, voterId, value });
+      }
+      const latest = postById.get(post.id);
+      if (!isPublicPost(latest)) {
+        sendJson(res, 404, { error: 'post not found' });
+        return;
+      }
+      sendJson(res, 200, { post: publicPost(latest) });
       return;
     }
 
     // Admin: list every post (including hidden) for management.
     if (req.method === 'GET' && url.pathname === '/api/admin/posts') {
-      if (!isAdmin(req)) {
-        sendJson(res, 401, { error: 'unauthorized' });
-        return;
-      }
       sendJson(res, 200, { posts: adminPosts() });
       return;
     }
 
     // Admin: create a post.
     if (req.method === 'POST' && url.pathname === '/api/admin/posts') {
-      if (!isAdmin(req)) {
-        sendJson(res, 401, { error: 'unauthorized' });
-        return;
-      }
       if (posts.length >= maxPosts) {
         sendJson(res, 400, { error: '文章數量已達上限' });
         return;
       }
-      const bodyText = await readBody(req);
-      let body = {};
-      try {
-        body = bodyText ? JSON.parse(bodyText) : {};
-      } catch {
-        sendJson(res, 400, { error: 'request body must be valid JSON' });
-        return;
-      }
+      const body = await readJsonBody(req);
       const fields = cleanPostInput(body);
       if (!fields.title) {
         sendJson(res, 400, { error: '標題不可為空' });
@@ -1670,18 +1723,7 @@ createServer(async (req, res) => {
     // Admin: edit a single post by id (category / title / author / content).
     const adminPostEditMatch = url.pathname.match(/^\/api\/admin\/posts\/([a-f0-9-]{36})$/);
     if (req.method === 'PUT' && adminPostEditMatch) {
-      if (!isAdmin(req)) {
-        sendJson(res, 401, { error: 'unauthorized' });
-        return;
-      }
-      const bodyText = await readBody(req);
-      let body = {};
-      try {
-        body = bodyText ? JSON.parse(bodyText) : {};
-      } catch {
-        sendJson(res, 400, { error: 'request body must be valid JSON' });
-        return;
-      }
+      const body = await readJsonBody(req);
       const fields = cleanPostInput(body);
       if (!fields.title) {
         sendJson(res, 400, { error: '標題不可為空' });
@@ -1708,18 +1750,7 @@ createServer(async (req, res) => {
     // Admin: hide / show / delete a single post by id.
     const adminPostMatch = url.pathname.match(/^\/api\/admin\/posts\/([a-f0-9-]{36})\/moderate$/);
     if (req.method === 'POST' && adminPostMatch) {
-      if (!isAdmin(req)) {
-        sendJson(res, 401, { error: 'unauthorized' });
-        return;
-      }
-      const bodyText = await readBody(req);
-      let body = {};
-      try {
-        body = bodyText ? JSON.parse(bodyText) : {};
-      } catch {
-        sendJson(res, 400, { error: 'request body must be valid JSON' });
-        return;
-      }
+      const body = await readJsonBody(req);
       const action = body.action;
       if (!['hide', 'show', 'delete'].includes(action)) {
         sendJson(res, 400, { error: 'action must be hide, show or delete' });
@@ -1755,10 +1786,6 @@ createServer(async (req, res) => {
     // --- 留言板管理 (admin) ----------------------------------------------
     // List every comment across all questions for moderation.
     if (req.method === 'GET' && url.pathname === '/api/admin/comments') {
-      if (!isAdmin(req)) {
-        sendJson(res, 401, { error: 'unauthorized' });
-        return;
-      }
       const all = questionComments.all().map(questionComments.adminComment);
       all.sort((a, b) => b.createdAt.localeCompare(a.createdAt)); // newest first
       sendJson(res, 200, { comments: all });
@@ -1768,18 +1795,7 @@ createServer(async (req, res) => {
     // Hide / show / delete a single 面試篩選器 comment.
     const adminCommentMatch = url.pathname.match(/^\/api\/admin\/comments\/([a-f0-9-]{36})\/moderate$/);
     if (req.method === 'POST' && adminCommentMatch) {
-      if (!isAdmin(req)) {
-        sendJson(res, 401, { error: 'unauthorized' });
-        return;
-      }
-      const bodyText = await readBody(req);
-      let body = {};
-      try {
-        body = bodyText ? JSON.parse(bodyText) : {};
-      } catch {
-        sendJson(res, 400, { error: 'request body must be valid JSON' });
-        return;
-      }
+      const body = await readJsonBody(req);
       const action = body.action;
       if (!['hide', 'show', 'delete'].includes(action)) {
         sendJson(res, 400, { error: 'action must be hide, show or delete' });
@@ -1797,10 +1813,6 @@ createServer(async (req, res) => {
     // 文章留言板 (admin): list every article comment, newest first. Joins the
     // article title so the admin can see which post each comment belongs to.
     if (req.method === 'GET' && url.pathname === '/api/admin/post-comments') {
-      if (!isAdmin(req)) {
-        sendJson(res, 401, { error: 'unauthorized' });
-        return;
-      }
       const all = postComments.all().map((comment) => ({
         ...postComments.adminComment(comment),
         postTitle: postById.get(comment.thread)?.title || '',
@@ -1813,18 +1825,7 @@ createServer(async (req, res) => {
     // Hide / show / delete a single 文章 comment.
     const adminPostCommentMatch = url.pathname.match(/^\/api\/admin\/post-comments\/([a-f0-9-]{36})\/moderate$/);
     if (req.method === 'POST' && adminPostCommentMatch) {
-      if (!isAdmin(req)) {
-        sendJson(res, 401, { error: 'unauthorized' });
-        return;
-      }
-      const bodyText = await readBody(req);
-      let body = {};
-      try {
-        body = bodyText ? JSON.parse(bodyText) : {};
-      } catch {
-        sendJson(res, 400, { error: 'request body must be valid JSON' });
-        return;
-      }
+      const body = await readJsonBody(req);
       const action = body.action;
       if (!['hide', 'show', 'delete'].includes(action)) {
         sendJson(res, 400, { error: 'action must be hide, show or delete' });
@@ -1848,19 +1849,8 @@ createServer(async (req, res) => {
     // --- 排行榜管理 (admin): delete a leaderboard entry by name ----------------
     const adminLbMatch = url.pathname.match(/^\/api\/admin\/([a-z]+)\/leaderboard$/);
     if (req.method === 'DELETE' && adminLbMatch && leaderboards[adminLbMatch[1]]) {
-      if (!isAdmin(req)) {
-        sendJson(res, 401, { error: 'unauthorized' });
-        return;
-      }
       const board = leaderboards[adminLbMatch[1]];
-      const bodyText = await readBody(req);
-      let body = {};
-      try {
-        body = bodyText ? JSON.parse(bodyText) : {};
-      } catch {
-        sendJson(res, 400, { error: 'request body must be valid JSON' });
-        return;
-      }
+      const body = await readJsonBody(req);
       const name = String(body.name ?? '').trim();
       if (!name) {
         sendJson(res, 400, { error: '缺少要刪除的暱稱' });
@@ -1875,75 +1865,62 @@ createServer(async (req, res) => {
       return;
     }
 
-    const scoreMatch = url.pathname.match(/^\/api\/([a-z]+)\/score$/);
-    if (req.method === 'POST' && scoreMatch && leaderboards[scoreMatch[1]]) {
-      const board = leaderboards[scoreMatch[1]];
-      const bodyText = await readBody(req);
-      let body = {};
-      try {
-        body = bodyText ? JSON.parse(bodyText) : {};
-      } catch {
-        sendJson(res, 400, { error: 'request body must be valid JSON' });
+    const gameMatch = url.pathname.match(/^\/api\/(checkgame|numbergame)\/(round|answer|next|score)$/);
+    if (req.method === 'POST' && gameMatch) {
+      const [, game, action] = gameMatch;
+      const body = await readJsonBody(req);
+      if (action === 'round') {
+        const name = sanitizeText(typeof body.name === 'string' ? body.name : '', maxNameLength);
+        if (!name) {
+          sendJson(res, 400, { error: '暱稱不可為空' });
+          return;
+        }
+        if (!allowGameStart(getClientIp(req))) {
+          sendJson(res, 429, { error: '開始回合過於頻繁，請稍後再試。' });
+          return;
+        }
+        sendJson(res, 200, gameRounds.start(game, name));
         return;
       }
 
-      // Honeypot: real players always send `website` empty.
-      if (typeof body.website === 'string' && body.website.trim() !== '') {
-        sendJson(res, 200, { leaderboard: board.leaderboard(), rank: null });
+      const round = gameRounds.get(game, body.roundId);
+      if (action === 'answer') {
+        sendJson(res, 200, gameRounds.answer(round, body.index, body.answer));
+        return;
+      }
+      if (action === 'next') {
+        sendJson(res, 200, gameRounds.next(round, body.index));
         return;
       }
 
-      const name = sanitizeText(body.name ?? '', maxNameLength);
-      const score = Number(body.score);
-
-      if (!name) {
-        sendJson(res, 400, { error: '暱稱不可為空' });
-        return;
-      }
-      if (!Number.isInteger(score) || score < 0 || score > board.maxScore) {
-        sendJson(res, 400, { error: 'score is invalid' });
-        return;
-      }
-
-      const rate = checkRateLimit(getClientIp(req));
-      if (!rate.ok) {
-        sendJson(res, 429, { error: rate.reason });
-        return;
-      }
-
-      const createdAt = new Date().toISOString();
-      const rank = board.record(name, score, createdAt);
-      await board.persist();
-
-      sendJson(res, 200, { leaderboard: board.leaderboard(), rank });
+      enforceVoter(req);
+      const board = leaderboards[game];
+      const result = await gameRounds.complete(round, async (name, score) => {
+        const rank = board.record(name, score, new Date().toISOString());
+        await board.persist();
+        return { leaderboard: board.leaderboard(), rank, score };
+      });
+      sendJson(res, 200, result);
       return;
     }
 
     const questionId = parseQuestionId(url.pathname);
     if (req.method === 'POST' && questionId) {
-      const bodyText = await readBody(req);
-      let body = {};
-      try {
-        body = bodyText ? JSON.parse(bodyText) : {};
-      } catch {
-        sendJson(res, 400, { error: 'request body must be valid JSON' });
-        return;
-      }
+      const body = await readJsonBody(req);
 
       const score = Number(body.score);
-      const voterId = typeof body.voterId === 'string' ? body.voterId.trim() : '';
+      const voterId = enforceVoter(req);
 
       if (!Number.isInteger(score) || score < 1 || score > 5) {
         sendJson(res, 400, { error: 'score must be an integer from 1 to 5' });
         return;
       }
 
-      if (!/^[a-zA-Z0-9_-]{12,80}$/.test(voterId)) {
-        sendJson(res, 400, { error: 'voterId is invalid' });
-        return;
+      const votes = store.questions[String(questionId)]?.votes;
+      checkVoteCapacity(votes, voterId);
+      if (votes?.[voterId] !== score) {
+        await setRating(questionId, voterId, score);
       }
-
-      await setRating(questionId, voterId, score);
 
       sendJson(res, 200, { rating: summarizeQuestion(questionId), myScore: score });
       return;
@@ -1954,27 +1931,21 @@ createServer(async (req, res) => {
     // resolve which board this path targets, then run one common handler.
     const commentQuestionId = parseCommentQuestionId(url.pathname);
     const commentPostId = parsePostCommentId(url.pathname);
+    const commentPost = commentPostId && postById.get(commentPostId);
     const commentTarget = commentQuestionId !== null
       ? { store: questionComments, thread: commentQuestionId }
-      : commentPostId !== null && postById.has(commentPostId)
+      : isPublicPost(commentPost)
         ? { store: postComments, thread: commentPostId }
         : null;
 
     if (req.method === 'GET' && commentTarget) {
-      const list = commentTarget.store.list(commentTarget.thread);
-      sendJson(res, 200, { comments: list.map(commentTarget.store.publicComment) }, cacheRead);
+      const list = commentTarget.store.list(commentTarget.thread).filter((comment) => !comment.adminHidden);
+      sendJson(res, 200, { comments: list.map(commentTarget.store.publicComment) });
       return;
     }
 
     if (req.method === 'POST' && commentTarget) {
-      const bodyText = await readBody(req);
-      let body = {};
-      try {
-        body = bodyText ? JSON.parse(bodyText) : {};
-      } catch {
-        sendJson(res, 400, { error: 'request body must be valid JSON' });
-        return;
-      }
+      const body = await readJsonBody(req);
 
       // Honeypot: bots tend to fill every field. Real users never see it, so a
       // non-empty value means a bot. Pretend success without storing anything.
@@ -2008,41 +1979,52 @@ createServer(async (req, res) => {
         return;
       }
 
+      // Moderation may run while Siteverify is in flight.
+      if (commentTarget.store === postComments) {
+        const post = postById.get(commentTarget.thread);
+        if (!isPublicPost(post)) {
+          sendJson(res, 404, { error: 'post not found' });
+          return;
+        }
+      }
       const comment = await commentTarget.store.add(commentTarget.thread, name, text);
+      if (comment.adminHidden || (commentPost && !isPublicPost(postById.get(commentPost.id)))) {
+        sendJson(res, 404, { error: 'comment not found' });
+        return;
+      }
       sendJson(res, 200, { comment: commentTarget.store.publicComment(comment) });
       return;
     }
 
     const voteTarget = parseCommentVote(url.pathname) || parsePostCommentVote(url.pathname);
     if (req.method === 'POST' && voteTarget) {
-      const bodyText = await readBody(req);
-      let body = {};
-      try {
-        body = bodyText ? JSON.parse(bodyText) : {};
-      } catch {
-        sendJson(res, 400, { error: 'request body must be valid JSON' });
+      const body = await readJsonBody(req);
+      const existing = voteTarget.store.get(voteTarget.commentId);
+      const post = voteTarget.store === postComments ? postById.get(voteTarget.thread) : null;
+      if (!existing || existing.adminHidden || existing.thread !== voteTarget.thread ||
+          (voteTarget.store === postComments && !isPublicPost(post))) {
+        sendJson(res, 404, { error: 'comment not found' });
         return;
       }
 
-      const voterId = typeof body.voterId === 'string' ? body.voterId.trim() : '';
+      const voterId = enforceVoter(req);
       const value = Number(body.value);
 
-      if (!/^[a-zA-Z0-9_-]{12,80}$/.test(voterId)) {
-        sendJson(res, 400, { error: 'voterId is invalid' });
-        return;
-      }
       if (![1, 0, -1].includes(value)) {
         sendJson(res, 400, { error: 'value must be 1, 0, or -1' });
         return;
       }
 
-      const comment = await voteTarget.store.setVote(voteTarget.commentId, voterId, value);
-      if (!comment) {
+      if (value !== 0) checkVoteCapacity(existing.votes, voterId);
+      if ((existing.votes[voterId] || 0) !== value) {
+        await voteTarget.store.setVote(voteTarget.commentId, voterId, value);
+      }
+      if (existing.adminHidden || !voteTarget.store.get(voteTarget.commentId) ||
+          (post && !isPublicPost(postById.get(post.id)))) {
         sendJson(res, 404, { error: 'comment not found' });
         return;
       }
-
-      sendJson(res, 200, { comment: voteTarget.store.publicComment(comment) });
+      sendJson(res, 200, { comment: voteTarget.store.publicComment(existing) });
       return;
     }
 
@@ -2051,7 +2033,7 @@ createServer(async (req, res) => {
     const status = error?.status || 500;
     sendJson(res, status, { error: status === 500 ? 'internal server error' : error.message });
   }
-}).listen(port, '0.0.0.0', () => {
+}).listen(port, bindHost, () => {
   const backend = useSqlite ? `SQLite ${process.env.DB_FILE || '/data/app.db'}` : `JSON ${dataFile}`;
   console.log(`ratings-api listening on :${port}, backend ${backend}`);
 });

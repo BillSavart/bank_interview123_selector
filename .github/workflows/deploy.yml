@@ -8,17 +8,13 @@ on:
     - cron: "0 20 * * *"
   workflow_dispatch: # allow manual runs from the Actions tab
 
-# One deploy per ref at a time. If a duplicate/overlapping run starts (e.g. a
-# double-delivered push, or a newer commit while one is mid-flight), the older
-# in-progress run is cancelled so only the latest state ships. Sequential,
-# non-overlapping pushes are unaffected — each deploys normally.
+# Keep a deployment running until its health checks or rollback have finished.
 concurrency:
   group: deploy-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions:
   contents: read
-  packages: write # push images to ghcr.io
 
 jobs:
   # Gate: nothing builds or deploys unless typecheck, unit tests, and the
@@ -27,29 +23,42 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          node-version: 20
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.22.3
           cache: npm
       - name: Install locked dependencies
         run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
+      - name: Test API and SQLite
+        run: |
+          npm rebuild better-sqlite3
+          npm run test:parity
       - run: npm run check:banks-data
 
   build:
     needs: checks
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     outputs:
       owner: ${{ steps.meta.outputs.owner }}
+      web_digest: ${{ steps.web.outputs.digest }}
+      api_digest: ${{ steps.api.outputs.digest }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
 
-      - uses: docker/setup-buildx-action@v3
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Log in to ghcr.io
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -60,7 +69,8 @@ jobs:
         run: echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
 
       - name: Build & push web image
-        uses: docker/build-push-action@v6
+        id: web
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: ./Dockerfile
@@ -72,7 +82,8 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build & push api image
-        uses: docker/build-push-action@v6
+        id: api
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: ./Dockerfile.api
@@ -86,17 +97,41 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
+    permissions: {}
     steps:
-      - name: Deploy over SSH
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          script: |
-            set -e
-            cd /home/billwang_tech/bank_interview123_selector
-            git pull --ff-only
-            docker compose -f deploy/docker-compose.yml --env-file deploy/.env pull
-            docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d
-            docker image prune -f
+      - name: Deploy over SSH with a verified host key
+        env:
+          SSH_FINGERPRINT: ${{ vars.SSH_FINGERPRINT || secrets.SSH_FINGERPRINT }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+          DEPLOY_SHA: ${{ github.sha }}
+          WEB_IMAGE: ghcr.io/${{ needs.build.outputs.owner }}/bank-interview-web@${{ needs.build.outputs.web_digest }}
+          API_IMAGE: ghcr.io/${{ needs.build.outputs.owner }}/bank-interview-api@${{ needs.build.outputs.api_digest }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$SSH_FINGERPRINT" =~ ^SHA256:[A-Za-z0-9+/]{43}$ ]]; then
+            echo 'Configure SSH_FINGERPRINT from the VM console or an independently verified host key.'
+            exit 1
+          fi
+          ssh_dir=$(mktemp -d)
+          trap 'rm -rf "$ssh_dir"' EXIT
+          umask 077
+          ssh-keyscan -T 10 -t ed25519 -- "$SSH_HOST" > "$ssh_dir/known_hosts" 2>/dev/null
+          actual=$(ssh-keygen -lf "$ssh_dir/known_hosts" | awk '{print $2}')
+          if [[ "$actual" != "$SSH_FINGERPRINT" ]]; then
+            echo 'SSH host fingerprint mismatch.'
+            exit 1
+          fi
+          printf '%s\n' "$SSH_KEY" > "$ssh_dir/deploy_key"
+          printf -v command 'bash -s -- %q %q %q' "$DEPLOY_SHA" "$WEB_IMAGE" "$API_IMAGE"
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$ssh_dir/known_hosts" -o HostKeyAlgorithms=ssh-ed25519 \
+            -i "$ssh_dir/deploy_key" -l "$SSH_USER" -- "$SSH_HOST" "$command" <<'DEPLOY'
+          set -euo pipefail
+          export DEPLOY_SHA="$1" WEB_IMAGE="$2" API_IMAGE="$3"
+          cd /home/billwang_tech/bank_interview123_selector
+          git pull --ff-only
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          exec bash deploy/deploy-release.sh
+          DEPLOY

@@ -1,13 +1,15 @@
+import { voterWrite } from './voterSession';
+
 export interface LeaderboardEntry {
   name: string;
   score: number;
   createdAt: string;
 }
 
-export interface SubmitScoreResult {
-  leaderboard?: LeaderboardEntry[];
-  rank?: number | null;
-  error?: string;
+export interface ScoreResult {
+  leaderboard: LeaderboardEntry[];
+  rank: number | null;
+  score: number;
 }
 
 // Each mini-game has its own leaderboard, keyed by this slug. The API exposes
@@ -41,20 +43,37 @@ export async function fetchLeaderboard(game: GameKey = 'checkgame'): Promise<Lea
   return payload.leaderboard || [];
 }
 
-export async function submitScore(game: GameKey, name: string, score: number): Promise<SubmitScoreResult> {
-  const response = await fetch(`/api/${game}/score`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    // `website` is a honeypot — real players always send it empty.
-    body: JSON.stringify({ name, score, website: '' }),
-  });
+export interface RoundQuestion<Question> {
+  roundId: string;
+  index: number;
+  total: number;
+  question: Question;
+  secondsLeft: number;
+}
 
-  const payload = (await response.json().catch(() => ({}))) as SubmitScoreResult;
-  if (!response.ok) {
-    return { error: payload.error || '成績送出失敗，請稍後再試。' };
-  }
-  return payload;
+export interface RoundGrade<Answer> {
+  correct: boolean;
+  timedOut: boolean;
+  gain: number;
+  totalScore: number;
+  answer: Answer;
+  explanation?: string;
+}
+
+export async function gameRequest<Result>(
+  game: GameKey,
+  action: 'round' | 'answer' | 'next' | 'score',
+  body: object,
+): Promise<Result> {
+  const path = `/api/${game}/${action}`;
+  const response = await (action === 'score'
+    ? voterWrite(path, body)
+    : fetch(path, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      }));
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || '遊戲連線失敗，請稍後再試。');
+  return data as Result;
 }

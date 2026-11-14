@@ -14,9 +14,15 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer } from 'node:net';
+import { setTimeout as sleep } from 'node:timers/promises';
+import checkGameData from '../src/data/checkGame.json' with { type: 'json' };
 import { randomUUID } from 'node:crypto';
 
 const ADMIN = 'parity-admin-token';
+const today = new Date().toISOString().slice(0, 10);
+const children = new Set();
+let fixtureDir;
 const api = new URL('./ratings-api.mjs', import.meta.url).pathname;
 const migrate = new URL('./migrate-to-sqlite.mjs', import.meta.url).pathname;
 
@@ -141,7 +147,7 @@ const writeFixture = (dir) => {
   // calendar + leaderboards read the same JSON in both modes (Batch B not done).
   writeFileSync(
     f('calendar.json'),
-    JSON.stringify([{ id: randomUUID(), org: '某銀行', signupStart: '2026-06-01', writtenExam: '2026-07-01', interview: '', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' }]),
+    JSON.stringify([{ id: randomUUID(), org: '某銀行', signupStart: today, writtenExam: today, interview: '', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' }]),
   );
   writeFileSync(f('checkgame-top.json'), JSON.stringify([{ name: 'Champ', score: 999, createdAt: '2026-01-01T00:00:00.000Z' }]));
   writeFileSync(f('numbergame-top.json'), JSON.stringify([{ name: 'Pro', score: 555, createdAt: '2026-01-01T00:00:00.000Z' }]));
@@ -186,37 +192,65 @@ const waitHealthy = async (base) => {
   throw new Error(`server at ${base} never became healthy`);
 };
 
-const startServer = async (port, env) => {
-  const p = spawn('node', [api], {
-    // Relax the anti-spam limiter so the rapid round-trip writes aren't throttled.
-    env: { ...process.env, PORT: String(port), ADMIN_TOKEN: ADMIN, COMMENT_MIN_INTERVAL_MS: '0', COMMENT_MAX_PER_WINDOW: '100000', ...env },
+const startServer = async (env) => {
+  const socket = createServer();
+  await new Promise((resolve) => socket.listen(0, '127.0.0.1', resolve));
+  const port = socket.address().port;
+  await new Promise((resolve) => socket.close(resolve));
+  const p = spawn(process.execPath, [api], {
+    env: {
+      PATH: process.env.PATH, PORT: String(port), NODE_ENV: 'test', ADMIN_TOKEN: ADMIN,
+      COMMENT_MIN_INTERVAL_MS: '0', COMMENT_MAX_PER_WINDOW: '1000000', ...env,
+    },
     stdio: ['ignore', 'ignore', 'inherit'],
   });
+  children.add(p);
+  p.once('exit', () => children.delete(p));
   const base = `http://127.0.0.1:${port}`;
   await waitHealthy(base);
+  const session = await request(base, '/api/admin/session', { method: 'POST', body: { token: ADMIN } });
+  if (session.status !== 200) throw new Error('test administrator could not log in');
   return {
     base,
-    stop: () =>
-      new Promise((resolve) => {
-        p.on('exit', () => resolve());
-        p.kill();
-      }),
+    cookie: session.cookie,
+    stop: () => new Promise((resolve) => {
+      p.once('exit', resolve);
+      p.kill();
+    }),
   };
 };
 
-const getJson = async (base, path, admin = false) => {
-  const r = await fetch(`${base}${path}`, admin ? { headers: { authorization: `Bearer ${ADMIN}` } } : undefined);
-  return { status: r.status, body: await r.json() };
+async function request(base, path, { method = 'GET', body, cookie, origin = base, headers = {} } = {}) {
+  const response = await fetch(base + path, {
+    method,
+    headers: {
+      ...headers,
+      ...(cookie ? { cookie } : {}),
+      ...(method !== 'GET' ? { origin } : {}),
+      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  return {
+    status: response.status,
+    body: await response.json(),
+    cookie: response.headers.get('set-cookie')?.split(';')[0],
+    setCookie: response.headers.get('set-cookie'),
+  };
+}
+
+const getJson = (base, path, cookie) => request(base, path, { cookie });
+const postJson = async (base, path, body, cookie) => {
+  const options = { method: 'POST', body, cookie };
+  const response = await request(base, path, options);
+  if (response.status !== 429) return response;
+  await sleep(1100);
+  return request(base, path, options);
 };
-const postJson = (base, path, body, admin = false) =>
-  fetch(`${base}${path}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', ...(admin ? { authorization: `Bearer ${ADMIN}` } : {}) },
-    body: JSON.stringify(body),
-  }).then(async (r) => ({ status: r.status, body: await r.json() }));
 
 const main = async () => {
   const dir = mkdtempSync(join(tmpdir(), 'parity-'));
+  fixtureDir = dir;
   const dbFile = join(dir, 'app.db');
   writeFixture(dir);
 
@@ -227,8 +261,8 @@ const main = async () => {
   // in SQLite mode, so the SQLite server gets NO JSON file paths — proving the
   // data really comes from app.db, not stray JSON files.
   const sqliteEnv = { USE_SQLITE: '1', DB_FILE: dbFile };
-  const jsonSrv = await startServer(4601, fileEnv(dir));
-  const sqlSrv = await startServer(4602, sqliteEnv);
+  const jsonSrv = await startServer(fileEnv(dir));
+  const sqlSrv = await startServer(sqliteEnv);
 
   console.log('\n── Read parity: JSON vs SQLite ──');
   const readPaths = [
@@ -255,7 +289,7 @@ const main = async () => {
     ['GET /api/admin/post-comments', '/api/admin/post-comments'],
   ];
   for (const [label, path] of adminPaths) {
-    const [j, s] = await Promise.all([getJson(jsonSrv.base, path, true), getJson(sqlSrv.base, path, true)]);
+    const [j, s] = await Promise.all([getJson(jsonSrv.base, path, jsonSrv.cookie), getJson(sqlSrv.base, path, sqlSrv.cookie)]);
     same(label, j.body, s.body);
   }
 
@@ -263,46 +297,80 @@ const main = async () => {
 
   // ---- write → restart → read-back round-trip (SQLite only) ----------------
   console.log('\n── SQLite write → restart → read-back ──');
-  const NEWVOTER = 'roundtrip-voter-1';
-  let srv = await startServer(4603, sqliteEnv);
+  let srv = await startServer(sqliteEnv);
+  const enrollment = await postJson(srv.base, '/api/voter-session', {});
+  const voter = enrollment.cookie;
+  eq('voter identity is issued as HttpOnly', enrollment.setCookie?.includes('HttpOnly'), true);
+  eq('public ratings reject caller-supplied voter IDs',
+    (await postJson(srv.base, '/api/ratings/9', { score: 5, voterId: 'fake-browser-id' })).status, 403);
+  eq('admin reads require a session', (await getJson(srv.base, '/api/admin/posts')).status, 401);
+  eq('admin writes reject a foreign origin', (await request(srv.base, '/api/admin/posts', {
+    method: 'POST', cookie: srv.cookie, origin: 'https://untrusted.example', body: {},
+  })).status, 403);
 
   // 1) new rating on a fresh question
-  await postJson(srv.base, '/api/ratings/9', { score: 4, voterId: NEWVOTER });
+  await postJson(srv.base, '/api/ratings/9', { score: 1, voterId: 'fake-browser-id-1' }, voter);
+  await postJson(srv.base, '/api/ratings/9', { score: 4, voterId: 'fake-browser-id-2' }, voter);
   // 2) new comment on thread 1
   const added = await postJson(srv.base, '/api/comments/1', { text: 'round-trip comment', name: 'RT' });
   const newCommentId = added.body.comment?.id;
   // 3) vote that new comment up
-  await postJson(srv.base, `/api/comments/1/${newCommentId}/vote`, { voterId: NEWVOTER, value: 1 });
+  eq('comment voting checks the parent thread',
+    (await postJson(srv.base, `/api/comments/2/${newCommentId}/vote`, { value: 1 }, voter)).status, 404);
+  await postJson(srv.base, `/api/comments/1/${newCommentId}/vote`, { value: 1 }, voter);
   // 4) admin hide the originally-visible comment QC2
-  await postJson(srv.base, `/api/admin/comments/${QC2}/moderate`, { action: 'hide' }, true);
+  await postJson(srv.base, `/api/admin/comments/${QC2}/moderate`, { action: 'hide' }, srv.cookie);
   // 5) public post submission (hidden + pending)
   const submitted = await postJson(srv.base, '/api/posts', { title: '投稿標題', content: '投稿內文', author: '投稿人', category: 'work' });
   // 6) admin delete the hidden post POST2 (and its votes)
-  await postJson(srv.base, `/api/admin/posts/${POST2}/moderate`, { action: 'delete' }, true);
+  await postJson(srv.base, `/api/admin/posts/${POST2}/moderate`, { action: 'delete' }, srv.cookie);
   // 7) vote on POST1
-  await postJson(srv.base, `/api/posts/${POST1}/vote`, { voterId: NEWVOTER, value: 1 });
+  await postJson(srv.base, `/api/posts/${POST1}/vote`, { value: 1 }, voter);
   // 8) calendar: create two events, edit one, delete the other
-  const calA = await postJson(srv.base, '/api/admin/calendar', { org: '甲銀行', signupStart: '2026-08-01' }, true);
+  const calA = await postJson(srv.base, '/api/admin/calendar', { org: '甲銀行', signupStart: today }, srv.cookie);
   const calAId = calA.body.event?.id;
-  const calB = await postJson(srv.base, '/api/admin/calendar', { org: '乙銀行', signupStart: '2026-08-15' }, true);
+  const calB = await postJson(srv.base, '/api/admin/calendar', { org: '乙銀行', signupStart: '2026-08-15' }, srv.cookie);
   const calBId = calB.body.event?.id;
-  await fetch(`${srv.base}/api/admin/calendar/${calAId}`, {
-    method: 'PUT',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${ADMIN}` },
-    body: JSON.stringify({ org: '甲銀行（已改名）', signupStart: '2026-08-01' }),
+  await request(srv.base, `/api/admin/calendar/${calAId}`, {
+    method: 'PUT', cookie: srv.cookie, body: { org: '甲銀行（已改名）', signupStart: today },
   });
-  await fetch(`${srv.base}/api/admin/calendar/${calBId}`, { method: 'DELETE', headers: { authorization: `Bearer ${ADMIN}` } });
-  // 9) leaderboard: submit a score, delete the fixture champion
-  await postJson(srv.base, '/api/checkgame/score', { name: 'RoundTrip', score: 12345 });
-  await fetch(`${srv.base}/api/admin/checkgame/leaderboard`, {
-    method: 'DELETE',
-    headers: { 'content-type': 'application/json', authorization: `Bearer ${ADMIN}` },
-    body: JSON.stringify({ name: 'Champ' }),
+  await request(srv.base, `/api/admin/calendar/${calBId}`, { method: 'DELETE', cookie: srv.cookie });
+
+  eq('forged leaderboard score rejected',
+    (await postJson(srv.base, '/api/checkgame/score', { name: 'RoundTrip', score: 100000 }, voter)).status, 409);
+  let question = (await postJson(srv.base, '/api/checkgame/round', { name: 'RoundTrip' })).body;
+  const roundId = question.roundId;
+  eq('question payload omits answer and explanation',
+    ['answer', 'explanation'].some((key) => key in question.question), false);
+  eq('unfinished rounds cannot submit scores',
+    (await postJson(srv.base, '/api/checkgame/score', { roundId }, voter)).status, 409);
+  for (let index = 0; index < question.total; index++) {
+    const answer = checkGameData.questions.find(({ id }) => id === question.question.id).answer;
+    const result = await postJson(srv.base, '/api/checkgame/answer', { roundId, index, answer });
+    if (!result.body.correct) throw new Error(`answer rejected: ${JSON.stringify(result.body)}`);
+    if (index + 1 < question.total) {
+      question = (await postJson(srv.base, '/api/checkgame/next', { roundId, index })).body;
+    }
+  }
+  const completed = await postJson(srv.base, '/api/checkgame/score', { roundId, score: 100000 }, voter);
+  eq('only server scoring is recorded', completed.body.score > 0 && completed.body.score <= 4800, true);
+  const repeated = await postJson(srv.base, '/api/checkgame/score', { roundId }, voter);
+  eq('score submission is idempotent', repeated.body.score, completed.body.score);
+  await request(srv.base, '/api/admin/checkgame/leaderboard', {
+    method: 'DELETE', cookie: srv.cookie, body: { name: 'Champ' },
   });
+  eq('hidden comment cannot be recovered by voting',
+    (await postJson(srv.base, `/api/comments/1/${QC2}/vote`, { value: 1 }, voter)).status, 404);
+  await postJson(srv.base, `/api/admin/posts/${POST1}/moderate`, { action: 'hide' }, srv.cookie);
+  eq('hidden article comments are inaccessible',
+    (await getJson(srv.base, `/api/post-comments/${POST1}`)).status, 404);
+  await postJson(srv.base, `/api/admin/posts/${POST1}/moderate`, { action: 'show' }, srv.cookie);
+  eq('admin can log out', (await request(srv.base, '/api/admin/session', { method: 'DELETE', cookie: srv.cookie })).status, 200);
+  eq('logged-out session is revoked', (await getJson(srv.base, '/api/admin/posts', srv.cookie)).status, 401);
 
   await srv.stop();
   // Reopen a brand-new process on the same DB: everything must have persisted.
-  srv = await startServer(4604, sqliteEnv);
+  srv = await startServer(sqliteEnv);
 
   const ratings = (await getJson(srv.base, '/api/ratings')).body.ratings;
   eq('rating q9 persisted (avg 4, count 1)', ratings.find((r) => r.questionId === 9), { questionId: 9, count: 1, average: 4 });
@@ -311,10 +379,11 @@ const main = async () => {
   const rt = c1.find((c) => c.id === newCommentId);
   eq('new comment persisted with text', rt?.text, 'round-trip comment');
   eq('new comment upvote persisted (score 1)', rt?.score, 1);
-  const qc2 = c1.find((c) => c.id === QC2);
-  eq('QC2 admin-hide persisted (hidden=true)', qc2?.hidden, true);
+  eq('admin-hidden comment stays absent after restart', c1.some((c) => c.id === QC2), false);
+  const adminComments = (await getJson(srv.base, '/api/admin/comments', srv.cookie)).body.comments;
+  eq('admin can still see the hidden comment', adminComments.find((c) => c.id === QC2)?.adminHidden, true);
 
-  const adminPosts = (await getJson(srv.base, '/api/admin/posts', true)).body.posts;
+  const adminPosts = (await getJson(srv.base, '/api/admin/posts', srv.cookie)).body.posts;
   eq('POST2 delete persisted (gone from admin list)', adminPosts.some((p) => p.id === POST2), false);
   const sub = adminPosts.find((p) => p.title === '投稿標題');
   eq('submission persisted as hidden+pending', sub ? { hidden: sub.hidden, pending: sub.pending } : null, { hidden: true, pending: true });
@@ -322,22 +391,24 @@ const main = async () => {
   const post1 = (await getJson(srv.base, `/api/posts/${POST1}`)).body.post;
   eq('POST1 vote persisted (up=2 from fixture+roundtrip)', post1?.up, 2);
 
-  const cal = (await getJson(srv.base, '/api/admin/calendar', true)).body.events;
+  const cal = (await getJson(srv.base, '/api/admin/calendar', srv.cookie)).body.events;
   eq('calendar edit persisted (org renamed)', cal.find((e) => e.id === calAId)?.org, '甲銀行（已改名）');
   eq('calendar delete persisted (event gone)', cal.some((e) => e.id === calBId), false);
 
   const lb = (await getJson(srv.base, '/api/checkgame/leaderboard')).body.leaderboard;
-  eq('leaderboard score persisted', lb.find((e) => e.name === 'RoundTrip')?.score, 12345);
+  eq('leaderboard score persisted', lb.find((e) => e.name === 'RoundTrip')?.score, completed.body.score);
   eq('leaderboard delete persisted (Champ gone)', lb.some((e) => e.name === 'Champ'), false);
 
   await srv.stop();
-  rmSync(dir, { recursive: true, force: true });
 
   console.log(`\n${failed === 0 ? '✅ PARITY OK' : '❌ PARITY FAILED'} — ${passed} passed, ${failed} failed`);
-  process.exit(failed === 0 ? 0 : 1);
+  process.exitCode = failed === 0 ? 0 : 1;
 };
 
 main().catch((e) => {
   console.error(e);
-  process.exit(1);
+  process.exitCode = 1;
+}).finally(() => {
+  for (const child of children) child.kill();
+  if (fixtureDir) rmSync(fixtureDir, { recursive: true, force: true });
 });

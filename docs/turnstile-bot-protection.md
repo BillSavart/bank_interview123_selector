@@ -9,9 +9,10 @@ Cloudflare Turnstile 的 Managed widget，保護：
 - `POST /api/posts`：使用者投稿，action 為 `post-submit`。
 - `POST /api/comments/:questionId`：題目留言，action 為 `comment-submit`。
 - `POST /api/post-comments/:postId`：文章留言，action 為 `comment-submit`。
+- `POST /api/voter-session`：匿名評分、投票及上傳排行榜的註冊，action 為 `voter-enroll`。
 
-一般評分、文章投票與留言投票不要求 Turnstile，避免每次輕量互動都增加摩擦；這些端點仍保留
-原本的格式驗證與資料覆寫規則。
+首次評分、投票或上傳排行榜時，訪客完成一次 Turnstile 驗證。伺服器用簽名的匿名 Cookie
+識別後續寫入。同一識別對同一目標更新既有投票。升級前的評分和投票仍計入公開總數。
 
 ## Request flow
 
@@ -46,10 +47,9 @@ sequenceDiagram
 2. Siteverify 回傳 `success: true`；
 3. `hostname` 在 `TURNSTILE_EXPECTED_HOSTNAMES` allowlist；
 4. `action` 與 API 路由預期用途相符；
-5. Cloudflare 看到的 remote IP 由 `CF-Connecting-IP` 優先取得，才退回 reverse-proxy header。
+5. Caddy 只採信 Cloudflare 來源的 `CF-Connecting-IP`，並覆寫送往 API 的來源 IP 標頭。
 
-驗證 request 帶 UUID `idempotency_key`。Turnstile token 具有時效、且只能成功驗證一次；表單在失敗或
-留言送出後會 reset widget，避免重送已使用的 token。
+API 在驗證前記錄短期 token 雜湊，以拒絕並行重送。表單在失敗或留言送出後會重設 widget。
 
 ## 金鑰與 runtime configuration
 
@@ -63,9 +63,8 @@ TURNSTILE_TIMEOUT_MS=5000
 - Site key 是公開識別值，由 `GET /api/security-config` 在 runtime 提供給 React；因此不需要把 key
   烤進 Vite image，也不需要為 key rotation 重建 web image。
 - Secret key 只注入 API container，僅用於 Siteverify，永遠不透過 API response 或前端 bundle 回傳。
-- 兩把 key 都沒設定時視為「刻意停用」，方便本機與尚未啟用的環境。
-- 只設定其中一把視為部署錯誤：受保護寫入會 fail closed 並回 `503`，container 啟動時也會記錄
-  `[turnstile] misconfigured`，避免看似啟用但實際繞過後端驗證。
+- 本機可省略兩把 key。正式環境缺少任一把 key 時，受保護寫入回傳 `503`，API 啟動時會記錄
+  `[turnstile] misconfigured`。
 
 ## Failure policy
 

@@ -1,7 +1,7 @@
 # Frontend image: build the SPA and serve it with Caddy.
 # Built in CI — never on the e2-micro VM (1GB RAM would OOM on `vite build`).
 
-FROM node:20-alpine AS build
+FROM node:24.22.3-alpine@sha256:116b800c3754b440ee0aa3ed2f20f5bf3d99a554bfd9adeea09ea8017f6e85f5 AS build
 WORKDIR /app
 RUN apk add --no-cache curl unzip
 COPY package*.json ./
@@ -15,7 +15,7 @@ RUN npm ci --ignore-scripts --no-audit --no-fund
 COPY . .
 RUN npm run build
 
-FROM caddy:2-alpine
+FROM caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
 COPY deploy/Caddyfile.docker /etc/caddy/Caddyfile
 COPY --from=build /app/dist /srv
 EXPOSE 80 443

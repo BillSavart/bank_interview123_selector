@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { ArrowUp } from 'lucide-react';
 import { NavBar } from './NavBar';
 import { PageGuide } from './PageGuide';
+import { VoterVerification } from './VoterVerification';
 
 const SITE_NAME = '公股銀行新手村';
 // Per-route browser-tab title. Falls back to the bare site name for anything
@@ -44,6 +45,7 @@ export function Layout() {
   return (
     <>
       <NavBar />
+      <VoterVerification />
       <main className="site-main">
         <Outlet />
         <PageGuide />

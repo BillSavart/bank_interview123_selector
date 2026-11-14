@@ -45,7 +45,7 @@ GCP e2-micro VM
 3. 兩筆都開 Proxy（橘色雲）。
 4. **SSL/TLS → Origin Server → Create Certificate**：產一張涵蓋 `你的網域` 與 `*.你的網域` 的 Origin Certificate，分別存成 `origin.pem`（憑證）與 `origin.key`（私鑰），放到 VM 的 `deploy/certs/`（compose 會以唯讀掛載到 web 容器的 `/certs`）。Caddy 用它終止 TLS，免去 Let's Encrypt 續期（續期需要 inbound，鎖防火牆後會失敗）。
 5. **SSL/TLS encryption mode 設 `Full (strict)`**（Origin Certificate 由 Cloudflare 簽發、受其信任，可通過 strict 驗證）。
-6. **Caching → Cache Rules** 新增一條：`URI Path` 符合 `/api/*` → `Eligible for cache`、Edge TTL 尊重 origin（用 cache-control header）。這樣公開 GET API（`/api/ratings`、`/api/comments/:id`、`/api/calendar`、`/api/*/leaderboard`，皆帶 `s-maxage=10`）會被邊緣快取吸收，origin 在高流量下幾乎閒置。寫入/admin/health 一律 `no-store`，不受影響。
+6. **Caching → Cache Rules** 對公開 GET API 尊重 origin 的 `Cache-Control`。`/api/ratings`、`/api/calendar` 與排行榜會提供短效快取。文章、留言與後台回應使用 `no-store`。從舊版升級時清除既有文章、留言及後台頁面的 CDN 快取。
 7. **Turnstile** 建立 Managed widget，加入根網域與 `www`，Pre-clearance 保持關閉；把 Site/Secret key 寫進 VM `deploy/.env`。
 8. **Security → Settings → Security.txt** 設定聯絡方式、到期日、語言與 canonical URL，並啟用開關。
 9. Cloudflare 帳戶的 **Profile → Authentication** 啟用 MFA；這是帳戶保護，與網站的 Turnstile 不同。

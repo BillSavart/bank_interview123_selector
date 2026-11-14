@@ -1,5 +1,3 @@
-import rawData from './checkGame.json';
-
 export type CheckAnswer = 'can' | 'cannot';
 
 export interface CheckQuestion {
@@ -11,13 +9,15 @@ export interface CheckQuestion {
   explanation: string;
 }
 
-export interface CheckGameData {
-  /** 暱稱輸入頁顯示的說明文字。 */
-  intro: string;
-  questions: CheckQuestion[];
-}
+export const checkGameIntro = `歡迎來到「支票審查員」！
 
-export const checkGameData = rawData as CheckGameData;
+今天是115年6月5日，你是銀行櫃員，接下來會有 12 張支票送到你面前。請依票面狀況判斷這張支票「可以收」還是「不可以收」。
+
+• 每題限時 15 秒，時間到會自動公布答案。
+• 答對才有分數，而且回答得越快、剩餘時間越多，分數越高。
+• 答完會公布正解與詳解，看完點「下一題」繼續。
+
+準備好了嗎？輸入你的暱稱，開始挑戰吧！`;
 
 /** 每題限時秒數。 */
 export const SECONDS_PER_QUESTION = 15;
@@ -43,9 +43,4 @@ export function shuffle<T>(input: readonly T[]): T[] {
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
   return arr;
-}
-
-/** 取得這一輪的題目順序（每次呼叫都重新洗牌）。 */
-export function buildRound(): CheckQuestion[] {
-  return shuffle(checkGameData.questions);
 }

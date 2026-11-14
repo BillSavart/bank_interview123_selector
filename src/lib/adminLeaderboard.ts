@@ -1,6 +1,4 @@
-// Admin API for the mini-game leaderboards. Listing uses the public endpoint
-// (the board is public anyway); deletion requires the ADMIN_TOKEN bearer (same
-// token as the calendar / comments admin).
+import { adminFetch } from './adminSession';
 
 export interface LeaderboardEntry {
   name: string;
@@ -14,12 +12,6 @@ export const LEADERBOARD_GAMES: Array<{ slug: string; label: string }> = [
   { slug: 'numbergame', label: '大寫數字訓練器' },
 ];
 
-const authHeaders = (token: string) => ({
-  Accept: 'application/json',
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${token}`,
-});
-
 export async function fetchLeaderboard(game: string): Promise<LeaderboardEntry[]> {
   const res = await fetch(`/api/${game}/leaderboard`, { headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error('leaderboard fetch failed');
@@ -27,10 +19,9 @@ export async function fetchLeaderboard(game: string): Promise<LeaderboardEntry[]
   return payload.leaderboard || [];
 }
 
-export async function deleteLeaderboardEntry(token: string, game: string, name: string): Promise<LeaderboardEntry[]> {
-  const res = await fetch(`/api/admin/${game}/leaderboard`, {
+export async function deleteLeaderboardEntry(game: string, name: string): Promise<LeaderboardEntry[]> {
+  const res = await adminFetch(`/api/admin/${game}/leaderboard`, {
     method: 'DELETE',
-    headers: authHeaders(token),
     body: JSON.stringify({ name }),
   });
   if (res.status === 401) throw new Error('unauthorized');

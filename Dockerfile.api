@@ -1,48 +1,31 @@
-# API image: tiny Node HTTP server for ratings / comments / posts / calendar /
-# leaderboards. Built in CI, pulled by the e2-micro VM.
-#
-# Two stages so the runtime image stays lean:
-#   - deps:    has the C++ toolchain, compiles better-sqlite3 from source.
-#   - runtime: node:20-slim + the compiled node_modules + the server files only.
-#
-# Why compile instead of a prebuilt binary: better-sqlite3 publishes no prebuilt
-# binary for node20 / linux for the pinned version (prebuild-install reports
-# "No prebuilt binaries found", then node-gyp needs python3+make+g++). Because the
-# dep is OPTIONAL (so the alpine/musl web image can skip it), a failed build is
-# silently dropped — which would make this image boot-loop on a missing module.
-# Compiling here guarantees the native binding is present. The API's only npm
-# runtime dependency is better-sqlite3, so that's all we install.
-
-FROM node:20-slim AS deps
+FROM node:24.22.3-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0 AS deps
 WORKDIR /app
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
-COPY package.json ./
-# Install just better-sqlite3, at the version pinned in package.json, compiling
-# the native binding against this exact Node/glibc.
-RUN npm install --omit=dev --no-save \
-  "better-sqlite3@$(node -p "require('./package.json').optionalDependencies['better-sqlite3']")"
+COPY server/package.json server/package-lock.json ./
+RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund \
+  && npm rebuild better-sqlite3 --build-from-source --nodedir=/usr/local \
+  && node -e "const Database = require('better-sqlite3'); new Database(':memory:').close()"
 
-FROM node:20-slim
+FROM node:24.22.3-trixie-slim@sha256:af02d57b57719b9657a45199a79264a9437940cd55b3c7b3fc99615654f124a0
 WORKDIR /app
-ENV NODE_ENV=production
-# Compiled deps from the build stage (no toolchain in the final image).
-COPY --from=deps /app/node_modules ./node_modules
-# The server plus its SQLite schema + one-off migration helper. db.mjs is needed
-# at runtime (ratings-api.mjs imports it); migrate-to-sqlite.mjs is run manually
-# on the VM during cutover (docker compose run --rm api node ...).
-COPY server/ratings-api.mjs ./server/ratings-api.mjs
-COPY server/db.mjs ./server/db.mjs
-COPY server/official-doc.mjs ./server/official-doc.mjs
-COPY server/submission-email.mjs ./server/submission-email.mjs
-COPY server/turnstile.mjs ./server/turnstile.mjs
-COPY server/migrate-to-sqlite.mjs ./server/migrate-to-sqlite.mjs
-COPY server/backup-db.mjs ./server/backup-db.mjs
-# Runtime heap cap (only the long-running server needs it; npm/compile must not
-# be constrained to 32 MB or they OOM-abort).
-ENV NODE_OPTIONS=--max-old-space-size=32
-RUN mkdir -p /data && chown -R node:node /data
+ENV NODE_ENV=production NODE_OPTIONS=--max-old-space-size=32
+COPY --from=deps /app/node_modules/better-sqlite3/package.json ./node_modules/better-sqlite3/package.json
+COPY --from=deps /app/node_modules/better-sqlite3/lib ./node_modules/better-sqlite3/lib
+COPY --from=deps /app/node_modules/better-sqlite3/build/Release/better_sqlite3.node ./node_modules/better-sqlite3/build/Release/better_sqlite3.node
+COPY --from=deps /app/node_modules/bindings ./node_modules/bindings
+COPY --from=deps /app/node_modules/file-uri-to-path ./node_modules/file-uri-to-path
+COPY server/package.json server/ratings-api.mjs server/db.mjs server/official-doc.mjs server/submission-email.mjs server/turnstile.mjs server/admin-session.mjs server/rate-limit.mjs server/voter-session.mjs server/game-rounds.mjs server/migrate-to-sqlite.mjs server/backup-db.mjs ./server/
+COPY package.json ./
+COPY src/data/checkGame.json src/data/checkGame.ts src/data/numberGame.ts ./src/data/
+COPY src/lib/chineseNumerals.ts ./src/lib/
+RUN apt-get update \
+  && apt-get upgrade -y --no-install-recommends \
+  && rm -rf /var/lib/apt/lists/* \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /opt/yarn* /usr/local/bin/yarn /usr/local/bin/yarnpkg \
+  && mkdir -p /data \
+  && chown node:node /data
 USER node
 EXPOSE 3000
 CMD ["node", "server/ratings-api.mjs"]

@@ -1,6 +1,7 @@
 // 經驗分享文章的型別與 API 呼叫。公開讀取走 /api/posts；後台發文／隱藏／刪除走
-// /api/admin/posts/*，需帶上管理員 token（Authorization: Bearer，與行事曆共用）。
-import { getVoterId } from './ratings';
+// /api/admin/posts/*，由管理員工作階段驗證。
+import { voterWrite } from './voterSession';
+import { adminFetch } from './adminSession';
 
 /** 文章分類：考試篇 / 工作篇。 */
 export type PostCategory = 'exam' | 'work';
@@ -73,7 +74,7 @@ export function postShortUrl(post: Pick<ExperiencePost, 'id' | 'slug'>): string 
 // --- 文章按讚 / 倒讚 -------------------------------------------------------
 export type PostVote = 1 | -1;
 
-const myPostVotesKey = 'bank-interview-post-votes';
+const myPostVotesKey = 'bank-interview-verified-post-votes';
 
 /** 讀出本機記錄的「我對哪些文章投了讚/倒讚」。 */
 export function loadMyPostVotes(): Record<string, PostVote> {
@@ -100,11 +101,7 @@ function saveMyPostVote(postId: string, value: PostVote | 0) {
 
 /** 對文章投票。value: 1（讚）、-1（倒讚）、0（取消）。成功回傳更新後的文章。 */
 export async function votePost(id: string, value: PostVote | 0): Promise<ExperiencePost | null> {
-  const res = await fetch(`/api/posts/${id}/vote`, {
-    method: 'POST',
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-    body: JSON.stringify({ voterId: getVoterId(), value }),
-  });
+  const res = await voterWrite(`/api/posts/${id}/vote`, { value });
   if (!res.ok) return null;
   const payload = (await res.json()) as { post?: ExperiencePost };
   if (!payload.post) return null;
@@ -113,12 +110,6 @@ export async function votePost(id: string, value: PostVote | 0): Promise<Experie
 }
 
 export type PostModerateAction = 'hide' | 'show' | 'delete';
-
-const authHeaders = (token: string) => ({
-  Accept: 'application/json',
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${token}`,
-});
 
 /** 公開讀取文章（僅未隱藏，已由後端依時間排序，最新在前）。 */
 export async function fetchPosts(): Promise<ExperiencePost[]> {
@@ -158,41 +149,37 @@ export async function fetchPost(id: string): Promise<ExperiencePost> {
   return payload.post;
 }
 
-/** 後台：取回全部文章（含隱藏），順帶驗證 token。 */
-export async function fetchAdminPosts(token: string): Promise<AdminPost[]> {
-  const res = await fetch('/api/admin/posts', { headers: authHeaders(token) });
+/** 後台取回全部文章（含隱藏）。 */
+export async function fetchAdminPosts(): Promise<AdminPost[]> {
+  const res = await adminFetch('/api/admin/posts');
   if (res.status === 401) throw new Error('unauthorized');
   if (!res.ok) throw new Error('admin posts fetch failed');
   const payload = (await res.json()) as { posts?: AdminPost[] };
   return payload.posts || [];
 }
 
-export async function createPost(token: string, input: PostInput): Promise<AdminPost[]> {
-  const res = await fetch('/api/admin/posts', {
+export async function createPost(input: PostInput): Promise<AdminPost[]> {
+  const res = await adminFetch('/api/admin/posts', {
     method: 'POST',
-    headers: authHeaders(token),
     body: JSON.stringify(input),
   });
   return handleWriteResponse(res);
 }
 
-export async function updatePost(token: string, id: string, input: PostInput): Promise<AdminPost[]> {
-  const res = await fetch(`/api/admin/posts/${id}`, {
+export async function updatePost(id: string, input: PostInput): Promise<AdminPost[]> {
+  const res = await adminFetch(`/api/admin/posts/${id}`, {
     method: 'PUT',
-    headers: authHeaders(token),
     body: JSON.stringify(input),
   });
   return handleWriteResponse(res);
 }
 
 export async function moderatePost(
-  token: string,
   id: string,
   action: PostModerateAction,
 ): Promise<AdminPost[]> {
-  const res = await fetch(`/api/admin/posts/${id}/moderate`, {
+  const res = await adminFetch(`/api/admin/posts/${id}/moderate`, {
     method: 'POST',
-    headers: authHeaders(token),
     body: JSON.stringify({ action }),
   });
   return handleWriteResponse(res);

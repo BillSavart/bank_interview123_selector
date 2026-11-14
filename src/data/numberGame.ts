@@ -1,7 +1,7 @@
 // 大寫數字訓練器的出題與計分。共 12 題：前 6 題是對齊「億 仟佰拾萬 仟佰拾元」
 // 表頭的方格題；後 6 題是刻意寫成支票金額樣式（如「貳拾捌萬參佰元整」，略去零）。
 // 兩種都在限時內把金額填回阿拉伯數字。計分與排行榜機制比照「支票審查員」。
-import { randomAmount, toGridCells, toCheckCapital, type GridCell } from '../lib/chineseNumerals';
+import { randomAmount, toGridCells, toCheckCapital, type GridCell } from '../lib/chineseNumerals.ts';
 
 interface BaseQuestion {
   id: number;

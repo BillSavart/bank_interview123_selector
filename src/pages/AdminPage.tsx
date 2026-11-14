@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react';
+import { adminSessionExpired, loginAdmin, logoutAdmin } from '../lib/adminSession';
 import { ShieldCheck, Plus, Trash2, Save, X, LogOut, Pencil, EyeOff, Eye, BookOpen } from 'lucide-react';
 import {
   createEvent,
   deleteEvent,
   emptyEventInput,
   fetchAdminCalendar,
-  loadAdminToken,
-  saveAdminToken,
   updateEvent,
   type CalendarEvent,
   type CalendarEventInput,
@@ -67,41 +66,60 @@ const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINUTES = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'));
 
 export function AdminPage() {
-  const [token, setToken] = useState(loadAdminToken());
+  const [token, setToken] = useState('');
   const [authed, setAuthed] = useState(false);
-
-  // Try to auto-login with a saved token on mount.
-  useEffect(() => {
-    if (!token) return;
-    fetchAdminCalendar(token)
-      .then((list) => {
-        setEvents(list);
-        setAuthed(true);
-      })
-      .catch(() => saveAdminToken(''));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loginError, setLoginError] = useState('');
 
-  const login = (e: React.FormEvent) => {
+  useEffect(() => {
+    try { localStorage.removeItem('admin-token'); } catch { /* storage may be unavailable */ }
+    let active = true;
+    fetchAdminCalendar()
+      .then((list) => {
+        if (active) {
+          setEvents(list);
+          setAuthed(true);
+        }
+      })
+      .catch(() => { /* Missing or expired session. */ })
+      .finally(() => { if (active) setLoading(false); });
+    const expire = () => {
+      setAuthed(false);
+      setEvents([]);
+    };
+    window.addEventListener(adminSessionExpired, expire);
+    return () => {
+      active = false;
+      window.removeEventListener(adminSessionExpired, expire);
+    };
+  }, []);
+
+  const login = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
-    fetchAdminCalendar(token.trim())
-      .then((list) => {
-        saveAdminToken(token.trim());
-        setEvents(list);
-        setAuthed(true);
-      })
-      .catch(() => setLoginError('管理金鑰不正確，或後台未啟用。'));
+    setLoading(true);
+    try {
+      await loginAdmin(token.trim());
+      setEvents(await fetchAdminCalendar());
+      setAuthed(true);
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : '登入失敗，請稍後再試。');
+    } finally {
+      setToken('');
+      setLoading(false);
+    }
   };
 
-  const logout = () => {
-    saveAdminToken('');
-    setToken('');
-    setAuthed(false);
-    setEvents([]);
+  const logout = async () => {
+    setLoginError('');
+    try {
+      await logoutAdmin();
+      setAuthed(false);
+      setEvents([]);
+    } catch {
+      setLoginError('登出失敗，請再試一次。');
+    }
   };
 
   if (!authed) {
@@ -126,7 +144,7 @@ export function AdminPage() {
             autoComplete="off"
           />
           {loginError && <p className="admin-error">{loginError}</p>}
-          <button type="submit" className="admin-btn admin-btn-primary" disabled={!token.trim()}>
+          <button type="submit" className="admin-btn admin-btn-primary" disabled={loading || !token.trim()}>
             登入
           </button>
         </form>
@@ -135,17 +153,18 @@ export function AdminPage() {
   }
 
   return (
-    <AdminDashboard token={token.trim()} events={events} setEvents={setEvents} onLogout={logout} />
+    <>
+      {loginError && <p className="container admin-error" role="alert">{loginError}</p>}
+      <AdminDashboard events={events} setEvents={setEvents} onLogout={logout} />
+    </>
   );
 }
 
 function AdminDashboard({
-  token,
   events,
   setEvents,
   onLogout,
 }: {
-  token: string;
   events: CalendarEvent[];
   setEvents: (e: CalendarEvent[]) => void;
   onLogout: () => void;
@@ -195,7 +214,7 @@ function AdminDashboard({
     setBusy(true);
     setError('');
     const action =
-      editingId === 'new' ? createEvent(token, draft) : updateEvent(token, editingId as string, draft);
+      editingId === 'new' ? createEvent(draft) : updateEvent(editingId as string, draft);
     action
       .then((list) => {
         setEvents(list);
@@ -208,7 +227,7 @@ function AdminDashboard({
   const remove = (ev: CalendarEvent) => {
     if (!window.confirm(`確定刪除「${ev.org}」？`)) return;
     setBusy(true);
-    deleteEvent(token, ev.id)
+    deleteEvent(ev.id)
       .then(setEvents)
       .catch((err) => setError(err.message || '刪除失敗。'))
       .finally(() => setBusy(false));
@@ -258,11 +277,11 @@ function AdminDashboard({
       </div>
 
       {tab === 'experience' ? (
-        <PostsAdmin token={token} />
+        <PostsAdmin />
       ) : tab === 'comments' ? (
-        <CommentsAdmin token={token} />
+        <CommentsAdmin />
       ) : tab === 'leaderboard' ? (
-        <LeaderboardAdmin token={token} />
+        <LeaderboardAdmin />
       ) : (
         <>
           {error && <p className="admin-error">{error}</p>}
@@ -391,7 +410,7 @@ function AdminDashboard({
   );
 }
 
-function PostsAdmin({ token }: { token: string }) {
+function PostsAdmin() {
   const [posts, setPosts] = useState<AdminPost[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
@@ -407,7 +426,7 @@ function PostsAdmin({ token }: { token: string }) {
 
   const load = () => {
     setState('loading');
-    fetchAdminPosts(token)
+    fetchAdminPosts()
       .then((list) => {
         setPosts(list);
         setState('ready');
@@ -415,7 +434,7 @@ function PostsAdmin({ token }: { token: string }) {
       .catch(() => setState('error'));
   };
 
-  useEffect(load, [token]);
+  useEffect(load, []);
 
   const openNew = () => {
     setDraft(emptyPostInput());
@@ -441,7 +460,7 @@ function PostsAdmin({ token }: { token: string }) {
     }
     setBusyId('form');
     setError('');
-    const action = editingId === 'new' ? createPost(token, draft) : updatePost(token, editingId as string, draft);
+    const action = editingId === 'new' ? createPost(draft) : updatePost(editingId as string, draft);
     action
       .then((list) => {
         setPosts(list);
@@ -455,7 +474,7 @@ function PostsAdmin({ token }: { token: string }) {
     if (action === 'delete' && !window.confirm(`確定永久刪除「${p.title}」？`)) return;
     setBusyId(p.id);
     setError('');
-    moderatePost(token, p.id, action)
+    moderatePost(p.id, action)
       .then(setPosts)
       .catch((err) => setError(err.message || '操作失敗。'))
       .finally(() => setBusyId(''));
@@ -745,7 +764,7 @@ function PostPreviewModal({
 }
 
 // 留言板管理：分成「面試篩選器留言」與「文章留言」兩個分頁，刻意不混在一起。
-function CommentsAdmin({ token }: { token: string }) {
+function CommentsAdmin() {
   const [board, setBoard] = useState<'question' | 'post'>('question');
   return (
     <div>
@@ -765,12 +784,12 @@ function CommentsAdmin({ token }: { token: string }) {
           文章留言
         </button>
       </div>
-      {board === 'question' ? <QuestionCommentsAdmin token={token} /> : <PostCommentsAdmin token={token} />}
+      {board === 'question' ? <QuestionCommentsAdmin /> : <PostCommentsAdmin />}
     </div>
   );
 }
 
-function QuestionCommentsAdmin({ token }: { token: string }) {
+function QuestionCommentsAdmin() {
   const [comments, setComments] = useState<AdminComment[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
@@ -778,7 +797,7 @@ function QuestionCommentsAdmin({ token }: { token: string }) {
 
   const load = () => {
     setState('loading');
-    fetchAdminComments(token)
+    fetchAdminComments()
       .then((list) => {
         setComments(list);
         setState('ready');
@@ -786,13 +805,13 @@ function QuestionCommentsAdmin({ token }: { token: string }) {
       .catch(() => setState('error'));
   };
 
-  useEffect(load, [token]);
+  useEffect(load, []);
 
   const act = (c: AdminComment, action: ModerateAction) => {
     if (action === 'delete' && !window.confirm(`確定永久刪除這則留言？\n「${c.text.slice(0, 40)}」`)) return;
     setBusyId(c.id);
     setError('');
-    moderateComment(token, c.id, action)
+    moderateComment(c.id, action)
       .then(() => {
         setComments((prev) => {
           if (action === 'delete') return prev.filter((x) => x.id !== c.id);
@@ -867,7 +886,7 @@ function QuestionCommentsAdmin({ token }: { token: string }) {
   );
 }
 
-function PostCommentsAdmin({ token }: { token: string }) {
+function PostCommentsAdmin() {
   const [comments, setComments] = useState<AdminPostComment[]>([]);
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
   const [error, setError] = useState('');
@@ -875,7 +894,7 @@ function PostCommentsAdmin({ token }: { token: string }) {
 
   const load = () => {
     setState('loading');
-    fetchAdminPostComments(token)
+    fetchAdminPostComments()
       .then((list) => {
         setComments(list);
         setState('ready');
@@ -883,13 +902,13 @@ function PostCommentsAdmin({ token }: { token: string }) {
       .catch(() => setState('error'));
   };
 
-  useEffect(load, [token]);
+  useEffect(load, []);
 
   const act = (c: AdminPostComment, action: ModerateAction) => {
     if (action === 'delete' && !window.confirm(`確定永久刪除這則留言？\n「${c.text.slice(0, 40)}」`)) return;
     setBusyId(c.id);
     setError('');
-    moderatePostComment(token, c.id, action)
+    moderatePostComment(c.id, action)
       .then(() => {
         setComments((prev) => {
           if (action === 'delete') return prev.filter((x) => x.id !== c.id);
@@ -966,7 +985,7 @@ function PostCommentsAdmin({ token }: { token: string }) {
   );
 }
 
-function LeaderboardAdmin({ token }: { token: string }) {
+function LeaderboardAdmin() {
   // One board per game, loaded together; null until its fetch resolves.
   const [boards, setBoards] = useState<Record<string, LeaderboardEntry[] | null>>({});
   const [state, setState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -986,13 +1005,13 @@ function LeaderboardAdmin({ token }: { token: string }) {
     return () => {
       alive = false;
     };
-  }, [token]);
+  }, []);
 
   const remove = (slug: string, entry: LeaderboardEntry) => {
     if (!window.confirm(`確定刪除「${entry.name}」（${entry.score} 分）的排行榜紀錄？`)) return;
     setBusyKey(`${slug}:${entry.name}`);
     setError('');
-    deleteLeaderboardEntry(token, slug, entry.name)
+    deleteLeaderboardEntry(slug, entry.name)
       .then((rows) => setBoards((prev) => ({ ...prev, [slug]: rows })))
       .catch((err) => setError(err.message || '刪除失敗。'))
       .finally(() => setBusyKey(''));

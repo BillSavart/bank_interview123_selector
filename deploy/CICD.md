@@ -18,7 +18,9 @@ GitHub Actions
   v
 SSH 到 GCP VM
   |- docker compose pull
-  |- docker compose up -d
+  |- docker compose up -d --wait
+  |- 檢查來源站 HTTPS、API 健康與後台隔離
+  |- 啟動或來源站驗證失敗時還原上一組映像
 ```
 
 VM 上跑 `web` container 與輕量 `api` container。Caddy 負責 HTTPS、靜態檔服務，並把 `/api/*` 反向代理到 Node API。使用者投稿先寫入 API 的持久層，再由 API container 透過 Resend HTTPS API 寄送管理員通知；Email provider 不在 VM 內運行。
@@ -26,14 +28,13 @@ VM 上跑 `web` container 與輕量 `api` container。Caddy 負責 HTTPS、靜�
 ### 可重現的 dependency install
 
 - `package.json` 以 `packageManager` 固定 npm 10.8.2，`package-lock.json` 也用同一版本維護。
-- PR checks、main branch 的 deploy gate 與 frontend Docker build 都只執行
-  `npm ci --ignore-scripts --no-audit --no-fund`。這些階段不啟動 SQLite API，因此不需要編譯
-  `better-sqlite3`；停用 lifecycle scripts 可移除 runner 上約一分鐘的 native build。Audit 不放在每次
-  deploy 的 critical path，維護相依套件時應另外執行 `npm audit`。
+- PR checks、main branch 的 deploy gate 與 frontend Docker build 都以
+  `npm ci --ignore-scripts --no-audit --no-fund` 安裝。CI 只在 API／SQLite 回歸測試前執行
+  `npm rebuild better-sqlite3`。維護相依套件時應另外執行 `npm audit`。
 - workflow 不提供 `npm install` fallback；若 manifest 與 lockfile 不一致，CI 會立即失敗，避免重新解析
   dependency tree 後仍繼續部署，也避免同一個 job 重複安裝。
-- `Dockerfile.api` 的 `npm install --no-save` 是刻意的例外：該 stage 只從 `package.json` 讀取已固定的
-  `better-sqlite3` 版本，為 Node 20 / glibc 編譯單一 native runtime dependency，不負責安裝完整專案。
+- `Dockerfile.api` 使用 `server/package-lock.json` 鎖定 `better-sqlite3`，為 Node 24 LTS / glibc
+  編譯 native runtime dependency。
 
 新增或升級套件時，請用 npm 10.8.2 執行 `npm install`，一併提交 `package.json` 與
 `package-lock.json`，並在 push 前以 `npm ci` 做一次 clean-install 驗證。
@@ -79,8 +80,7 @@ REGISTRY=ghcr.io/你的github帳號
 DOMAIN=你的網域
 ADMIN_DOMAIN=admin.你的網域
 ADMIN_TOKEN=用一段夠長的隨機字串
-# 選用：邊界 Basic Auth 的 bcrypt hash（caddy hash-password 產生）
-ADMIN_BASIC_HASH=
+VOTER_SIGNING_KEY=另一段獨立的隨機字串
 # 選用：使用者投稿成功後寄 Email 通知（以下三項須同時設定）
 RESEND_API_KEY=re_xxxxxxxxx
 SUBMISSION_NOTIFY_EMAIL=你的收件信箱
@@ -95,10 +95,10 @@ EOF
 
 - `DOMAIN` 是 Cloudflare 上的正式網域，例如 `example.com` 或 `interview.example.com`。
 - `ADMIN_DOMAIN` 是管理後台子網域，例如 `admin.interview.example.com`。
-- `ADMIN_TOKEN` 是招考行事曆後台的管理金鑰，保護 `/api/admin/*` 寫入。
-  產生方式例如：`openssl rand -hex 24`。**未設定時後台寫入一律拒絕**（行事曆變唯讀）。
+- `ADMIN_TOKEN` 是後台登入金鑰。登入後 API 發放有效一小時的安全 Cookie，重啟 API 後需重新登入。
+- `VOTER_SIGNING_KEY` 可用 `openssl rand -hex 32` 產生。固定這個值可在重啟或輪替管理金鑰時保留匿名投票識別。
 - 投稿通知三個變數的啟用條件、DNS 與失敗行為見下節；缺少任何一項時通知保持停用，不影響投稿。
-- Turnstile 的 Site key 可公開，Secret key 只能留在 `deploy/.env`／API container。兩把都未設定時刻意停用；只設定其中一把時公開投稿與留言會 fail closed。
+- Turnstile 的 Site key 可公開，Secret key 保存在 `deploy/.env`。正式環境缺少任一把時，投稿、留言與匿名投票註冊回傳 `503`。
 - 改完 `deploy/.env` 後執行
   `docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d`，讓 api / web
   重新讀取環境變數。
@@ -208,6 +208,7 @@ chmod 600 deploy/certs/origin.key
   的 Origin Certificate，存成 `origin.pem` / `origin.key` 放到 VM 的 `deploy/certs/`
   （compose 會唯讀掛載到 web 容器 `/certs`，Caddy 用它終止 TLS，免 Let's Encrypt 續期）。
 - **SSL/TLS encryption mode 設 `Full (strict)`**。
+- **Edge Certificates → Minimum TLS Version 設 `1.2`**。
 - **Caching → Cache Rules** 加一條：`/api/*` → `Eligible for cache`、Edge TTL 尊重 origin，
   讓公開 GET API（帶 `s-maxage=10`）被邊緣快取吸收。
 - 上線並確認憑證生效後，把防火牆 80/443 收緊成只允許 Cloudflare 網段，詳見
@@ -222,6 +223,7 @@ Settings -> Secrets and variables -> Actions:
 | `SSH_HOST` | VM external IP |
 | `SSH_USER` | VM SSH user |
 | `SSH_KEY` | SSH private key |
+| `SSH_FINGERPRINT` | Actions variable 或 secret。由 VM 控制台執行 `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub`，取 `SHA256:…` 欄位 |
 
 ghcr push 可用 GitHub Actions 內建 `GITHUB_TOKEN`。
 

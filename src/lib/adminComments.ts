@@ -1,5 +1,4 @@
-// Admin API for moderating the question-board comments. All calls require the
-// ADMIN_TOKEN bearer (same token as the calendar admin).
+import { adminFetch } from './adminSession';
 
 export interface AdminComment {
   id: string;
@@ -16,24 +15,17 @@ export interface AdminComment {
 
 export type ModerateAction = 'hide' | 'show' | 'delete';
 
-const authHeaders = (token: string) => ({
-  Accept: 'application/json',
-  'Content-Type': 'application/json',
-  Authorization: `Bearer ${token}`,
-});
-
-export async function fetchAdminComments(token: string): Promise<AdminComment[]> {
-  const res = await fetch('/api/admin/comments', { headers: authHeaders(token) });
+export async function fetchAdminComments(): Promise<AdminComment[]> {
+  const res = await adminFetch('/api/admin/comments');
   if (res.status === 401) throw new Error('unauthorized');
   if (!res.ok) throw new Error('admin comments fetch failed');
   const payload = (await res.json()) as { comments?: AdminComment[] };
   return payload.comments || [];
 }
 
-export async function moderateComment(token: string, id: string, action: ModerateAction): Promise<void> {
-  const res = await fetch(`/api/admin/comments/${id}/moderate`, {
+export async function moderateComment(id: string, action: ModerateAction): Promise<void> {
+  const res = await adminFetch(`/api/admin/comments/${id}/moderate`, {
     method: 'POST',
-    headers: authHeaders(token),
     body: JSON.stringify({ action }),
   });
   if (res.status === 401) throw new Error('unauthorized');
@@ -61,18 +53,17 @@ export interface AdminPostComment {
   adminHidden: boolean;
 }
 
-export async function fetchAdminPostComments(token: string): Promise<AdminPostComment[]> {
-  const res = await fetch('/api/admin/post-comments', { headers: authHeaders(token) });
+export async function fetchAdminPostComments(): Promise<AdminPostComment[]> {
+  const res = await adminFetch('/api/admin/post-comments');
   if (res.status === 401) throw new Error('unauthorized');
   if (!res.ok) throw new Error('admin post comments fetch failed');
   const payload = (await res.json()) as { comments?: AdminPostComment[] };
   return payload.comments || [];
 }
 
-export async function moderatePostComment(token: string, id: string, action: ModerateAction): Promise<void> {
-  const res = await fetch(`/api/admin/post-comments/${id}/moderate`, {
+export async function moderatePostComment(id: string, action: ModerateAction): Promise<void> {
+  const res = await adminFetch(`/api/admin/post-comments/${id}/moderate`, {
     method: 'POST',
-    headers: authHeaders(token),
     body: JSON.stringify({ action }),
   });
   if (res.status === 401) throw new Error('unauthorized');

@@ -1,3 +1,5 @@
+import { voterWrite } from './voterSession';
+
 export interface RatingSummary {
   questionId: number;
   count: number;
@@ -6,22 +8,7 @@ export interface RatingSummary {
 
 export type RatingMap = Record<number, RatingSummary>;
 
-const voterStorageKey = 'bank-interview-rating-voter-id';
-const scoreStorageKey = 'bank-interview-rating-scores';
-
-const createClientId = () => {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID().replaceAll('-', '');
-  return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 14)}`;
-};
-
-export function getVoterId() {
-  const existing = localStorage.getItem(voterStorageKey);
-  if (existing) return existing;
-
-  const voterId = createClientId();
-  localStorage.setItem(voterStorageKey, voterId);
-  return voterId;
-}
+const scoreStorageKey = 'bank-interview-verified-rating-scores';
 
 export function loadLocalScores(): Record<number, number> {
   try {
@@ -51,14 +38,7 @@ export async function fetchRatings(): Promise<RatingMap> {
 }
 
 export async function submitRating(questionId: number, score: number): Promise<RatingSummary> {
-  const response = await fetch(`/api/ratings/${questionId}`, {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ score, voterId: getVoterId() }),
-  });
+  const response = await voterWrite(`/api/ratings/${questionId}`, { score });
 
   if (!response.ok) throw new Error('rating submit failed');
   const payload = (await response.json()) as { rating: RatingSummary };

@@ -73,7 +73,7 @@ export function TurnstileWidget({
   onChange,
   resetKey = 0,
 }: {
-  action: 'post-submit' | 'comment-submit';
+  action: 'post-submit' | 'comment-submit' | 'voter-enroll';
   challenge: TurnstileChallenge;
   onChange: (next: TurnstileChallenge) => void;
   resetKey?: number;

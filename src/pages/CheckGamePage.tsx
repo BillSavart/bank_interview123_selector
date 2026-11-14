@@ -1,138 +1,18 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Check, X, Trophy, Timer, ClipboardCheck, RotateCcw } from 'lucide-react';
-import {
-  buildRound,
-  checkGameData,
-  scoreForAnswer,
-  SECONDS_PER_QUESTION,
-  type CheckAnswer,
-  type CheckQuestion,
-} from '../data/checkGame';
-import {
-  fetchLeaderboard,
-  loadPlayerName,
-  savePlayerName,
-  submitScore,
-  type LeaderboardEntry,
-} from '../lib/leaderboard';
+import { checkGameIntro, SECONDS_PER_QUESTION, type CheckAnswer, type CheckQuestion } from '../data/checkGame';
+import type { LeaderboardEntry } from '../lib/leaderboard';
+import { useRankedGame } from '../lib/useRankedGame';
 
-type Phase = 'intro' | 'playing' | 'result';
-
+type CheckPrompt = Omit<CheckQuestion, 'answer' | 'explanation'>;
 const ANSWER_LABEL: Record<CheckAnswer, string> = { can: '可以', cannot: '不可以' };
 
 export function CheckGamePage() {
-  const [phase, setPhase] = useState<Phase>('intro');
-  const [name, setName] = useState(loadPlayerName());
-
-  // Per-round state
-  const [round, setRound] = useState<CheckQuestion[]>([]);
-  const [index, setIndex] = useState(0);
-  const [secondsLeft, setSecondsLeft] = useState(SECONDS_PER_QUESTION);
+  const game = useRankedGame<CheckPrompt, CheckAnswer>('checkgame');
+  const { phase, name, round, grade, busy, error } = game;
   const [picked, setPicked] = useState<CheckAnswer | null>(null);
-  const [revealed, setRevealed] = useState(false);
-  const [secondsAtAnswer, setSecondsAtAnswer] = useState(0);
-  const [totalScore, setTotalScore] = useState(0);
-  const [lastGain, setLastGain] = useState(0);
-
-  // Leaderboard
-  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
-  const [myRank, setMyRank] = useState<number | null>(null);
-  const [submitState, setSubmitState] = useState<'idle' | 'submitting' | 'done' | 'error'>('idle');
-
-  const current = round[index];
-  const isLast = index === round.length - 1;
-
-  const refreshLeaderboard = useCallback(() => {
-    fetchLeaderboard()
-      .then(setLeaderboard)
-      .catch(() => {
-        /* leaderboard is best-effort; ignore network errors */
-      });
-  }, []);
-
-  useEffect(() => {
-    refreshLeaderboard();
-  }, [refreshLeaderboard]);
-
-  // --- Countdown timer -----------------------------------------------------
-  const revealAnswer = useCallback((remaining: number) => {
-    setSecondsAtAnswer(remaining);
-    setRevealed(true);
-  }, []);
-
-  useEffect(() => {
-    if (phase !== 'playing' || revealed) return;
-
-    if (secondsLeft <= 0) {
-      revealAnswer(0);
-      return;
-    }
-
-    const timer = window.setTimeout(() => setSecondsLeft((s) => s - 1), 1000);
-    return () => window.clearTimeout(timer);
-  }, [phase, revealed, secondsLeft, revealAnswer]);
-
-  // Award score once when an answer is revealed.
-  useEffect(() => {
-    if (!revealed || !current) return;
-    const correct = picked === current.answer;
-    const gain = scoreForAnswer(correct, secondsAtAnswer);
-    setLastGain(gain);
-    setTotalScore((prev) => prev + gain);
-  }, [revealed]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const startGame = () => {
-    const trimmed = name.trim();
-    if (!trimmed) return;
-    savePlayerName(trimmed);
-    setRound(buildRound());
-    setIndex(0);
-    setSecondsLeft(SECONDS_PER_QUESTION);
-    setPicked(null);
-    setRevealed(false);
-    setSecondsAtAnswer(0);
-    setTotalScore(0);
-    setLastGain(0);
-    setSubmitState('idle');
-    setMyRank(null);
-    setPhase('playing');
-  };
-
-  const pick = (answer: CheckAnswer) => {
-    if (revealed) return;
-    setPicked(answer);
-    revealAnswer(secondsLeft);
-  };
-
-  const next = () => {
-    if (isLast) {
-      finishGame();
-      return;
-    }
-    setIndex((i) => i + 1);
-    setSecondsLeft(SECONDS_PER_QUESTION);
-    setPicked(null);
-    setRevealed(false);
-    setSecondsAtAnswer(0);
-  };
-
-  const finishGame = () => {
-    setPhase('result');
-    setSubmitState('submitting');
-    submitScore('checkgame', name.trim(), totalScore)
-      .then((res) => {
-        if (res.error) {
-          setSubmitState('error');
-          return;
-        }
-        if (res.leaderboard) setLeaderboard(res.leaderboard);
-        setMyRank(res.rank ?? null);
-        setSubmitState('done');
-      })
-      .catch(() => setSubmitState('error'));
-  };
-
-  const correct = revealed && current ? picked === current.answer : false;
+  const start = () => { setPicked(null); game.start(); };
+  const next = () => { setPicked(null); game.next(); };
 
   return (
     <div className="container py-4 checkgame-page">
@@ -143,27 +23,38 @@ export function CheckGamePage() {
 
       <div className="checkgame-layout">
         <div className="checkgame-main">
+          {error && (
+            <div className="mb-3">
+              <p className="text-danger" role="alert">{error}</p>
+              {phase === 'playing' && <button type="button" className="checkgame-btn" onClick={start}>重新開始</button>}
+            </div>
+          )}
           {phase === 'intro' && (
             <IntroCard
               name={name}
-              onNameChange={setName}
-              onStart={startGame}
-              intro={checkGameData.intro}
+              onNameChange={game.setName}
+              onStart={start}
+              intro={checkGameIntro}
+              busy={busy}
             />
           )}
 
-          {phase === 'playing' && current && (
+          {phase === 'playing' && round && (
             <QuestionCard
-              question={current}
-              index={index}
-              total={round.length}
-              secondsLeft={secondsLeft}
+              question={round.question}
+              index={round.index}
+              total={round.total}
+              secondsLeft={game.secondsLeft}
               picked={picked}
-              revealed={revealed}
-              correct={correct}
-              lastGain={lastGain}
-              isLast={isLast}
-              onPick={pick}
+              revealed={!!grade}
+              correct={grade?.correct || false}
+              correctAnswer={grade?.answer}
+              explanation={grade?.explanation}
+              timedOut={grade?.timedOut || false}
+              lastGain={grade?.gain || 0}
+              isLast={round.index + 1 === round.total}
+              busy={busy}
+              onPick={(answer) => { setPicked(answer); game.answer(answer); }}
               onNext={next}
             />
           )}
@@ -171,16 +62,17 @@ export function CheckGamePage() {
           {phase === 'result' && (
             <ResultCard
               name={name}
-              totalScore={totalScore}
-              rank={myRank}
-              submitState={submitState}
-              onReplay={startGame}
+              totalScore={grade?.totalScore || 0}
+              rank={game.rank}
+              submitState={game.submitState}
+              onReplay={start}
+              busy={busy}
             />
           )}
         </div>
 
         <aside className="checkgame-side">
-          <LeaderboardPanel entries={leaderboard} playerName={name} />
+          <LeaderboardPanel entries={game.leaderboard} playerName={name} />
         </aside>
       </div>
     </div>
@@ -194,11 +86,13 @@ function IntroCard({
   onNameChange,
   onStart,
   intro,
+  busy,
 }: {
   name: string;
   onNameChange: (v: string) => void;
   onStart: () => void;
   intro: string;
+  busy: boolean;
 }) {
   return (
     <div className="checkgame-card checkgame-intro">
@@ -224,7 +118,7 @@ function IntroCard({
           placeholder="輸入暱稱（最多 24 字）"
           onChange={(e) => onNameChange(e.target.value)}
         />
-        <button type="submit" className="checkgame-btn checkgame-btn-primary" disabled={!name.trim()}>
+        <button type="submit" className="checkgame-btn checkgame-btn-primary" disabled={busy || !name.trim()}>
           開始挑戰
         </button>
       </form>
@@ -242,18 +136,26 @@ function QuestionCard({
   picked,
   revealed,
   correct,
+  correctAnswer,
+  explanation,
+  timedOut,
+  busy,
   lastGain,
   isLast,
   onPick,
   onNext,
 }: {
-  question: CheckQuestion;
+  question: CheckPrompt;
   index: number;
   total: number;
   secondsLeft: number;
   picked: CheckAnswer | null;
   revealed: boolean;
   correct: boolean;
+  correctAnswer?: CheckAnswer;
+  explanation?: string;
+  timedOut: boolean;
+  busy: boolean;
   lastGain: number;
   isLast: boolean;
   onPick: (a: CheckAnswer) => void;
@@ -305,8 +207,8 @@ function QuestionCard({
 
       <div className="checkgame-choices">
         {(['can', 'cannot'] as CheckAnswer[]).map((value) => {
-          const isAnswer = revealed && question.answer === value;
-          const isWrongPick = revealed && picked === value && picked !== question.answer;
+          const isAnswer = revealed && correctAnswer === value;
+          const isWrongPick = revealed && picked === value && picked !== correctAnswer;
           return (
             <button
               key={value}
@@ -314,7 +216,7 @@ function QuestionCard({
               className={`checkgame-choice ${value === 'can' ? 'is-can' : 'is-cannot'} ${
                 isAnswer ? 'is-correct' : ''
               } ${isWrongPick ? 'is-wrong' : ''}`}
-              disabled={revealed}
+              disabled={revealed || busy}
               onClick={() => onPick(value)}
             >
               {value === 'can' ? <Check size={20} /> : <X size={20} />}
@@ -328,13 +230,13 @@ function QuestionCard({
         <div className={`checkgame-reveal ${correct ? 'is-correct' : 'is-wrong'}`}>
           <div className="checkgame-reveal-head">
             <span className="checkgame-reveal-verdict">
-              {picked === null ? '時間到！' : correct ? '答對了！' : '答錯了'}
-              　正解：{ANSWER_LABEL[question.answer]}
+              {timedOut ? '時間到！' : correct ? '答對了！' : '答錯了'}
+              　正解：{correctAnswer && ANSWER_LABEL[correctAnswer]}
             </span>
             <span className="checkgame-reveal-gain">+{lastGain} 分</span>
           </div>
-          <p className="checkgame-explanation">{question.explanation}</p>
-          <button type="button" className="checkgame-btn checkgame-btn-primary" onClick={onNext}>
+          <p className="checkgame-explanation">{explanation}</p>
+          <button type="button" className="checkgame-btn checkgame-btn-primary" onClick={onNext} disabled={busy}>
             {isLast ? '看結算' : '下一題'}
           </button>
         </div>
@@ -351,12 +253,14 @@ function ResultCard({
   rank,
   submitState,
   onReplay,
+  busy,
 }: {
   name: string;
   totalScore: number;
   rank: number | null;
   submitState: 'idle' | 'submitting' | 'done' | 'error';
   onReplay: () => void;
+  busy: boolean;
 }) {
   return (
     <div className="checkgame-card checkgame-result">
@@ -376,7 +280,7 @@ function ResultCard({
         <p className="checkgame-result-note is-error">成績上傳失敗，但不影響你再玩一次。</p>
       )}
 
-      <button type="button" className="checkgame-btn checkgame-btn-primary" onClick={onReplay}>
+      <button type="button" className="checkgame-btn checkgame-btn-primary" onClick={onReplay} disabled={busy}>
         <RotateCcw size={18} />
         再玩一次
       </button>
