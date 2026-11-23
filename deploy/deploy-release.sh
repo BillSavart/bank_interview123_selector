@@ -11,15 +11,28 @@ origin_pin="sha256//$(openssl x509 -in deploy/certs/origin.pem -pubkey -noout \
   | openssl pkey -pubin -outform DER | openssl dgst -sha256 -binary | openssl base64 -A)"
 
 check_status() {
-  local host=$1 path=$2 expected=$3 status
-  status=$(curl --silent --show-error --connect-timeout 3 --max-time 6 \
-    --retry 2 --retry-connrefused --retry-delay 1 --noproxy '*' \
-    --resolve "$host:443:127.0.0.1" --insecure --pinnedpubkey "$origin_pin" \
-    --output /dev/null --write-out '%{http_code}' "https://$host$path") || return 1
-  if [[ $status != "$expected" ]]; then
-    printf '%s%s returned %s, expected %s\n' "$host" "$path" "$status" "$expected" >&2
-    return 1
-  fi
+  local host=$1 path=$2 expected=$3 status='' attempt
+  # web has no compose healthcheck and docker-proxy accepts :443 before Caddy
+  # finishes binding TLS, causing curl (35) SSL_ERROR_SYSCALL which --retry-connrefused
+  # does not retry. Retry transient transport / 502-504 errors briefly while failing
+  # immediately on wrong deterministic statuses (e.g. broken admin isolation).
+  for attempt in 1 2 3 4 5 6; do
+    if status=$(curl --silent --show-error --connect-timeout 3 --max-time 6 \
+      --noproxy '*' \
+      --resolve "$host:443:127.0.0.1" --insecure --pinnedpubkey "$origin_pin" \
+      --output /dev/null --write-out '%{http_code}' "https://$host$path"); then
+      if [[ $status == "$expected" ]]; then
+        return 0
+      fi
+      if [[ $status != 502 && $status != 503 && $status != 504 ]]; then
+        printf '%s%s returned %s, expected %s\n' "$host" "$path" "$status" "$expected" >&2
+        return 1
+      fi
+    fi
+    sleep 1
+  done
+  printf '%s%s failed verification (last status: %s, expected %s)\n' "$host" "$path" "${status:-transport-error}" "$expected" >&2
+  return 1
 }
 
 verify_origin() {
