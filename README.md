@@ -14,7 +14,7 @@ React + Bootstrap + TypeScript 的 static-first 全端 side project，搭配輕�
 - **可回滾的持久層演進**：同一套 domain model 支援 JSON／JSONL 與 SQLite backend，並以 parity test 驗證讀寫語意一致。
 - **安全的非同步通知**：投稿採 persist-first，Email 採 best-effort；Resend API Key 只存在後端環境變數，使用 UUID idempotency key 去重，供應商失敗不會造成投稿遺失。
 - **分層防濫用**：公開投稿與匿名留言由 Cloudflare Turnstile Managed widget + 後端 Siteverify 保護，後端再驗證 hostname/action，並疊加 honeypot、輸入限制、每 IP rate limit 與投稿待審核。
-- **自動化招考行事曆同步**：GitHub Actions 定時抓取台灣金融研訓院受託甄試清單與重要時程表 PDF（複用既有 `pdf-parse`，零額外 VM 負載），經既有指紋驗證 SSH 推送至 VM 本機 `deploy/sync-calendar.sh`，以 Origin Certificate 公鑰釘選呼叫 `/api/admin/calendar/sync`；`ADMIN_TOKEN` 不離開 VM，且自動保護後台人工編輯與刪除紀錄。
+- **招考行事曆監控與半自動同步**：GitHub Actions 定時監控台灣金融研訓院 `Exam.aspx`，偵測到未收錄新招考時經既有指紋驗證 SSH 呼叫 VM `/api/admin/calendar/alerts`，沿用 Resend 寄出新招考通知；本機端以 `npm run sync:calendar` 解析各招考重要時程表 PDF 並一鍵同步上站，自動保護後台人工編輯與刪除紀錄，且 `ADMIN_TOKEN` 不離開 VM。
 - **Production-minded delivery**：Cloudflare edge、Caddy reverse proxy、Origin Certificate、Docker Compose、GHCR 與 GitHub Actions 組成完整 CI/CD；部署與故障排查皆有 runbook。
 
 投稿通知的 sequence、DNS 驗證、安全邊界、failure modes 與擴充方向見 [投稿 Email 通知技術設計](docs/submission-email-notifications.md)；公開寫入的 bot protection 見 [Cloudflare Turnstile 技術設計](docs/turnstile-bot-protection.md)。
@@ -37,7 +37,7 @@ React + Bootstrap + TypeScript 的 static-first 全端 side project，搭配輕�
 - 畫面左下角顯示 `Credit: 公股銀行招考討論區 Jack/聯合哥`，右下角提供回到頂端按鈕。
 - 題庫 PDF 保留在 `public`，網站上可直接開啟原始 PDF。
 - 試場資訊（`/venues`）彙整各家招考的試場情報：頁面上方為**試場地圖**，用 Leaflet + OpenStreetMap（Standard 圖磚、免金鑰，遵守[圖磚使用政策](https://operations.osmfoundation.org/policies/tiles/)）標出台北市與新北（板橋／中和／永和）常用考場，marker 依分區上色編號、與側欄清單連動，彈窗附最近捷運站、路線色與「在 Google 地圖開啟」；下方依銀行分組列出筆試各試場缺考統計與面試各試場考題。考場資料在 `src/data/examVenues.ts`，地圖元件在 `src/components/VenueMap.tsx`。
-- 招考行事曆（`/calendar`）以月曆條狀呈現各家銀行報名起迄、筆試、試題解答、筆試放榜、面試、二面與最終放榜日（僅保留上個月～下下下個月視窗）。除後台手動維護外，由 GitHub Actions 每日自動抓取台灣金融研訓院（TABF）受託甄試重要時程表 PDF 並同步上架；後台手動編輯過的招考會自動鎖定、刪除的招考不會再被同步建回。
+- 招考行事曆（`/calendar`）以月曆條狀呈現各家銀行報名起迄、筆試、試題解答、筆試放榜、面試、二面與最終放榜日（僅保留上個月～下下下個月視窗）。除後台手動維護外，GitHub Actions 每日自動監控金研院 `Exam.aspx` 並在發現新招考時透過 Resend 寄信提醒，本機執行 `npm run sync:calendar` 即可解析時程表 PDF 並一鍵同步上站；後台手動編輯過的招考會自動鎖定、刪除的招考不會再被同步建回或重複提醒。
 - 年薪計算機（`/salary`）依職等、調薪與升等機制試算年資 1～30 年的年薪：拉桿設定年資即顯示總薪資、當年年薪與平均月領，並附逐年明細（固定列出 1～30 年）。月薪五等 40,900 元起、每年調薪 2%，升等時程為五→六、六→七各 2 年、七→八 3 年、八→九 6 年（九等自第 14 年起）；年薪含 12 個月本薪、獎金 4 個月、加班費（時薪＝月薪÷30÷8，每月加班 12 小時、無條件捨去）與行儲利息，第一年獎金因新人考績打八折。計算邏輯集中在 `src/lib/salary.ts`（附 `salary.test.ts` 對帳測試）。
 
 ## 本機開發
@@ -177,7 +177,9 @@ TURNSTILE_TIMEOUT_MS=5000
 | `npm run typecheck` | 只跑 TypeScript 型別檢查（`tsc -b`） |
 | `npm run test` | 跑 Vitest 單元測試 |
 | `npm run test:parity` | 驗證 JSON／SQLite 後端讀寫一致性與重啟持久化 |
-| `npm run scrape:calendar` | 抓取台灣金融研訓院最新招考時程表 PDF 並輸出同步 JSON |
+| `npm run watch:calendar` | 抓取金研院 `Exam.aspx` 最新招考清單 JSON |
+| `npm run scrape:calendar` | 本機抓取金研院全部招考時程表 PDF 並輸出同步 JSON |
+| `npm run sync:calendar` | 本機抓取 TABF 時程表 PDF 並經 SSH 同步至正式站（支援 `--dry-run`／`--local`） |
 | `npm run build` | 完整建置（含 `extract:questions` 與預渲染），輸出到 `dist/` |
 | `npm run preview` | 用 Vite 預覽 `dist/` 的建置結果，模擬正式靜態站 |
 
@@ -241,7 +243,7 @@ npm run make:answer-prompts -- 5
 - **邊緣快取**：公開 GET API 帶 `s-maxage=10`，搭配 Cloudflare `/api/*` Cache Rule，由邊緣吸收重複讀取，e2-micro 在高流量下幾乎閒置。
 - **防火牆**：GCP 80/443 只允許 Cloudflare 網段，外人無法繞過 Cloudflare 直連 VM（取代 Cloudflare Tunnel，單機 e2-micro 用 Tunnel 並不省錢）。
 - **公開寫入保護**：Turnstile token 必須經 API server 呼叫 Siteverify 驗證，前端 widget 本身不構成信任邊界。
-- **招考行事曆排程同步**：[.github/workflows/sync-calendar.yml](.github/workflows/sync-calendar.yml) 每日台北時間 `09:30` 與 `18:30`（錯開 `03:30` SQLite 備份與 `04:00` 每日部署）在 GitHub runner 執行 `scripts/scrape-tabf-calendar.mjs` 解析 TABF 時程表 PDF，再經既有的指紋驗證 SSH 把 JSON 送到 VM 執行 [deploy/sync-calendar.sh](deploy/sync-calendar.sh) 寫入 API；支援手動 `workflow_dispatch`（含 `dry_run` 預覽），不需在 GitHub 新增 `ADMIN_TOKEN` secret。
+- **招考行事曆監控與同步**：[.github/workflows/watch-tabf-exams.yml](.github/workflows/watch-tabf-exams.yml) 每日台北時間 `09:30` 與 `18:30`（錯開 `03:30` SQLite 備份與 `04:00` 每日部署）抓取 `www.tabf.org.tw/Exam.aspx` 並經既有指紋驗證 SSH 執行 `deploy/sync-calendar.sh --alerts`，若出現未收錄的新招考即透過 VM 既有 Resend 設定寄出彙整提醒信；因 `svc.tabf.org.tw` 會阻擋海外雲端機房 IP，收到通知後由本機執行 `npm run sync:calendar` 抓取時程表 PDF 並同步上站。
 
 部署細節見：
 

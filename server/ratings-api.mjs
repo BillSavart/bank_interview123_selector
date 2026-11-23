@@ -703,6 +703,9 @@ let calendarEvents = [];
 // Deleted synced externalKeys -> ISO timestamp; prevents daily sync from
 // resurrecting an event the admin intentionally removed. Pruned after 180 days.
 const calendarSuppressed = new Map();
+// Synced or already-alerted externalKeys -> ISO timestamp; prevents duplicate
+// "new exam" emails and prevents aged-out exams still on Exam.aspx from re-alerting.
+const calendarAlerted = new Map();
 const suppressedTtlMs = 180 * 24 * 60 * 60 * 1000;
 const maxSyncEvents = 100;
 let calendarWriteQueue = Promise.resolve();
@@ -815,22 +818,26 @@ const pruneCalendar = () => {
   return before - calendarEvents.length;
 };
 
-const pruneSuppressedCalendar = () => {
+const pruneTimestampMap = (map) => {
   const cutoff = Date.now() - suppressedTtlMs;
   let removed = 0;
-  for (const [key, deletedAt] of calendarSuppressed) {
-    const ts = Date.parse(deletedAt);
+  for (const [key, stamp] of map) {
+    const ts = Date.parse(stamp);
     if (!Number.isFinite(ts) || ts < cutoff) {
-      calendarSuppressed.delete(key);
+      map.delete(key);
       removed += 1;
     }
   }
   return removed;
 };
 
+const pruneSuppressedCalendar = () => pruneTimestampMap(calendarSuppressed);
+const pruneAlertedCalendar = () => pruneTimestampMap(calendarAlerted);
+
 const loadCalendar = async () => {
   calendarEvents = [];
   calendarSuppressed.clear();
+  calendarAlerted.clear();
   if (useSqlite) {
     const rows = db.prepare('SELECT * FROM calendar_events').all();
     calendarEvents = sortCalendar(
@@ -849,7 +856,11 @@ const loadCalendar = async () => {
       const k = String(s.external_key || '').trim();
       if (k) calendarSuppressed.set(k, String(s.deleted_at || ''));
     }
-    if (pruneCalendar() + pruneSuppressedCalendar() > 0) await persistCalendar();
+    for (const a of db.prepare('SELECT external_key, alerted_at FROM calendar_alerted').all()) {
+      const k = String(a.external_key || '').trim();
+      if (k) calendarAlerted.set(k, String(a.alerted_at || ''));
+    }
+    if (pruneCalendar() + pruneSuppressedCalendar() + pruneAlertedCalendar() > 0) await persistCalendar();
     return;
   }
   let raw = '';
@@ -883,8 +894,13 @@ const loadCalendar = async () => {
         if (k && typeof v === 'string') calendarSuppressed.set(k, v);
       }
     }
+    if (parsed && !Array.isArray(parsed) && parsed.alerted && typeof parsed.alerted === 'object') {
+      for (const [k, v] of Object.entries(parsed.alerted)) {
+        if (k && typeof v === 'string') calendarAlerted.set(k, v);
+      }
+    }
     // Rewrite the file if startup pruning dropped anything (reclaims disk).
-    if (pruneCalendar() + pruneSuppressedCalendar() > 0) await persistCalendar();
+    if (pruneCalendar() + pruneSuppressedCalendar() + pruneAlertedCalendar() > 0) await persistCalendar();
   } catch (error) {
     console.warn(`Could not parse ${calendarFile}; starting with an empty calendar.`, error);
   }
@@ -895,6 +911,7 @@ const persistCalendar = () => {
     const cols = ['id', ...calendarColumns.map(([col]) => col), 'external_key', 'manual_edited', 'created_at', 'updated_at'];
     const ins = db.prepare(`INSERT OR REPLACE INTO calendar_events (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
     const insSup = db.prepare('INSERT OR REPLACE INTO calendar_suppressed (external_key, deleted_at) VALUES (?, ?)');
+    const insAlert = db.prepare('INSERT OR REPLACE INTO calendar_alerted (external_key, alerted_at) VALUES (?, ?)');
     db.transaction(() => {
       db.prepare('DELETE FROM calendar_events').run();
       for (const e of calendarEvents) {
@@ -911,14 +928,22 @@ const persistCalendar = () => {
       for (const [k, deletedAt] of calendarSuppressed) {
         insSup.run(String(k), String(deletedAt));
       }
+      db.prepare('DELETE FROM calendar_alerted').run();
+      for (const [k, alertedAt] of calendarAlerted) {
+        insAlert.run(String(k), String(alertedAt));
+      }
     })();
     return Promise.resolve();
   }
   calendarWriteQueue = calendarWriteQueue.then(async () => {
     await mkdir(dirname(calendarFile), { recursive: true });
     const tmpFile = `${calendarFile}.${process.pid}.${randomUUID()}.tmp`;
-    const payload = calendarSuppressed.size
-      ? { events: calendarEvents, suppressed: Object.fromEntries(calendarSuppressed) }
+    const payload = calendarSuppressed.size || calendarAlerted.size
+      ? {
+          events: calendarEvents,
+          suppressed: Object.fromEntries(calendarSuppressed),
+          alerted: Object.fromEntries(calendarAlerted),
+        }
       : calendarEvents;
     await writeFile(tmpFile, `${JSON.stringify(payload, null, 2)}\n`);
     await rename(tmpFile, calendarFile);
@@ -1643,7 +1668,7 @@ createServer(async (req, res) => {
       };
 
       const seenKeys = new Set();
-      let dirty = pruneSuppressedCalendar() > 0;
+      let dirty = pruneSuppressedCalendar() + pruneAlertedCalendar() > 0;
 
       for (const rawItem of body.events) {
         if (!rawItem || typeof rawItem !== 'object') {
@@ -1667,6 +1692,12 @@ createServer(async (req, res) => {
         if (!fields.org || !hasValidDates || !hasAtLeastOneDate) {
           summary.skippedInvalid += 1;
           continue;
+        }
+        // Record every valid seen exam key so aged-out or already-synced exams
+        // do not trigger false "new exam" email alerts later.
+        if (!calendarAlerted.has(externalKey)) {
+          calendarAlerted.set(externalKey, now);
+          dirty = true;
         }
         if (!eventInWindow(fields)) {
           summary.skippedOutOfWindow += 1;
@@ -1724,6 +1755,113 @@ createServer(async (req, res) => {
       }
       summary.total = calendarEvents.length;
       sendJson(res, 200, { ok: true, summary });
+      return;
+    }
+
+    // Admin: check a scraped recruitment listing (e.g. TABF Exam.aspx) for unseen
+    // exams and send a single Resend email digest via the VM's existing mail config.
+    if (req.method === 'POST' && url.pathname === '/api/admin/calendar/alerts') {
+      const body = await readJsonBody(req, { maxLength: 131072 });
+      const source = typeof body.source === 'string' ? body.source.trim().toLowerCase() : '';
+      if (!/^[a-z0-9_-]{1,32}$/.test(source)) {
+        sendJson(res, 400, { error: 'source 格式不正確' });
+        return;
+      }
+      if (!Array.isArray(body.exams) || body.exams.length === 0 || body.exams.length > maxSyncEvents) {
+        sendJson(res, 400, { error: `exams 必須為 1～${maxSyncEvents} 筆陣列` });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const checkedAt = typeof body.checkedAt === 'string' && body.checkedAt.trim() ? body.checkedAt.trim() : now;
+      let dirty = pruneSuppressedCalendar() + pruneAlertedCalendar() > 0;
+      const seenKeys = new Set();
+      const newExams = [];
+
+      for (const rawItem of body.exams) {
+        if (!rawItem || typeof rawItem !== 'object') continue;
+        const externalKey = typeof rawItem.externalKey === 'string' ? rawItem.externalKey.trim().toLowerCase() : '';
+        if (
+          !externalKey.startsWith(`${source}:`) ||
+          !/^[a-z0-9_:-]{3,80}$/.test(externalKey) ||
+          seenKeys.has(externalKey)
+        ) {
+          continue;
+        }
+        seenKeys.add(externalKey);
+
+        const title = sanitizeText(rawItem.title ?? '', maxCalendarFieldLength);
+        const urlValue = sanitizeText(rawItem.url ?? '', maxCalendarFieldLength);
+        if (!title) continue;
+
+        if (calendarSuppressed.has(externalKey) || calendarAlerted.has(externalKey)) continue;
+
+        const slug = source === 'tabf' ? extractTabfSlugFromLink(urlValue) || externalKey.slice('tabf:'.length) : null;
+        const exists = calendarEvents.some(
+          (e) =>
+            (e.externalKey && e.externalKey === externalKey) ||
+            (slug && extractTabfSlugFromLink(e.link) === slug),
+        );
+        if (exists) {
+          // Remember already-present manual exams so they won't alert after aging out.
+          calendarAlerted.set(externalKey, now);
+          dirty = true;
+          continue;
+        }
+
+        newExams.push({
+          externalKey,
+          title,
+          url: urlValue,
+          isRegistering: Boolean(rawItem.isRegistering),
+        });
+      }
+
+      if (newExams.length === 0) {
+        if (dirty) await persistCalendar();
+        sendJson(res, 200, {
+          ok: true,
+          summary: { source, received: body.exams.length, newCount: 0, emailed: false, reason: 'no_new_exams' },
+        });
+        return;
+      }
+
+      if (!submissionEmailNotifier.enabled) {
+        if (dirty) await persistCalendar();
+        sendJson(res, 200, {
+          ok: true,
+          summary: {
+            source,
+            received: body.exams.length,
+            newCount: newExams.length,
+            emailed: false,
+            reason: 'email_disabled',
+            newExams,
+          },
+        });
+        return;
+      }
+
+      try {
+        const result = await submissionEmailNotifier.notifyNewExams({ source, exams: newExams, checkedAt });
+        for (const exam of newExams) calendarAlerted.set(exam.externalKey, now);
+        await persistCalendar();
+        sendJson(res, 200, {
+          ok: true,
+          summary: {
+            source,
+            received: body.exams.length,
+            newCount: newExams.length,
+            emailed: Boolean(result?.sent),
+            emailId: result?.id || null,
+            newExams,
+          },
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        console.error(`[calendar-alert] email failed: ${message}`);
+        sendJson(res, 502, { error: '新招考通知寄送失敗，下次排程將重試。' });
+      }
       return;
     }
 

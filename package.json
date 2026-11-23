@@ -18,6 +18,8 @@
     "build:banks-data": "node scripts/build-banks-data.mjs",
     "check:banks-data": "node scripts/check-banks-data.mjs",
     "scrape:calendar": "node scripts/scrape-tabf-calendar.mjs",
+    "watch:calendar": "node scripts/watch-tabf-exams.mjs",
+    "sync:calendar": "node scripts/sync-tabf-local.mjs",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "preview": "vite preview"

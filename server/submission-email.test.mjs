@@ -96,4 +96,48 @@ describe('submission email notifier', () => {
     expect(error.message).toContain('Resend API 422');
     expect(error.message).not.toContain('re_secret_value');
   });
+
+  it('sends a single digest email when new TABF exams are detected', async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({ id: 'alert-789' }),
+    }));
+    const notifier = createSubmissionEmailNotifier({
+      apiKey: 're_test_key',
+      from: '網站通知 <notifications@example.com>',
+      recipients: 'owner@example.com',
+      adminBaseUrl: 'https://admin.example.com',
+      fetchImpl,
+    });
+
+    const result = await notifier.notifyNewExams({
+      source: 'tabf',
+      checkedAt: '2026-11-23T01:30:00.000Z',
+      exams: [
+        {
+          externalKey: 'tabf:115tcbbank04',
+          title: '合作金庫商業銀行116年新進人員甄試',
+          url: 'https://svc.tabf.org.tw/115tcbbank04/',
+          isRegistering: true,
+        },
+        {
+          externalKey: 'tabf:115hncb05',
+          title: '華南銀行116年度新進人員甄試',
+          url: 'https://svc.tabf.org.tw/115hncb05/',
+          isRegistering: false,
+        },
+      ],
+    });
+
+    expect(result).toEqual({ sent: true, id: 'alert-789' });
+    const [, req] = fetchImpl.mock.calls[0];
+    const body = JSON.parse(req.body);
+    expect(req.headers['Idempotency-Key']).toMatch(/^calendar-alert-tabf-[a-f0-9]{16}$/);
+    expect(body.subject).toBe('[新招考通知] 金研院新增 2 筆招考（合作金庫商業銀行116年新進人員甄試 等）');
+    expect(body.text).toContain('1. [報名中] 合作金庫商業銀行116年新進人員甄試');
+    expect(body.text).toContain('https://svc.tabf.org.tw/115tcbbank04/');
+    expect(body.text).toContain('npm run sync:calendar');
+    expect(body.text).toContain('管理後台：https://admin.example.com');
+  });
 });

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 const RESEND_EMAIL_ENDPOINT = 'https://api.resend.com/emails';
 const DEFAULT_TIMEOUT_MS = 5000;
 
@@ -105,6 +107,66 @@ export function createSubmissionEmailNotifier({
           to,
           subject: `[待審核投稿] ${title}`,
           text,
+        }),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+
+      if (!response.ok) {
+        const detail = await response.text().catch(() => '');
+        throw new Error(`Resend API ${response.status}${detail ? `: ${detail.slice(0, 300)}` : ''}`);
+      }
+
+      const payload = await response.json().catch(() => ({}));
+      return { sent: true, id: payload.id || null };
+    },
+
+    async notifyNewExams({ source = 'tabf', exams = [], checkedAt = new Date().toISOString() } = {}) {
+      if (!enabled) return { sent: false, reason: 'disabled' };
+      if (!Array.isArray(exams) || exams.length === 0) return { sent: false, reason: 'empty' };
+
+      const normalized = exams.map((exam) => ({
+        externalKey: cleanSingleLine(exam?.externalKey, ''),
+        title: cleanSingleLine(exam?.title, '（未命名招考）').slice(0, 120),
+        url: cleanSingleLine(exam?.url, ''),
+        isRegistering: Boolean(exam?.isRegistering),
+      }));
+      const firstTitle = normalized[0].title;
+      const subject =
+        normalized.length === 1
+          ? `[新招考通知] ${firstTitle}`
+          : `[新招考通知] 金研院新增 ${normalized.length} 筆招考（${firstTitle} 等）`;
+
+      const lines = [
+        `台灣金融研訓院受託甄試專區出現 ${normalized.length} 筆尚未收錄的新招考：`,
+        '',
+        ...normalized.flatMap((exam, idx) => [
+          `${idx + 1}. ${exam.isRegistering ? '[報名中] ' : ''}${exam.title}`,
+          ...(exam.url ? [`   專區連結：${exam.url}`] : []),
+        ]),
+        '',
+        `檢查時間：${formatSubmittedAt(checkedAt)}`,
+        '同步指令（在本機專案目錄執行）：npm run sync:calendar',
+        normalizedAdminBaseUrl ? `管理後台：${normalizedAdminBaseUrl}` : '請於本機同步或登入網站管理後台更新行事曆。',
+      ];
+
+      const keySeed = normalized
+        .map((e) => e.externalKey || e.title)
+        .sort()
+        .join(',');
+      const digest = createHash('sha256').update(keySeed).digest('hex').slice(0, 16);
+
+      const response = await fetchImpl(endpoint, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${normalizedApiKey}`,
+          'Content-Type': 'application/json',
+          'Idempotency-Key': `calendar-alert-${cleanSingleLine(source, 'tabf')}-${digest}`,
+        },
+        body: JSON.stringify({
+          from: normalizedFrom,
+          to,
+          subject,
+          text: lines.join('\n'),
         }),
         signal: AbortSignal.timeout(timeoutMs),
       });

@@ -467,6 +467,25 @@ const main = async () => {
   eq('admin-edited synced event preserved', calAfterSync.find((e) => e.link === 'https://svc.tabf.org.tw/115sync02/')?.org, '自動同步銀行B（人工微調）');
   eq('admin-deleted synced event stays absent', calAfterSync.some((e) => e.link === 'https://svc.tabf.org.tw/115sync03/'), false);
 
+  // Calendar alert check: synced, manual-slug, suppressed, and aged-out seen keys are ignored; only brand-new triggers
+  const alertCheck = await postJson(srv.base, '/api/admin/calendar/alerts', {
+    source: 'tabf',
+    exams: [
+      { externalKey: 'tabf:115manual01', title: '甲銀行', url: 'https://svc.tabf.org.tw/115manual01/', isRegistering: true },
+      { externalKey: 'tabf:115sync01', title: '自動同步銀行A', url: 'https://svc.tabf.org.tw/115sync01/', isRegistering: false },
+      { externalKey: 'tabf:115sync03', title: '被刪掉的銀行C', url: 'https://svc.tabf.org.tw/115sync03/', isRegistering: false },
+      { externalKey: 'tabf:110old01', title: '過期招考', url: 'https://svc.tabf.org.tw/110old01/', isRegistering: false },
+      { externalKey: 'tabf:116brandnew01', title: '全新招考銀行', url: 'https://svc.tabf.org.tw/116brandnew01/', isRegistering: true },
+    ],
+  }, srv.cookie);
+  eq('calendar alerts detects only brand-new unseen exam', {
+    status: alertCheck.status,
+    newCount: alertCheck.body.summary?.newCount,
+    emailed: alertCheck.body.summary?.emailed,
+    reason: alertCheck.body.summary?.reason,
+    firstKey: alertCheck.body.summary?.newExams?.[0]?.externalKey,
+  }, { status: 200, newCount: 1, emailed: false, reason: 'email_disabled', firstKey: 'tabf:116brandnew01' });
+
   const lb = (await getJson(srv.base, '/api/checkgame/leaderboard')).body.leaderboard;
   eq('leaderboard score persisted', lb.find((e) => e.name === 'RoundTrip')?.score, completed.body.score);
   eq('leaderboard delete persisted (Champ gone)', lb.some((e) => e.name === 'Champ'), false);

@@ -101,6 +101,12 @@ CREATE TABLE IF NOT EXISTS calendar_suppressed (
   deleted_at   TEXT NOT NULL DEFAULT ''
 );
 
+-- 已同步或已寄過新招考通知的鍵值，避免重複寄信與過期事件再度觸發通知。
+CREATE TABLE IF NOT EXISTS calendar_alerted (
+  external_key TEXT PRIMARY KEY,
+  alerted_at   TEXT NOT NULL DEFAULT ''
+);
+
 -- 小遊戲排行榜。game 區分各遊戲，每個遊戲每個名字最多一列。
 CREATE TABLE IF NOT EXISTS leaderboard (
   game       TEXT    NOT NULL,

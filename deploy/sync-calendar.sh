@@ -2,10 +2,22 @@
 # Push scraped calendar JSON (passed on stdin) into the running API container
 # over loopback HTTPS using the VM's local deploy/.env credentials.
 #
+# Modes:
+#   bash deploy/sync-calendar.sh           -> POST /api/admin/calendar/sync
+#   bash deploy/sync-calendar.sh --alerts  -> POST /api/admin/calendar/alerts
+#
 # Keeps ADMIN_TOKEN on the VM only (never copied into GitHub Secrets, never
 # passed on argv, and the temporary admin session is revoked on exit).
 set -euo pipefail
 umask 077
+
+ENDPOINT="/api/admin/calendar/sync"
+if [[ "${1:-}" == "--alerts" ]]; then
+  ENDPOINT="/api/admin/calendar/alerts"
+elif [[ -n "${1:-}" && "${1:-}" != "--sync" ]]; then
+  echo "Usage: $0 [--sync|--alerts]" >&2
+  exit 1
+fi
 
 cd "$(dirname "$0")/.."
 ENV_FILE=deploy/.env
@@ -84,9 +96,9 @@ logged_in=1
 
 sync_status=$(curl_admin -b "$cookie_jar" -H 'Content-Type: application/json' \
   --data-binary "@$payload_file" -o "$resp_file" -w '%{http_code}' \
-  "https://$ADMIN_DOMAIN/api/admin/calendar/sync")
+  "https://$ADMIN_DOMAIN$ENDPOINT")
 if [[ "$sync_status" != "200" ]]; then
-  echo "Calendar sync failed with HTTP $sync_status: $(cat "$resp_file")" >&2
+  echo "Calendar request ($ENDPOINT) failed with HTTP $sync_status: $(cat "$resp_file")" >&2
   exit 1
 fi
 

@@ -1,4 +1,4 @@
-name: Sync TABF Calendar
+name: Watch TABF New Exams
 
 on:
   schedule:
@@ -7,19 +7,19 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Scrape and print parsed events without pushing to VM"
+        description: "Check Exam.aspx listing and print exams without notifying VM"
         type: boolean
         default: false
 
 concurrency:
-  group: sync-calendar
+  group: watch-tabf-exams
   cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
-  sync:
+  watch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -29,19 +29,15 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24.22.3
-          cache: npm
 
-      - name: Install locked dependencies
-        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Fetch TABF Exam.aspx recruitment listing
+        run: node scripts/watch-tabf-exams.mjs --out /tmp/tabf-watch.json
 
-      - name: Scrape TABF recruitment schedules
-        run: node scripts/scrape-tabf-calendar.mjs --out /tmp/tabf-calendar.json
-
-      - name: Preview scraped events (dry run)
+      - name: Preview recruitment listing (dry run)
         if: ${{ inputs.dry_run == true }}
-        run: cat /tmp/tabf-calendar.json
+        run: cat /tmp/tabf-watch.json
 
-      - name: Push calendar sync to VM over verified SSH
+      - name: Check for new exams and send email alert via VM API
         if: ${{ inputs.dry_run != true }}
         env:
           SSH_FINGERPRINT: ${{ vars.SSH_FINGERPRINT || secrets.SSH_FINGERPRINT }}
@@ -67,5 +63,5 @@ jobs:
           ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             -o UserKnownHostsFile="$ssh_dir/known_hosts" -o HostKeyAlgorithms=ssh-ed25519 \
             -i "$ssh_dir/deploy_key" -l "$SSH_USER" -- "$SSH_HOST" \
-            'cd /home/billwang_tech/bank_interview123_selector && bash deploy/sync-calendar.sh' \
-            < /tmp/tabf-calendar.json
+            'cd /home/billwang_tech/bank_interview123_selector && bash deploy/sync-calendar.sh --alerts' \
+            < /tmp/tabf-watch.json
