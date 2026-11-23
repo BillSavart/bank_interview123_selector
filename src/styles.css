@@ -4676,7 +4676,9 @@ select {
   color: #334155;
 }
 
-.cal-bar.is-writtenResult {
+.cal-bar.is-writtenResult,
+.cal-bar.is-stageResult,
+.cal-bar.is-interviewResult {
   background: #fde68a;
   color: #92400e;
 }
@@ -4694,6 +4696,16 @@ select {
 .cal-bar.is-final {
   background: #fecdd3;
   color: #9f1239;
+}
+
+.cal-bar.is-upload {
+  background: #fed7aa;
+  color: #9a3412;
+}
+
+.cal-bar.is-onlineTest {
+  background: #ccfbf1;
+  color: #115e59;
 }
 
 .cal-bar:hover {
@@ -4739,6 +4751,8 @@ select {
   position: relative;
   width: 100%;
   max-width: 420px;
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
   background: #fff;
   border-radius: 14px;
   padding: 1.5rem;
@@ -4777,7 +4791,7 @@ select {
 
 .cal-modal-rows dt {
   font-size: 0.8rem;
-  color: #94a3b8;
+  color: #475569;
   font-weight: 600;
 }
 
@@ -4786,6 +4800,7 @@ select {
   font-weight: 700;
   color: #0f172a;
   font-variant-numeric: tabular-nums;
+  white-space: pre-line;
 }
 
 .cal-modal-note {

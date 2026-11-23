@@ -2,6 +2,33 @@
 // /api/admin/calendar/*，由管理員工作階段驗證。
 import { adminFetch } from './adminSession';
 
+export type CalendarScheduleKind =
+  | 'signup' | 'written' | 'answerKey' | 'writtenResult'
+  | 'interview' | 'interview2' | 'final'
+  | 'upload' | 'stageResult' | 'interviewResult' | 'onlineTest';
+
+export const CALENDAR_KIND_LABEL: Record<CalendarScheduleKind, string> = {
+  signup: '報名',
+  written: '筆試',
+  answerKey: '試題解答',
+  writtenResult: '筆試放榜',
+  interview: '面試',
+  interview2: '二面',
+  final: '放榜',
+  upload: '文件上傳截止',
+  stageResult: '階段結果',
+  interviewResult: '口試成績',
+  onlineTest: '線上測驗',
+};
+
+export interface CalendarScheduleItem {
+  kind: CalendarScheduleKind;
+  label: string;
+  start: string;
+  end: string;
+  period: string;
+}
+
 export interface CalendarEvent {
   id: string;
   /** 招考機關 / 名稱，例如「台灣銀行 一般金融人員」。 */
@@ -26,6 +53,8 @@ export interface CalendarEvent {
   link: string;
   /** 備註。 */
   note: string;
+  /** 類組時程、同階段多日場次與其他額外日期。 */
+  scheduleDetails?: CalendarScheduleItem[];
   createdAt?: string;
   updatedAt?: string;
 }

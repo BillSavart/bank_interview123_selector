@@ -1,32 +1,46 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, X } from 'lucide-react';
-import { fetchCalendar, type CalendarEvent } from '../lib/calendar';
+import {
+  fetchCalendar,
+  CALENDAR_KIND_LABEL,
+  type CalendarEvent,
+  type CalendarScheduleItem,
+  type CalendarScheduleKind,
+} from '../lib/calendar';
 
 const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
 const DAY_MS = 86_400_000;
 
-// All segment kinds drawable on the calendar, with their short label and colour.
-type SegKind = 'signup' | 'written' | 'answerKey' | 'writtenResult' | 'interview' | 'interview2' | 'final';
-
-const KIND_LABEL: Record<SegKind, string> = {
-  signup: '報名',
-  written: '筆試',
-  answerKey: '試題解答',
-  writtenResult: '筆試放榜',
-  interview: '面試',
-  interview2: '二面',
-  final: '放榜',
+const DETAIL_LABEL: Partial<Record<CalendarScheduleKind, string>> = {
+  signup: '報名期間',
+  written: '筆試日期',
+  answerKey: '試題與解答公告',
+  writtenResult: '筆試結果公佈',
 };
 
-// Single-day markers, in display order, mapped to the event field they read.
-const SINGLE_DAY: Array<{ field: keyof CalendarEvent; kind: SegKind }> = [
+// Date fields used for records saved without a detailed timeline.
+const SINGLE_DAY = [
   { field: 'writtenExam', kind: 'written' },
   { field: 'answerKey', kind: 'answerKey' },
   { field: 'writtenResult', kind: 'writtenResult' },
   { field: 'interview', kind: 'interview' },
   { field: 'interview2', kind: 'interview2' },
   { field: 'finalResult', kind: 'final' },
-];
+] as const;
+
+function getSchedule(event: CalendarEvent): CalendarScheduleItem[] {
+  const items = [...(event.scheduleDetails || [])];
+  const kinds = new Set(items.map(({ kind }) => kind));
+  if (!kinds.has('signup') && (event.signupStart || event.signupEnd)) {
+    items.push({ kind: 'signup', label: '', start: event.signupStart, end: event.signupEnd, period: '' });
+  }
+  for (const { field, kind } of SINGLE_DAY) {
+    if (!kinds.has(kind) && event[field]) {
+      items.push({ kind, label: '', start: event[field], end: '', period: '' });
+    }
+  }
+  return items.sort((a, b) => (a.start || a.end).localeCompare(b.start || b.end));
+}
 
 // Parse a date that may carry a trailing time ('YYYY-MM-DD' or 'YYYY-MM-DD HH:MM')
 // to a local-midnight Date, or null when empty/invalid.
@@ -44,7 +58,7 @@ const dayDiff = (a: Date, b: Date) => Math.round((a.getTime() - b.getTime()) / D
 
 interface Segment {
   event: CalendarEvent;
-  kind: SegKind;
+  item: CalendarScheduleItem;
   start: Date;
   end: Date;
 }
@@ -59,17 +73,11 @@ interface PlacedBar {
 function buildSegments(events: CalendarEvent[]): Segment[] {
   const segs: Segment[] = [];
   for (const ev of events) {
-    const ss = parseYMD(ev.signupStart);
-    const se = parseYMD(ev.signupEnd);
-    if (ss || se) {
-      const start = (ss || se) as Date;
-      let end = (se || ss) as Date;
-      if (end < start) end = start;
-      segs.push({ event: ev, kind: 'signup', start, end });
-    }
-    for (const { field, kind } of SINGLE_DAY) {
-      const d = parseYMD(ev[field] as string);
-      if (d) segs.push({ event: ev, kind, start: d, end: d });
+    for (const item of getSchedule(ev)) {
+      const start = parseYMD(item.start || item.end);
+      if (!start) continue;
+      const end = parseYMD(item.end) || start;
+      segs.push({ event: ev, item, start, end: end < start ? start : end });
     }
   }
   return segs;
@@ -219,19 +227,19 @@ export function CalendarPage() {
 
                 <div className="cal-week-bars">
                   {bars.map((b, bi) => {
-                    const ev = b.seg.event;
-                    const label = `${KIND_LABEL[b.seg.kind]} ${ev.org}`;
+                    const { event: ev, item } = b.seg;
+                    const label = `${item.label || CALENDAR_KIND_LABEL[item.kind]} ${ev.org}`;
                     return (
                       <button
                         key={bi}
                         type="button"
-                        className={`cal-bar is-${b.seg.kind}`}
+                        className={`cal-bar is-${item.kind}`}
                         style={{
                           left: `calc(${(b.startCol / 7) * 100}% + 2px)`,
                           width: `calc(${(b.span / 7) * 100}% - 4px)`,
                           top: 28 + b.lane * 22,
                         }}
-                        title={label}
+                        title={`${label}　${formatScheduleDate(item)}`}
                         onClick={() => setSelected(ev)}
                       >
                         {label}
@@ -265,16 +273,19 @@ const fmtRange = (start: string, end: string) => {
   return '—';
 };
 
+const formatScheduleDate = ({ kind, start, end, period }: CalendarScheduleItem) => {
+  if (kind === 'signup' || end) return fmtRange(start, end);
+  return period ? `${start} ${period}` : start;
+};
+
 function EventModal({ event, onClose }: { event: CalendarEvent; onClose: () => void }) {
-  // Only show rows the admin actually filled in.
-  const rows: Array<[string, string]> = [];
-  if (event.signupStart || event.signupEnd) rows.push(['報名期間', fmtRange(event.signupStart, event.signupEnd)]);
-  if (event.writtenExam) rows.push(['筆試日期', event.writtenExam]);
-  if (event.answerKey) rows.push(['試題與解答公告', event.answerKey]);
-  if (event.writtenResult) rows.push(['筆試結果公佈', event.writtenResult]);
-  if (event.interview) rows.push(['面試', event.interview]);
-  if (event.interview2) rows.push(['二面', event.interview2]);
-  if (event.finalResult) rows.push(['放榜', event.finalResult]);
+  const rows = new Map<string, string[]>();
+  for (const item of getSchedule(event)) {
+    const label = item.label || DETAIL_LABEL[item.kind] || CALENDAR_KIND_LABEL[item.kind];
+    const values = rows.get(label) || [];
+    values.push(formatScheduleDate(item));
+    rows.set(label, values);
+  }
   return (
     <div className="cal-modal-backdrop" onClick={onClose} role="presentation">
       <div className="cal-modal" onClick={(e) => e.stopPropagation()}>
@@ -284,10 +295,10 @@ function EventModal({ event, onClose }: { event: CalendarEvent; onClose: () => v
         <h2 className="cal-modal-org">{event.org}</h2>
 
         <dl className="cal-modal-rows">
-          {rows.map(([label, value]) => (
+          {[...rows].map(([label, values]) => (
             <div key={label}>
               <dt>{label}</dt>
-              <dd>{value}</dd>
+              <dd>{values.join('\n')}</dd>
             </div>
           ))}
         </dl>
@@ -297,7 +308,7 @@ function EventModal({ event, onClose }: { event: CalendarEvent; onClose: () => v
         {event.link && (
           <a className="calendar-card-link" href={externalHref(event.link)} target="_blank" rel="noopener noreferrer">
             <ExternalLink size={15} />
-            查看簡章
+            查看招考資料
           </a>
         )}
       </div>

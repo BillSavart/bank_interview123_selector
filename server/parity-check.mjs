@@ -21,6 +21,11 @@ import { randomUUID } from 'node:crypto';
 
 const ADMIN = 'parity-admin-token';
 const today = new Date().toISOString().slice(0, 10);
+const later = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+const interviewSittings = [
+  { kind: 'interview', label: '', start: today, end: '', period: '晚上' },
+  { kind: 'interview', label: '', start: later, end: '', period: '全日' },
+];
 const children = new Set();
 let fixtureDir;
 const api = new URL('./ratings-api.mjs', import.meta.url).pathname;
@@ -147,7 +152,11 @@ const writeFixture = (dir) => {
   // calendar + leaderboards read the same JSON in both modes (Batch B not done).
   writeFileSync(
     f('calendar.json'),
-    JSON.stringify([{ id: randomUUID(), org: '某銀行', signupStart: today, writtenExam: today, interview: '', createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z' }]),
+    JSON.stringify([{
+      id: randomUUID(), org: '某銀行', signupStart: today, writtenExam: today, interview: '',
+      scheduleDetails: [{ kind: 'upload', label: '文件上傳截止', start: today, end: '', period: '' }],
+      createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
+    }]),
   );
   writeFileSync(f('checkgame-top.json'), JSON.stringify([{ name: 'Champ', score: 999, createdAt: '2026-01-01T00:00:00.000Z' }]));
   writeFileSync(f('numbergame-top.json'), JSON.stringify([{ name: 'Pro', score: 555, createdAt: '2026-01-01T00:00:00.000Z' }]));
@@ -330,30 +339,37 @@ const main = async () => {
   const calA = await postJson(srv.base, '/api/admin/calendar', {
     org: '甲銀行',
     signupStart: today,
-    link: 'https://svc.tabf.org.tw/115manual01/Home/Read',
+    link: 'https://svc.tabf.org.tw/_File/Download/115manual01/Readme/example.pdf',
   }, srv.cookie);
   const calAId = calA.body.event?.id;
-  const calB = await postJson(srv.base, '/api/admin/calendar', { org: '乙銀行', signupStart: '2026-08-15' }, srv.cookie);
+  const calB = await postJson(srv.base, '/api/admin/calendar', {
+    org: '乙銀行', signupStart: today, link: 'https://svc.tabf.org.tw/_File/Download/115manual02/Readme/example.pdf',
+  }, srv.cookie);
   const calBId = calB.body.event?.id;
   await request(srv.base, `/api/admin/calendar/${calAId}`, {
     method: 'PUT', cookie: srv.cookie, body: {
       org: '甲銀行（已改名）',
       signupStart: today,
-      link: 'https://svc.tabf.org.tw/115manual01/Home/Read',
+      link: 'https://svc.tabf.org.tw/_File/Download/115manual01/Readme/example.pdf',
     },
   });
   await request(srv.base, `/api/admin/calendar/${calBId}`, { method: 'DELETE', cookie: srv.cookie });
 
   // 8b) calendar sync: create, deduplicate pre-existing manual slug, skip out-of-window & dateless
+  const detailedEvent = {
+    externalKey: 'tabf:115sync01', org: '自動同步銀行A', signupStart: today, writtenExam: today,
+    scheduleDetails: interviewSittings, link: 'https://svc.tabf.org.tw/115sync01/',
+  };
   const syncPayload1 = {
     source: 'tabf',
     events: [
       { externalKey: 'tabf:115manual01', org: '甲銀行（爬蟲不應覆蓋）', signupStart: today, link: 'https://svc.tabf.org.tw/115manual01/' },
-      { externalKey: 'tabf:115sync01', org: '自動同步銀行A', signupStart: today, writtenExam: today, link: 'https://svc.tabf.org.tw/115sync01/' },
+      detailedEvent,
       { externalKey: 'tabf:115sync02', org: '自動同步銀行B', signupStart: today, link: 'https://svc.tabf.org.tw/115sync02/' },
       { externalKey: 'tabf:115sync03', org: '自動同步銀行C（會被管理員刪）', signupStart: today, link: 'https://svc.tabf.org.tw/115sync03/' },
       { externalKey: 'tabf:110old01', org: '過期招考', signupStart: '2021-01-01', link: 'https://svc.tabf.org.tw/110old01/' },
       { externalKey: 'tabf:115nodate', org: '無日期招考', link: 'https://svc.tabf.org.tw/115nodate/' },
+      { externalKey: 'tabf:115manual02', org: '手動移除招考', signupStart: today, link: 'https://svc.tabf.org.tw/115manual02/' },
     ],
   };
   const syncRes1 = await postJson(srv.base, '/api/admin/calendar/sync', syncPayload1, srv.cookie);
@@ -363,13 +379,14 @@ const main = async () => {
     skippedManual: syncRes1.body.summary?.skippedManual,
     skippedOutOfWindow: syncRes1.body.summary?.skippedOutOfWindow,
     skippedInvalid: syncRes1.body.summary?.skippedInvalid,
-  }, { status: 200, created: 3, skippedManual: 1, skippedOutOfWindow: 1, skippedInvalid: 1 });
+    skippedSuppressed: syncRes1.body.summary?.skippedSuppressed,
+  }, { status: 200, created: 3, skippedManual: 1, skippedOutOfWindow: 1, skippedInvalid: 1, skippedSuppressed: 1 });
 
   // Idempotent re-sync + update one event
   const syncRes2 = await postJson(srv.base, '/api/admin/calendar/sync', {
     source: 'tabf',
     events: [
-      { externalKey: 'tabf:115sync01', org: '自動同步銀行A', signupStart: today, writtenExam: today, note: '已更新備註', link: 'https://svc.tabf.org.tw/115sync01/' },
+      { ...detailedEvent, note: '已更新備註' },
       { externalKey: 'tabf:115sync02', org: '自動同步銀行B', signupStart: today, link: 'https://svc.tabf.org.tw/115sync02/' },
     ],
   }, srv.cookie);
@@ -377,6 +394,14 @@ const main = async () => {
     updated: syncRes2.body.summary?.updated,
     unchanged: syncRes2.body.summary?.unchanged,
   }, { updated: 1, unchanged: 1 });
+  const sparseSync = await postJson(srv.base, '/api/admin/calendar/sync', {
+    source: 'tabf',
+    events: [{ ...detailedEvent, writtenExam: '', scheduleDetails: interviewSittings.slice(0, 1) }],
+  }, srv.cookie);
+  eq('partial calendar sync preserves previously verified dates and multiple sittings', {
+    updated: sparseSync.body.summary?.updated,
+    retainedIncomplete: sparseSync.body.summary?.retainedIncomplete,
+  }, { updated: 0, retainedIncomplete: 1 });
 
   // Admin edits 115sync02 (locks it) and deletes 115sync03 (suppresses it)
   const adminCalMid = (await getJson(srv.base, '/api/admin/calendar', srv.cookie)).body.events;
@@ -448,6 +473,12 @@ const main = async () => {
   eq('calendar edit persisted (org renamed)', cal.find((e) => e.id === calAId)?.org, '甲銀行（已改名）');
   eq('calendar delete persisted (event gone)', cal.some((e) => e.id === calBId), false);
   eq('synced calendar update persisted', cal.find((e) => e.link === 'https://svc.tabf.org.tw/115sync01/')?.note, '已更新備註');
+  const syncedEvent = cal.find((e) => e.link === detailedEvent.link);
+  eq('detailed calendar dates persist through SQLite restart', {
+    written: syncedEvent?.writtenExam,
+    firstInterview: syncedEvent?.interview,
+    sittings: syncedEvent?.scheduleDetails,
+  }, { written: today, firstInterview: today, sittings: interviewSittings });
 
   // Re-sync AFTER restart: locked manual edit and deleted suppression must both hold across reboot
   const syncAfterReboot = await postJson(srv.base, '/api/admin/calendar/sync', {

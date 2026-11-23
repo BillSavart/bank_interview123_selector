@@ -167,7 +167,7 @@ function formatValidDateTime(rawYear, rawMonth, rawDay, rawHour, rawMinute, meri
     if (!Number.isInteger(hh) || !Number.isInteger(mm) || hh < 0 || hh > 23 || mm < 0 || mm > 59) {
       return datePart;
     }
-    if (meridiem === '下午' && hh >= 1 && hh <= 11) hh += 12;
+    if ((meridiem === '下午' || meridiem === '晚上') && hh >= 1 && hh <= 11) hh += 12;
     return `${datePart} ${pad2(hh)}:${pad2(mm)}`;
   }
   return datePart;
@@ -177,33 +177,37 @@ function formatValidDateTime(rawYear, rawMonth, rawDay, rawHour, rawMinute, meri
  * Extract all ROC or Western dates (with optional HH:MM) from text in reading order.
  * Also expands shorthand ranges such as "115年12月5日(六)至6日(日)".
  */
-export function extractDateTimes(input) {
+function extractScheduleDates(input) {
   const s = toHalfWidth(input);
   const results = [];
   const fullDateRe =
-    /(?:民國\s*)?(\d{2,4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日(?:\s*\([^)]{0,12}\))?(?:\s*(上午|下午|中午)?\s*(\d{1,2})\s*:\s*(\d{2}))?/g;
+    /(?:民國\s*)?(\d{2,4})\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})\s*日(?:\s*\([^)]{0,12}\))?(?:\s*(?:(上午|下午|中午|晚上)?\s*(\d{1,2})\s*:\s*(\d{2})|(上午|下午|中午|晚上|全日)))?/g;
 
   const matches = [...s.matchAll(fullDateRe)];
   for (let i = 0; i < matches.length; i++) {
     const m = matches[i];
     const formatted = formatValidDateTime(m[1], m[2], m[3], m[5], m[6], m[4] || '');
     if (!formatted) continue;
-    results.push(formatted);
+    results.push({ start: formatted, period: m[7] || '' });
 
     // Check for shorthand range continuation right after this match (e.g., "至 6 日(日)17:00" or "至 12 月 6 日").
     const tailEnd = i + 1 < matches.length ? matches[i + 1].index : s.length;
     const tail = s.slice(m.index + m[0].length, tailEnd);
     const shortMatch = tail.match(
-      /^\s*(?:起\s*)?(?:至|~|-|–|—)\s*(?:(\d{1,2})\s*月\s*)?(\d{1,2})\s*日(?:\s*\([^)]{0,12}\))?(?:\s*(上午|下午|中午)?\s*(\d{1,2})\s*:\s*(\d{2}))?/,
+      /^\s*(?:起\s*)?(?:至|~|-|–|—)\s*(?:(\d{1,2})\s*月\s*)?(\d{1,2})\s*日(?:\s*\([^)]{0,12}\))?(?:\s*(?:(上午|下午|中午|晚上)?\s*(\d{1,2})\s*:\s*(\d{2})|(上午|下午|中午|晚上|全日)))?/,
     );
     if (shortMatch) {
       const endMonth = shortMatch[1] || m[2];
       const endFormatted = formatValidDateTime(m[1], endMonth, shortMatch[2], shortMatch[4], shortMatch[5], shortMatch[3] || '');
-      if (endFormatted) results.push(endFormatted);
+      if (endFormatted) results.push({ start: endFormatted, period: shortMatch[6] || '' });
     }
   }
 
   return results;
+}
+
+export function extractDateTimes(input) {
+  return extractScheduleDates(input).map(({ start }) => start);
 }
 
 function isRemarkCell(cell) {
@@ -376,6 +380,9 @@ function parseRowsFromPlainText(fullText) {
   const anchorLabels = [
     '報名期間',
     '網路報名',
+    '書面履歷上傳截止時間',
+    '第一階段結果查詢',
+    '數理邏輯測驗',
     '筆試日期',
     '試題與選擇題解答公告',
     '試題及選擇題解答公告',
@@ -402,7 +409,12 @@ function parseRowsFromPlainText(fullText) {
     }
     const matchedLabel = anchorLabels.find((lbl) => compact.startsWith(lbl));
     if (matchedLabel) {
-      const windowText = lines.slice(i, i + 5).join('\n');
+      const window = lines.slice(i, i + 5);
+      const end = window.findIndex((line, index) => index > 0 && (
+        parseStageHeader(line) || isRemarkCell(line) ||
+        anchorLabels.some((label) => line.replace(/\s+/g, '').startsWith(label))
+      ));
+      const windowText = (end < 0 ? window : window.slice(0, end)).join('\n');
       const dates = extractDateTimes(windowText);
       if (dates.length) {
         rows.push({
@@ -440,6 +452,15 @@ export function parseSchedulePdfData({ tables = [], text = '', title, url, slug 
     finalResult: '',
     link: url,
     note: '',
+    scheduleDetails: [],
+  };
+
+  const addDetail = (kind, start, { label = '', end = '', period = '' } = {}) => {
+    if (!start || event.scheduleDetails.some((item) =>
+      item.kind === kind && item.start === start && item.end === end &&
+      item.label === label && item.period === period
+    )) return;
+    event.scheduleDetails.push({ kind, label, start, end, period });
   };
 
   const notes = [];
@@ -457,6 +478,10 @@ export function parseSchedulePdfData({ tables = [], text = '', title, url, slug 
 
   const hasAnyWrittenStage = rows.some(
     (r) => r.stage.hasWritten || /筆試日期|試題.*解答/.test(r.label),
+  );
+  const hasThirdStage = rows.some((row) => row.stage.num === 3);
+  const uploadRequired = rows.some(({ label, noteCell }) =>
+    label.includes('報名期間') && /上傳.*視同未完成報名/.test(noteCell.replace(/\s+/g, '')),
   );
 
   for (const row of rows) {
@@ -505,11 +530,14 @@ export function parseSchedulePdfData({ tables = [], text = '', title, url, slug 
         event.signupStart = sortedStarts[0];
         if (sortedEnds.length) event.signupEnd = sortedEnds[sortedEnds.length - 1];
 
-        if (trackRanges.length >= 2) {
-          const uniqueEnds = new Set(trackRanges.map((t) => `${t.start}~${t.end}`));
-          if (uniqueEnds.size >= 2) {
-            addNote(trackRanges.map((t) => `${t.track}報名至 ${t.end}`).join('；'));
+        const uniqueRanges = new Set(trackRanges.map((t) => `${t.start}~${t.end}`));
+        if (uniqueRanges.size >= 2) {
+          for (const { track, start, end } of trackRanges) {
+            const name = track.replace(/書面審查類別/g, '書審類').replace(/筆試測驗類別/g, '筆試類');
+            addDetail('signup', start, { label: `${name}報名`, end });
           }
+        } else {
+          addDetail('signup', event.signupStart, { end: event.signupEnd });
         }
       }
       continue;
@@ -518,7 +546,26 @@ export function parseSchedulePdfData({ tables = [], text = '', title, url, slug 
     // 2. 試題與選擇題解答公告
     if (/試題.*解答|選擇題解答/.test(label) && !/疑義/.test(label)) {
       const dates = extractDateTimes(stitchTimeCells(nonPlaceholder));
-      if (dates[0] && !event.answerKey) event.answerKey = dates[0];
+      if (dates[0] && !event.answerKey) {
+        event.answerKey = dates[0];
+        addDetail('answerKey', dates[0]);
+      }
+      continue;
+    }
+
+    if (/上傳.*截止/.test(label)) {
+      const deadline = extractDateTimes(stitchTimeCells(nonPlaceholder)).at(-1);
+      addDetail('upload', deadline, { label: '文件上傳截止' });
+      if (deadline && uploadRequired) addNote('逾期未上傳文件視同未完成報名。');
+      continue;
+    }
+
+    if (/^第一階段.*視訊(?:面試|面談)/.test(label)) {
+      const approximate = toHalfWidth(nonPlaceholder.join(' ')).match(/\d{1,2}\s*月\s*(?:上旬|中旬|下旬)/)?.[0];
+      if (approximate) {
+        const excluded = /除儲備菁英人才A、儲備菁英人才B毋須參加/.test(label) ? '（儲備菁英人才 A、B 免參加）' : '';
+        addPrefixedNote('第一階段視訊面試', `${approximate.replace(/\s+/g, '')}起陸續個別通知${excluded}`);
+      }
       continue;
     }
 
@@ -532,17 +579,19 @@ export function parseSchedulePdfData({ tables = [], text = '', title, url, slug 
       continue;
     }
 
-    // 4. Online cognitive/logic test in Stage 2 (e.g. 華南菁英 數理邏輯測驗) -> record in note.
+    // 4. Online test with its own window and applicable groups.
     if (/數理邏輯測驗|線上測驗/.test(label)) {
       const dates = extractDateTimes(stitchTimeCells(nonPlaceholder));
-      if (dates.length >= 2) addNote(`線上數理邏輯測驗：${dates[0]}～${dates[dates.length - 1]}`);
-      else if (dates[0]) addNote(`線上數理邏輯測驗：${dates[0]}`);
+      const test = label.includes('數理邏輯測驗') ? '線上數理邏輯測驗' : '線上測驗';
+      const groups = /僅儲備菁英人才A、儲備菁英人才B/.test(label) ? '（僅儲備菁英人才 A、B）' : '';
+      addDetail('onlineTest', dates[0], { label: test + groups, end: dates.length > 1 ? dates.at(-1) : '' });
       continue;
     }
 
     // Extract dates for remaining substantive schedule rows.
     const stitched = stitchTimeCells(nonPlaceholder);
-    const dates = extractDateTimes(stitched);
+    const sittings = extractScheduleDates(stitched);
+    const dates = sittings.map(({ start }) => start);
     const vague = dates.length === 0 ? extractVagueSchedulePhrase(stitched) : '';
 
     // 5. 筆試日期
@@ -551,6 +600,7 @@ export function parseSchedulePdfData({ tables = [], text = '', title, url, slug 
       (stage.num === 1 && !stage.isReviewOnly && !stage.isInterview && /^(?:測驗日期|考試日期|第一試日期)$/.test(label))
     ) {
       if (dates[0] && !event.writtenExam) event.writtenExam = dates[0];
+      for (const { start, period } of sittings) addDetail('written', start, { period });
       continue;
     }
 
@@ -562,6 +612,9 @@ export function parseSchedulePdfData({ tables = [], text = '', title, url, slug 
       (stage.num >= 2 && /^(?:測驗日期|考試日期|口試|面試|面試日期及通知)$/.test(label));
 
     if (isInterviewRow) {
+      const kind = isThirdStageInterview ? 'interview2' : 'interview';
+      const interviewLabel = stage.desc.includes('體能') ? '口試／體能測驗' : '';
+      for (const { start, period } of sittings) addDetail(kind, start, { period, label: interviewLabel });
       if (isThirdStageInterview) {
         if (dates[0] && !event.interview2) event.interview2 = dates[0];
         else if (vague) addPrefixedNote('二面', vague);
@@ -580,9 +633,14 @@ export function parseSchedulePdfData({ tables = [], text = '', title, url, slug 
     ) {
       const isWrittenResult = (stage.hasWritten || /筆試|測驗/.test(label)) && (hasAnyWrittenStage || /筆試/.test(label));
       if (isWrittenResult) {
-        if (dates[0] && !event.writtenResult) event.writtenResult = dates[0];
+        if (dates[0] && !event.writtenResult) {
+          event.writtenResult = dates[0];
+          addDetail('writtenResult', dates[0], {
+            label: /書面審查|書審/.test(label) ? '書審／筆試結果' : '',
+          });
+        }
       } else if (dates[0]) {
-        addPrefixedNote(row.rawLabel.replace(/\s+/g, ''), dates[0]);
+        addDetail('stageResult', dates[0], { label: row.rawLabel.replace(/\s+/g, '') });
       } else if (vague) {
         addPrefixedNote(row.rawLabel.replace(/\s+/g, ''), vague);
       }
@@ -590,9 +648,19 @@ export function parseSchedulePdfData({ tables = [], text = '', title, url, slug 
     }
 
     // 8. 放榜 / 最終錄取名單公告
+    if (hasThirdStage && stage.num === 2 && /口試成績/.test(label) && dates[0]) {
+      addDetail('interviewResult', dates[0], { label: '第二階段口試成績（三階段類組）' });
+      if (/甄試結果|甄選結果|錄取名單/.test(label)) {
+        event.finalResult = dates[0];
+        addDetail('final', dates[0], { label: '甄選結果（兩階段類組）' });
+      }
+      continue;
+    }
     if (/錄取名單|榜示|甄試結果|甄選結果|放榜|最終結果/.test(label) || (stage.num >= 2 && /(?:結果|成績)/.test(label))) {
-      if (dates[0]) event.finalResult = dates[0];
-      else if (vague) addPrefixedNote('錄取結果', vague);
+      if (dates[0]) {
+        event.finalResult = dates[0];
+        addDetail('final', dates[0]);
+      } else if (vague) addPrefixedNote('錄取結果', vague);
       continue;
     }
   }
@@ -615,5 +683,6 @@ export function hasAnyCalendarDate(event) {
     'interview2',
     'finalResult',
   ];
-  return fields.some((f) => /^\d{4}-\d{2}-\d{2}/.test(String(event?.[f] || '')));
+  return fields.some((f) => /^\d{4}-\d{2}-\d{2}/.test(String(event?.[f] || ''))) ||
+    Boolean(event?.scheduleDetails?.length);
 }

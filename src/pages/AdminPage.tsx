@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { adminSessionExpired, loginAdmin, logoutAdmin } from '../lib/adminSession';
 import { ShieldCheck, Plus, Trash2, Save, X, LogOut, Pencil, EyeOff, Eye, BookOpen } from 'lucide-react';
 import {
+  CALENDAR_KIND_LABEL,
   createEvent,
   deleteEvent,
   emptyEventInput,
@@ -9,6 +10,8 @@ import {
   updateEvent,
   type CalendarEvent,
   type CalendarEventInput,
+  type CalendarScheduleItem,
+  type CalendarScheduleKind,
 } from '../lib/calendar';
 import {
   fetchAdminComments,
@@ -39,7 +42,8 @@ import {
   type PostModerateAction,
 } from '../lib/posts';
 
-const FIELD_LABELS: Array<{ key: keyof CalendarEventInput; label: string; type: 'text' | 'datetime'; placeholder?: string }> = [
+type CalendarFormField = Exclude<keyof CalendarEventInput, 'scheduleDetails'>;
+const FIELD_LABELS: Array<{ key: CalendarFormField; label: string; type: 'text' | 'datetime'; placeholder?: string }> = [
   { key: 'org', label: '機關 / 名稱', type: 'text', placeholder: '台灣銀行 一般金融人員' },
   { key: 'signupStart', label: '報名起始', type: 'datetime' },
   { key: 'signupEnd', label: '報名截止', type: 'datetime' },
@@ -52,6 +56,17 @@ const FIELD_LABELS: Array<{ key: keyof CalendarEventInput; label: string; type: 
   { key: 'link', label: '簡章連結', type: 'text', placeholder: 'https://…' },
   { key: 'note', label: '備註', type: 'text' },
 ];
+const DATE_KINDS: Partial<Record<CalendarFormField, CalendarScheduleKind>> = {
+  signupStart: 'signup',
+  signupEnd: 'signup',
+  writtenExam: 'written',
+  answerKey: 'answerKey',
+  writtenResult: 'writtenResult',
+  interview: 'interview',
+  interview2: 'interview2',
+  finalResult: 'final',
+};
+const DATE_TIME_PATTERN = '[0-9]{4}-[0-9]{2}-[0-9]{2}( [0-9]{2}:[0-9]{2})?';
 
 // A stored date field may carry a trailing " HH:MM" time. Split / join helpers.
 const splitDT = (v: string): { date: string; time: string } => {
@@ -175,6 +190,7 @@ function AdminDashboard({
   const [draft, setDraft] = useState<CalendarEventInput>(emptyEventInput());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const detailedKinds = new Set(draft.scheduleDetails?.map(({ kind }) => kind));
 
   const openNew = () => {
     setDraft(emptyEventInput());
@@ -183,6 +199,10 @@ function AdminDashboard({
   };
 
   const openEdit = (ev: CalendarEvent) => {
+    const details = ev.scheduleDetails || [];
+    const advancedKinds = new Set(details
+      .filter(({ kind, label, period }) => label || period || details.filter((item) => item.kind === kind).length > 1)
+      .map(({ kind }) => kind));
     setDraft({
       org: ev.org,
       signupStart: ev.signupStart,
@@ -195,9 +215,17 @@ function AdminDashboard({
       finalResult: ev.finalResult,
       link: ev.link,
       note: ev.note,
+      scheduleDetails: details.filter(({ kind }) => advancedKinds.has(kind)),
     });
     setEditingId(ev.id);
     setError('');
+  };
+
+  const editScheduleItem = (index: number, patch: Partial<CalendarScheduleItem>) => {
+    setDraft((previous) => ({
+      ...previous,
+      scheduleDetails: previous.scheduleDetails?.map((item, i) => i === index ? { ...item, ...patch } : item),
+    }));
   };
 
   const closeForm = () => {
@@ -295,6 +323,8 @@ function AdminDashboard({
           <h2 className="admin-form-title">{editingId === 'new' ? '新增招考' : '編輯招考'}</h2>
           <div className="admin-form-grid">
             {FIELD_LABELS.map((f) => {
+              const kind = DATE_KINDS[f.key];
+              if (kind && detailedKinds.has(kind)) return null;
               if (f.type === 'datetime') {
                 const { date, time } = splitDT(draft[f.key]);
                 const [hh = '', mm = ''] = time ? time.split(':') : ['', ''];
@@ -306,11 +336,10 @@ function AdminDashboard({
                         className="admin-input"
                         type="date"
                         value={date}
-                        // When a date is first picked, default the time to 14:00 (24h).
                         onChange={(e) =>
                           setDraft({
                             ...draft,
-                            [f.key]: joinDT(e.target.value, e.target.value ? time || '14:00' : ''),
+                            [f.key]: joinDT(e.target.value, time),
                           })
                         }
                       />
@@ -320,8 +349,9 @@ function AdminDashboard({
                         value={hh}
                         disabled={!date}
                         aria-label={`${f.label} 時`}
-                        onChange={(e) => setDraft({ ...draft, [f.key]: joinDT(date, `${e.target.value}:${mm || '00'}`) })}
+                        onChange={(e) => setDraft({ ...draft, [f.key]: joinDT(date, e.target.value ? `${e.target.value}:${mm || '00'}` : '') })}
                       >
+                        <option value="">—</option>
                         {HOURS.map((h) => (
                           <option key={h} value={h}>
                             {h}
@@ -334,8 +364,9 @@ function AdminDashboard({
                         value={mm}
                         disabled={!date}
                         aria-label={`${f.label} 分`}
-                        onChange={(e) => setDraft({ ...draft, [f.key]: joinDT(date, `${hh || '00'}:${e.target.value}`) })}
+                        onChange={(e) => setDraft({ ...draft, [f.key]: joinDT(date, e.target.value ? `${hh || '00'}:${e.target.value}` : '') })}
                       >
+                        <option value="">—</option>
                         {MINUTES.map((m) => (
                           <option key={m} value={m}>
                             {m}
@@ -359,6 +390,50 @@ function AdminDashboard({
                 </label>
               );
             })}
+            {draft.scheduleDetails?.map((item, index) => (
+              <div key={index} className="admin-field admin-field-wide">
+                <input
+                  className="admin-input"
+                  aria-label={`時程 ${index + 1} 名稱`}
+                  placeholder={CALENDAR_KIND_LABEL[item.kind]}
+                  value={item.label}
+                  onChange={(e) => editScheduleItem(index, { label: e.target.value })}
+                />
+                <div className="admin-datetime">
+                  <input
+                    className="admin-input"
+                    aria-label={`時程 ${index + 1} 日期或起始時間`}
+                    placeholder="YYYY-MM-DD HH:MM"
+                    pattern={DATE_TIME_PATTERN}
+                    required
+                    value={item.start}
+                    onChange={(e) => editScheduleItem(index, { start: e.target.value })}
+                  />
+                  {(item.kind === 'signup' || item.kind === 'onlineTest' || item.end) && (
+                    <input
+                      className="admin-input"
+                      aria-label={`時程 ${index + 1} 結束時間`}
+                      placeholder="YYYY-MM-DD HH:MM"
+                      pattern={DATE_TIME_PATTERN}
+                      value={item.end}
+                      onChange={(e) => editScheduleItem(index, { end: e.target.value })}
+                    />
+                  )}
+                  {(item.kind === 'written' || item.kind === 'interview' || item.kind === 'interview2') && (
+                    <select
+                      className="admin-input"
+                      aria-label={`時程 ${index + 1} 時段`}
+                      value={item.period}
+                      onChange={(e) => editScheduleItem(index, { period: e.target.value })}
+                    >
+                      {['', '上午', '中午', '下午', '晚上', '全日'].map((period) => (
+                        <option key={period} value={period}>{period || '未指定時段'}</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
           <div className="admin-form-actions">
             <button type="submit" className="admin-btn admin-btn-primary" disabled={busy}>

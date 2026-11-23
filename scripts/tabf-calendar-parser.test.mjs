@@ -91,7 +91,7 @@ describe('tabf-calendar-parser', () => {
       url: 'https://svc.tabf.org.tw/115bot04/',
       slug: '115bot04',
     });
-    expect(ev).toEqual({
+    expect(ev).toMatchObject({
       externalKey: 'tabf:115bot04',
       org: '臺灣銀行115年新進工員甄試',
       signupStart: '2026-08-06 10:00',
@@ -105,6 +105,10 @@ describe('tabf-calendar-parser', () => {
       link: 'https://svc.tabf.org.tw/115bot04/',
       note: '',
     });
+    expect(ev.scheduleDetails).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'written', start: '2026-09-12', period: '下午' }),
+      expect.objectContaining({ kind: 'interview', start: '2026-10-18', label: '口試／體能測驗' }),
+    ]));
   });
 
   it('parses dual-track exam with separate signup deadlines and split time cells (115tcbbank04 pattern)', () => {
@@ -140,8 +144,13 @@ describe('tabf-calendar-parser', () => {
     expect(ev.writtenResult).toBe('2027-01-04 10:00');
     expect(ev.interview).toBe('2027-01-09');
     expect(ev.finalResult).toBe('2027-01-18 14:00');
-    expect(ev.note).toContain('書面審查類別報名至 2026-12-02 17:00');
-    expect(ev.note).toContain('筆試測驗類別報名至 2026-11-18 17:00');
+    expect(ev.scheduleDetails.filter(({ kind }) => kind === 'signup')).toEqual([
+      { kind: 'signup', label: '書審類報名', start: '2026-11-05 10:00', end: '2026-12-02 17:00', period: '' },
+      { kind: 'signup', label: '筆試類報名', start: '2026-11-05 10:00', end: '2026-11-18 17:00', period: '' },
+    ]);
+    expect(ev.scheduleDetails).toContainEqual(expect.objectContaining({
+      kind: 'writtenResult', label: '書審／筆試結果', start: '2027-01-04 10:00',
+    }));
   });
 
   it('recovers spanning signup cells split across columns using getText() (115hncb05 & 115chb05 patterns)', () => {
@@ -173,11 +182,14 @@ describe('tabf-calendar-parser', () => {
     expect(ev.signupStart).toBe('2026-09-07 10:00');
     expect(ev.signupEnd).toBe('2026-10-05 17:00');
     expect(ev.writtenExam).toBe('');
-    // Pure 書面審查 should not populate 筆試放榜 (writtenResult), goes to note instead.
     expect(ev.writtenResult).toBe('');
     expect(ev.interview).toBe('2026-11-01');
     expect(ev.finalResult).toBe('2026-11-09 14:00');
-    expect(ev.note).toContain('書面審查結果查詢：2026-10-23 14:00');
+    expect(ev.scheduleDetails).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'stageResult', label: '書面審查結果查詢', start: '2026-10-23 14:00' }),
+      expect.objectContaining({ kind: 'interviewResult', label: '第二階段口試成績（三階段類組）', start: '2026-11-09 14:00' }),
+      expect.objectContaining({ kind: 'final', label: '甄選結果（兩階段類組）', start: '2026-11-09 14:00' }),
+    ]));
     expect(ev.note).toContain('約三週內通知複試');
   });
 
@@ -206,5 +218,40 @@ describe('tabf-calendar-parser', () => {
     expect(ev.note).toContain('115年 12 月下旬起');
     expect(ev.note).toContain('面試日期由兆豐銀行個別通知');
     expect(hasAnyCalendarDate(ev)).toBe(true);
+  });
+
+  it('keeps distinct oral exam dates and their published time of day', () => {
+    const ev = parseSchedulePdfData({
+      tables: [[
+        ['第二試：口試', '測驗日期', '115 年 11 月 5 日(四)晚上、\n115 年 11 月 8 日(日)全日、\n115 年 11 月 10 日(二)晚上'],
+      ]],
+      title: '財金資訊', url: 'https://svc.tabf.org.tw/115fisc06/', slug: '115fisc06',
+    });
+    expect(ev.scheduleDetails.map(({ kind, start, period }) => [kind, start, period])).toEqual([
+      ['interview', '2026-11-05', '晚上'],
+      ['interview', '2026-11-08', '全日'],
+      ['interview', '2026-11-10', '晚上'],
+    ]);
+  });
+
+  it('keeps upload deadlines, phase results, and eligibility for published interviews and tests', () => {
+    const ev = parseSchedulePdfData({
+      tables: [[
+        ['第一階段', '書面履歷上傳截止時間', '115 年 11 月', '27 日(五)17:00'],
+        ['第一階段(視訊面試)※除儲備菁英人才 A、儲備菁英人才 B 毋須參加外，其餘類組應參加', '12 月上旬'],
+        ['第一階段結果查詢', '115 年 12 月 14 日(一)14:00'],
+        ['第二階段', '數理邏輯測驗(線上)※僅儲備菁英人才 A、儲備菁英人才 B 須進行', '115 年 12 月 14 日(一)14:00 至 115 年 12 月 15 日(二)17:00'],
+      ]],
+      title: '華南銀行菁英人才', url: 'https://svc.tabf.org.tw/115hncb06/', slug: '115hncb06',
+    });
+    expect(ev.scheduleDetails).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'upload', start: '2026-11-27 17:00' }),
+      expect.objectContaining({ kind: 'stageResult', start: '2026-12-14 14:00' }),
+      expect.objectContaining({
+        kind: 'onlineTest', label: '線上數理邏輯測驗（僅儲備菁英人才 A、B）',
+        start: '2026-12-14 14:00', end: '2026-12-15 17:00',
+      }),
+    ]));
+    expect(ev.note).toContain('12月上旬起陸續個別通知（儲備菁英人才 A、B 免參加）');
   });
 });

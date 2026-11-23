@@ -3,7 +3,7 @@ import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises
 import { dirname } from 'node:path';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { isIP } from 'node:net';
-import { openDb, calendarColumns } from './db.mjs';
+import { openDb, calendarColumns, calendarEventColumns } from './db.mjs';
 import {
   getOfficialDocQuestion,
   initOfficialDocStore,
@@ -735,15 +735,39 @@ const calendarDateFields = [
   'interview2',
   'finalResult',
 ];
+const calendarScheduleFields = {
+  signup: ['signupStart', 'signupEnd'],
+  written: ['writtenExam'],
+  answerKey: ['answerKey'],
+  writtenResult: ['writtenResult'],
+  interview: ['interview'],
+  interview2: ['interview2'],
+  final: ['finalResult'],
+  upload: [],
+  stageResult: [],
+  interviewResult: [],
+  onlineTest: [],
+};
+const calendarPeriods = new Set(['上午', '中午', '下午', '晚上', '全日']);
 const maxCalendarFieldLength = 300;
-const validDateValue = (s) => !s || /^\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?$/.test(s);
+const validDateValue = (s) => {
+  if (!s) return true;
+  const match = s.match(/^(\d{4}-\d{2}-\d{2})(?: (?:[01]\d|2[0-3]):[0-5]\d)?$/);
+  if (!match) return false;
+  const date = new Date(`${match[1]}T00:00:00Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === match[1];
+};
 
 // Date-only prefix (drops any " HH:MM"), for comparisons.
 const dateOnly = (s) => (s || '').slice(0, 10);
 
+const calendarDates = (event) => [
+  ...calendarDateFields.map((field) => event[field]),
+  ...(event.scheduleDetails || []).flatMap(({ start, end }) => [start, end]),
+].map(dateOnly).filter(Boolean);
+
 // Earliest relevant date of an event ('9999' when undated → sinks to the bottom).
-const earliestDate = (e) =>
-  calendarDateFields.map((f) => dateOnly(e[f])).filter(Boolean).sort()[0] || '9999';
+const earliestDate = (e) => calendarDates(e).sort()[0] || '9999';
 
 // Sort by the earliest relevant date.
 const sortCalendar = (rows) => rows.sort((a, b) => earliestDate(a).localeCompare(earliestDate(b)));
@@ -756,6 +780,66 @@ const cleanCalendarInput = (raw) => {
   return event;
 };
 
+const sortScheduleDetails = (items) => items.sort((a, b) =>
+  a.start.localeCompare(b.start) || a.kind.localeCompare(b.kind) ||
+  a.label.localeCompare(b.label) || a.end.localeCompare(b.end) || a.period.localeCompare(b.period),
+);
+
+const cleanScheduleDetails = (raw) => {
+  if (!Array.isArray(raw)) return [];
+  const items = [];
+  for (const item of raw) {
+    if (typeof item?.kind !== 'string' || !Object.hasOwn(calendarScheduleFields, item.kind)) continue;
+    const start = sanitizeText(item.start ?? '', 32);
+    const end = sanitizeText(item.end ?? '', 32);
+    if (!start || !validDateValue(start) || !validDateValue(end) || (end && end < start)) continue;
+    items.push({
+      kind: item.kind,
+      label: sanitizeText(item.label ?? '', maxCalendarFieldLength),
+      start,
+      end,
+      period: start.length === 10 && calendarPeriods.has(item.period) ? item.period : '',
+    });
+  }
+  return sortScheduleDetails(items);
+};
+
+const parseStoredScheduleDetails = (value) => {
+  try {
+    return cleanScheduleDetails(JSON.parse(value || '[]'));
+  } catch {
+    return [];
+  }
+};
+
+const mergeScheduleDetails = (previous, incoming) => {
+  const details = [];
+  const retainedKinds = new Set();
+  for (const kind of Object.keys(calendarScheduleFields)) {
+    const oldItems = previous.filter((item) => item.kind === kind);
+    const newItems = incoming.filter((item) => item.kind === kind);
+    // A partial scrape can omit an entire milestone or one sitting within an exam.
+    if (newItems.length < oldItems.length ||
+        newItems.filter((item) => item.end).length < oldItems.filter((item) => item.end).length) {
+      details.push(...oldItems);
+      retainedKinds.add(kind);
+    } else {
+      details.push(...newItems);
+    }
+  }
+  return { details: sortScheduleDetails(details), retainedKinds };
+};
+
+const applyScheduleDates = (fields, details) => {
+  for (const [kind, [startField, endField]] of Object.entries(calendarScheduleFields)) {
+    if (!startField) continue;
+    const items = details.filter((item) => item.kind === kind);
+    if (!items.length) continue;
+    fields[startField] = (kind === 'final' ? items.at(-1) : items[0]).start;
+    if (endField) fields[endField] = items.map((item) => item.end).sort().at(-1);
+  }
+};
+
 const extractTabfSlugFromLink = (rawUrl) => {
   if (!rawUrl || typeof rawUrl !== 'string') return null;
   const trimmed = rawUrl.trim();
@@ -763,7 +847,10 @@ const extractTabfSlugFromLink = (rawUrl) => {
   try {
     const parsed = new URL(normalized);
     if (parsed.hostname.toLowerCase() !== 'svc.tabf.org.tw') return null;
-    const seg = parsed.pathname.split('/').filter(Boolean)[0];
+    const [first, second, third, folder, file] = parsed.pathname.split('/').filter(Boolean);
+    const isDocument = /^_file$/i.test(first) && /^download$/i.test(second)
+      && /^(?:readme|schedule)$/i.test(folder) && /\.pdf$/i.test(file);
+    const seg = isDocument ? third : first;
     if (!seg || seg.startsWith('_') || !/^[a-z0-9][a-z0-9_-]{1,48}$/i.test(seg)) return null;
     return seg.toLowerCase();
   } catch {
@@ -786,6 +873,7 @@ const shapeCalendarEvent = (e) => ({
   finalResult: e.finalResult,
   link: e.link,
   note: e.note,
+  ...(e.scheduleDetails?.length ? { scheduleDetails: e.scheduleDetails } : {}),
   createdAt: e.createdAt,
   updatedAt: e.updatedAt,
 });
@@ -803,7 +891,7 @@ const calendarWindow = () => {
 };
 
 const eventInWindow = (e) => {
-  const dates = calendarDateFields.map((f) => dateOnly(e[f])).filter(Boolean);
+  const dates = calendarDates(e);
   if (!dates.length) return true; // keep dateless drafts (can't be placed yet)
   const min = dates.reduce((a, b) => (a < b ? a : b));
   const max = dates.reduce((a, b) => (a > b ? a : b));
@@ -846,6 +934,7 @@ const loadCalendar = async () => {
         // DB columns are snake_case; cleanCalendarInput keys on the camelCase
         // form names, so map them back via the shared calendarColumns table.
         ...cleanCalendarInput(Object.fromEntries(calendarColumns.map(([col, jsonKey]) => [jsonKey, r[col]]))),
+        scheduleDetails: parseStoredScheduleDetails(r.schedule_details),
         externalKey: String(r.external_key || ''),
         manualEdited: !!r.manual_edited,
         createdAt: String(r.created_at || ''),
@@ -882,6 +971,7 @@ const loadCalendar = async () => {
           .map((e) => ({
             id: String(e.id),
             ...cleanCalendarInput(e),
+            scheduleDetails: cleanScheduleDetails(e.scheduleDetails),
             externalKey: typeof e.externalKey === 'string' ? e.externalKey : '',
             manualEdited: !!e.manualEdited,
             createdAt: String(e.createdAt || ''),
@@ -908,8 +998,7 @@ const loadCalendar = async () => {
 
 const persistCalendar = () => {
   if (useSqlite) {
-    const cols = ['id', ...calendarColumns.map(([col]) => col), 'external_key', 'manual_edited', 'created_at', 'updated_at'];
-    const ins = db.prepare(`INSERT OR REPLACE INTO calendar_events (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+    const ins = db.prepare(`INSERT OR REPLACE INTO calendar_events (${calendarEventColumns.join(', ')}) VALUES (${calendarEventColumns.map(() => '?').join(', ')})`);
     const insSup = db.prepare('INSERT OR REPLACE INTO calendar_suppressed (external_key, deleted_at) VALUES (?, ?)');
     const insAlert = db.prepare('INSERT OR REPLACE INTO calendar_alerted (external_key, alerted_at) VALUES (?, ?)');
     db.transaction(() => {
@@ -918,6 +1007,7 @@ const persistCalendar = () => {
         ins.run(
           String(e.id),
           ...calendarColumns.map(([, jsonKey]) => String(e[jsonKey] ?? '')),
+          JSON.stringify(e.scheduleDetails || []),
           String(e.externalKey || ''),
           e.manualEdited ? 1 : 0,
           String(e.createdAt || ''),
@@ -1617,19 +1707,26 @@ createServer(async (req, res) => {
       }
       const body = await readJsonBody(req);
       const fields = cleanCalendarInput(body);
+      const scheduleDetails = cleanScheduleDetails(body.scheduleDetails);
       if (!fields.org) {
         sendJson(res, 400, { error: '機關/名稱不可為空' });
+        return;
+      }
+      if (Array.isArray(body.scheduleDetails) && scheduleDetails.length !== body.scheduleDetails.length) {
+        sendJson(res, 400, { error: '詳細時程的日期或分類不正確' });
         return;
       }
       const now = new Date().toISOString();
       const event = {
         id: randomUUID(),
         ...fields,
+        scheduleDetails,
         externalKey: '',
         manualEdited: true,
         createdAt: now,
         updatedAt: now,
       };
+      applyScheduleDates(event, scheduleDetails);
       calendarEvents.push(event);
       sortCalendar(calendarEvents);
       pruneCalendar(); // drop any events that have since aged out of the window
@@ -1664,6 +1761,7 @@ createServer(async (req, res) => {
         skippedManual: 0,
         skippedSuppressed: 0,
         skippedInvalid: 0,
+        retainedIncomplete: 0,
         total: 0,
       };
 
@@ -1687,19 +1785,21 @@ createServer(async (req, res) => {
         seenKeys.add(externalKey);
 
         const fields = cleanCalendarInput(rawItem);
+        const scheduleDetails = cleanScheduleDetails(rawItem.scheduleDetails);
         const hasValidDates = calendarDateFields.every((f) => validDateValue(fields[f]));
-        const hasAtLeastOneDate = calendarDateFields.some((f) => Boolean(dateOnly(fields[f])));
+        const hasAtLeastOneDate = calendarDates({ ...fields, scheduleDetails }).length > 0;
         if (!fields.org || !hasValidDates || !hasAtLeastOneDate) {
           summary.skippedInvalid += 1;
           continue;
         }
+        applyScheduleDates(fields, scheduleDetails);
         // Record every valid seen exam key so aged-out or already-synced exams
         // do not trigger false "new exam" email alerts later.
         if (!calendarAlerted.has(externalKey)) {
           calendarAlerted.set(externalKey, now);
           dirty = true;
         }
-        if (!eventInWindow(fields)) {
+        if (!eventInWindow({ ...fields, scheduleDetails })) {
           summary.skippedOutOfWindow += 1;
           continue;
         }
@@ -1721,12 +1821,22 @@ createServer(async (req, res) => {
             summary.skippedManual += 1;
             continue;
           }
-          const changed = calendarFields.some((f) => existing[f] !== fields[f]);
+          const { details, retainedKinds } = mergeScheduleDetails(existing.scheduleDetails, scheduleDetails);
+          const retainedDates = calendarDateFields.filter((f) => !fields[f] && existing[f]);
+          for (const field of retainedDates) fields[field] = existing[field];
+          applyScheduleDates(fields, details);
+          if (retainedDates.length || retainedKinds.size) {
+            fields.note ||= existing.note;
+            summary.retainedIncomplete += 1;
+          }
+          fields.link ||= existing.link;
+          const changed = calendarFields.some((f) => existing[f] !== fields[f]) ||
+            JSON.stringify(existing.scheduleDetails) !== JSON.stringify(details);
           if (!changed) {
             summary.unchanged += 1;
             continue;
           }
-          Object.assign(existing, fields, { updatedAt: now });
+          Object.assign(existing, fields, { scheduleDetails: details, updatedAt: now });
           summary.updated += 1;
           dirty = true;
           continue;
@@ -1739,6 +1849,7 @@ createServer(async (req, res) => {
         calendarEvents.push({
           id: randomUUID(),
           ...fields,
+          scheduleDetails,
           externalKey,
           manualEdited: false,
           createdAt: now,
@@ -1877,8 +1988,13 @@ createServer(async (req, res) => {
 
       if (req.method === 'DELETE') {
         const [removed] = calendarEvents.splice(idx, 1);
-        if (removed?.externalKey) {
-          calendarSuppressed.set(removed.externalKey, new Date().toISOString());
+        const slug = extractTabfSlugFromLink(removed.link);
+        const key = removed.externalKey || (slug ? `tabf:${slug}` : '');
+        const sameExamRemains = key && calendarEvents.some((event) =>
+          event.externalKey === key || (slug && extractTabfSlugFromLink(event.link) === slug),
+        );
+        if (key && !sameExamRemains) {
+          calendarSuppressed.set(key, new Date().toISOString());
           pruneSuppressedCalendar();
         }
         await persistCalendar();
@@ -1892,12 +2008,28 @@ createServer(async (req, res) => {
         sendJson(res, 400, { error: '機關/名稱不可為空' });
         return;
       }
-      calendarEvents[idx] = {
-        ...calendarEvents[idx],
+      const existing = calendarEvents.find((event) => event.id === id);
+      if (!existing) {
+        sendJson(res, 404, { error: 'event not found' });
+        return;
+      }
+      const explicitDetails = Array.isArray(body.scheduleDetails);
+      const scheduleDetails = explicitDetails
+        ? cleanScheduleDetails(body.scheduleDetails)
+        : existing.scheduleDetails.filter(({ kind }) =>
+            calendarScheduleFields[kind].every((field) => fields[field] === existing[field]),
+          );
+      if (explicitDetails && scheduleDetails.length !== body.scheduleDetails.length) {
+        sendJson(res, 400, { error: '詳細時程的日期或分類不正確' });
+        return;
+      }
+      applyScheduleDates(fields, scheduleDetails);
+      Object.assign(existing, {
         ...fields,
+        scheduleDetails,
         manualEdited: true,
         updatedAt: new Date().toISOString(),
-      };
+      });
       sortCalendar(calendarEvents);
       pruneCalendar(); // drop any events that have since aged out of the window
       await persistCalendar();

@@ -89,6 +89,7 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   final_result   TEXT NOT NULL DEFAULT '',
   link           TEXT NOT NULL DEFAULT '',
   note           TEXT NOT NULL DEFAULT '',
+  schedule_details TEXT NOT NULL DEFAULT '[]',
   external_key   TEXT NOT NULL DEFAULT '',
   manual_edited  INTEGER NOT NULL DEFAULT 0,
   created_at     TEXT NOT NULL DEFAULT '',
@@ -158,6 +159,11 @@ export const calendarColumns = [
   ['note', 'note'],
 ];
 
+export const calendarEventColumns = [
+  'id', ...calendarColumns.map(([column]) => column), 'schedule_details',
+  'external_key', 'manual_edited', 'created_at', 'updated_at',
+];
+
 // Backfill newer columns when opening an existing production DB created before
 // automated calendar sync was added.
 const ensureCalendarMetaColumns = (db) => {
@@ -167,6 +173,9 @@ const ensureCalendarMetaColumns = (db) => {
   }
   if (!existing.has('manual_edited')) {
     db.exec('ALTER TABLE calendar_events ADD COLUMN manual_edited INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!existing.has('schedule_details')) {
+    db.exec("ALTER TABLE calendar_events ADD COLUMN schedule_details TEXT NOT NULL DEFAULT '[]'");
   }
 };
 
