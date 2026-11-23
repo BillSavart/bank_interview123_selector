@@ -326,15 +326,68 @@ const main = async () => {
   await postJson(srv.base, `/api/admin/posts/${POST2}/moderate`, { action: 'delete' }, srv.cookie);
   // 7) vote on POST1
   await postJson(srv.base, `/api/posts/${POST1}/vote`, { value: 1 }, voter);
-  // 8) calendar: create two events, edit one, delete the other
-  const calA = await postJson(srv.base, '/api/admin/calendar', { org: '甲銀行', signupStart: today }, srv.cookie);
+  // 8) calendar: create two events, edit one, delete the other, then test automated sync
+  const calA = await postJson(srv.base, '/api/admin/calendar', {
+    org: '甲銀行',
+    signupStart: today,
+    link: 'https://svc.tabf.org.tw/115manual01/Home/Read',
+  }, srv.cookie);
   const calAId = calA.body.event?.id;
   const calB = await postJson(srv.base, '/api/admin/calendar', { org: '乙銀行', signupStart: '2026-08-15' }, srv.cookie);
   const calBId = calB.body.event?.id;
   await request(srv.base, `/api/admin/calendar/${calAId}`, {
-    method: 'PUT', cookie: srv.cookie, body: { org: '甲銀行（已改名）', signupStart: today },
+    method: 'PUT', cookie: srv.cookie, body: {
+      org: '甲銀行（已改名）',
+      signupStart: today,
+      link: 'https://svc.tabf.org.tw/115manual01/Home/Read',
+    },
   });
   await request(srv.base, `/api/admin/calendar/${calBId}`, { method: 'DELETE', cookie: srv.cookie });
+
+  // 8b) calendar sync: create, deduplicate pre-existing manual slug, skip out-of-window & dateless
+  const syncPayload1 = {
+    source: 'tabf',
+    events: [
+      { externalKey: 'tabf:115manual01', org: '甲銀行（爬蟲不應覆蓋）', signupStart: today, link: 'https://svc.tabf.org.tw/115manual01/' },
+      { externalKey: 'tabf:115sync01', org: '自動同步銀行A', signupStart: today, writtenExam: today, link: 'https://svc.tabf.org.tw/115sync01/' },
+      { externalKey: 'tabf:115sync02', org: '自動同步銀行B', signupStart: today, link: 'https://svc.tabf.org.tw/115sync02/' },
+      { externalKey: 'tabf:115sync03', org: '自動同步銀行C（會被管理員刪）', signupStart: today, link: 'https://svc.tabf.org.tw/115sync03/' },
+      { externalKey: 'tabf:110old01', org: '過期招考', signupStart: '2021-01-01', link: 'https://svc.tabf.org.tw/110old01/' },
+      { externalKey: 'tabf:115nodate', org: '無日期招考', link: 'https://svc.tabf.org.tw/115nodate/' },
+    ],
+  };
+  const syncRes1 = await postJson(srv.base, '/api/admin/calendar/sync', syncPayload1, srv.cookie);
+  eq('calendar sync initial run counts', {
+    status: syncRes1.status,
+    created: syncRes1.body.summary?.created,
+    skippedManual: syncRes1.body.summary?.skippedManual,
+    skippedOutOfWindow: syncRes1.body.summary?.skippedOutOfWindow,
+    skippedInvalid: syncRes1.body.summary?.skippedInvalid,
+  }, { status: 200, created: 3, skippedManual: 1, skippedOutOfWindow: 1, skippedInvalid: 1 });
+
+  // Idempotent re-sync + update one event
+  const syncRes2 = await postJson(srv.base, '/api/admin/calendar/sync', {
+    source: 'tabf',
+    events: [
+      { externalKey: 'tabf:115sync01', org: '自動同步銀行A', signupStart: today, writtenExam: today, note: '已更新備註', link: 'https://svc.tabf.org.tw/115sync01/' },
+      { externalKey: 'tabf:115sync02', org: '自動同步銀行B', signupStart: today, link: 'https://svc.tabf.org.tw/115sync02/' },
+    ],
+  }, srv.cookie);
+  eq('calendar sync updates changed event and leaves unchanged untouched', {
+    updated: syncRes2.body.summary?.updated,
+    unchanged: syncRes2.body.summary?.unchanged,
+  }, { updated: 1, unchanged: 1 });
+
+  // Admin edits 115sync02 (locks it) and deletes 115sync03 (suppresses it)
+  const adminCalMid = (await getJson(srv.base, '/api/admin/calendar', srv.cookie)).body.events;
+  const sync2Ev = adminCalMid.find((e) => e.link === 'https://svc.tabf.org.tw/115sync02/');
+  const sync3Ev = adminCalMid.find((e) => e.link === 'https://svc.tabf.org.tw/115sync03/');
+  eq('public calendar omits internal sync metadata',
+    ['externalKey', 'manualEdited'].some((k) => k in (sync2Ev || {})), false);
+  await request(srv.base, `/api/admin/calendar/${sync2Ev.id}`, {
+    method: 'PUT', cookie: srv.cookie, body: { org: '自動同步銀行B（人工微調）', signupStart: today, link: sync2Ev.link },
+  });
+  await request(srv.base, `/api/admin/calendar/${sync3Ev.id}`, { method: 'DELETE', cookie: srv.cookie });
 
   eq('forged leaderboard score rejected',
     (await postJson(srv.base, '/api/checkgame/score', { name: 'RoundTrip', score: 100000 }, voter)).status, 409);
@@ -394,6 +447,25 @@ const main = async () => {
   const cal = (await getJson(srv.base, '/api/admin/calendar', srv.cookie)).body.events;
   eq('calendar edit persisted (org renamed)', cal.find((e) => e.id === calAId)?.org, '甲銀行（已改名）');
   eq('calendar delete persisted (event gone)', cal.some((e) => e.id === calBId), false);
+  eq('synced calendar update persisted', cal.find((e) => e.link === 'https://svc.tabf.org.tw/115sync01/')?.note, '已更新備註');
+
+  // Re-sync AFTER restart: locked manual edit and deleted suppression must both hold across reboot
+  const syncAfterReboot = await postJson(srv.base, '/api/admin/calendar/sync', {
+    source: 'tabf',
+    events: [
+      { externalKey: 'tabf:115sync01', org: '自動同步銀行A', signupStart: today, writtenExam: today, note: '已更新備註', link: 'https://svc.tabf.org.tw/115sync01/' },
+      { externalKey: 'tabf:115sync02', org: '自動同步銀行B（不該蓋掉人工）', signupStart: today, link: 'https://svc.tabf.org.tw/115sync02/' },
+      { externalKey: 'tabf:115sync03', org: '自動同步銀行C（不該復活）', signupStart: today, link: 'https://svc.tabf.org.tw/115sync03/' },
+    ],
+  }, srv.cookie);
+  eq('calendar sync lock & suppression survive SQLite restart', {
+    unchanged: syncAfterReboot.body.summary?.unchanged,
+    skippedManual: syncAfterReboot.body.summary?.skippedManual,
+    skippedSuppressed: syncAfterReboot.body.summary?.skippedSuppressed,
+  }, { unchanged: 1, skippedManual: 1, skippedSuppressed: 1 });
+  const calAfterSync = (await getJson(srv.base, '/api/calendar')).body.events;
+  eq('admin-edited synced event preserved', calAfterSync.find((e) => e.link === 'https://svc.tabf.org.tw/115sync02/')?.org, '自動同步銀行B（人工微調）');
+  eq('admin-deleted synced event stays absent', calAfterSync.some((e) => e.link === 'https://svc.tabf.org.tw/115sync03/'), false);
 
   const lb = (await getJson(srv.base, '/api/checkgame/leaderboard')).body.leaderboard;
   eq('leaderboard score persisted', lb.find((e) => e.name === 'RoundTrip')?.score, completed.body.score);

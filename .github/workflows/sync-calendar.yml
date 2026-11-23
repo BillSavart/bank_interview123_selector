@@ -1,0 +1,71 @@
+name: Sync TABF Calendar
+
+on:
+  schedule:
+    # 01:30 & 10:30 UTC = 09:30 & 18:30 Asia/Taipei (avoids 03:30 SQLite backup and 04:00 daily deploy).
+    - cron: "30 1,10 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Scrape and print parsed events without pushing to VM"
+        type: boolean
+        default: false
+
+concurrency:
+  group: sync-calendar
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.22.3
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Scrape TABF recruitment schedules
+        run: node scripts/scrape-tabf-calendar.mjs --out /tmp/tabf-calendar.json
+
+      - name: Preview scraped events (dry run)
+        if: ${{ inputs.dry_run == true }}
+        run: cat /tmp/tabf-calendar.json
+
+      - name: Push calendar sync to VM over verified SSH
+        if: ${{ inputs.dry_run != true }}
+        env:
+          SSH_FINGERPRINT: ${{ vars.SSH_FINGERPRINT || secrets.SSH_FINGERPRINT }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_KEY: ${{ secrets.SSH_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$SSH_FINGERPRINT" =~ ^SHA256:[A-Za-z0-9+/]{43}$ ]]; then
+            echo 'Configure SSH_FINGERPRINT from the VM console or an independently verified host key.'
+            exit 1
+          fi
+          ssh_dir=$(mktemp -d)
+          trap 'rm -rf "$ssh_dir"' EXIT
+          umask 077
+          ssh-keyscan -T 10 -t ed25519 -- "$SSH_HOST" > "$ssh_dir/known_hosts" 2>/dev/null
+          actual=$(ssh-keygen -lf "$ssh_dir/known_hosts" | awk '{print $2}')
+          if [[ "$actual" != "$SSH_FINGERPRINT" ]]; then
+            echo 'SSH host fingerprint mismatch.'
+            exit 1
+          fi
+          printf '%s\n' "$SSH_KEY" > "$ssh_dir/deploy_key"
+          ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$ssh_dir/known_hosts" -o HostKeyAlgorithms=ssh-ed25519 \
+            -i "$ssh_dir/deploy_key" -l "$SSH_USER" -- "$SSH_HOST" \
+            'cd /home/billwang_tech/bank_interview123_selector && bash deploy/sync-calendar.sh' \
+            < /tmp/tabf-calendar.json

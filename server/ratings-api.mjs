@@ -700,6 +700,11 @@ const leaderboards = {
 // writtenExam（筆試）, writtenResult（筆試結果公佈）, interview（面試/一面）,
 // interview2（二面）, finalResult（放榜）, link（簡章連結）, note（備註）.
 let calendarEvents = [];
+// Deleted synced externalKeys -> ISO timestamp; prevents daily sync from
+// resurrecting an event the admin intentionally removed. Pruned after 180 days.
+const calendarSuppressed = new Map();
+const suppressedTtlMs = 180 * 24 * 60 * 60 * 1000;
+const maxSyncEvents = 100;
 let calendarWriteQueue = Promise.resolve();
 
 const calendarFields = [
@@ -728,6 +733,7 @@ const calendarDateFields = [
   'finalResult',
 ];
 const maxCalendarFieldLength = 300;
+const validDateValue = (s) => !s || /^\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2})?$/.test(s);
 
 // Date-only prefix (drops any " HH:MM"), for comparisons.
 const dateOnly = (s) => (s || '').slice(0, 10);
@@ -746,6 +752,40 @@ const cleanCalendarInput = (raw) => {
   }
   return event;
 };
+
+const extractTabfSlugFromLink = (rawUrl) => {
+  if (!rawUrl || typeof rawUrl !== 'string') return null;
+  const trimmed = rawUrl.trim();
+  const normalized = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const parsed = new URL(normalized);
+    if (parsed.hostname.toLowerCase() !== 'svc.tabf.org.tw') return null;
+    const seg = parsed.pathname.split('/').filter(Boolean)[0];
+    if (!seg || seg.startsWith('_') || !/^[a-z0-9][a-z0-9_-]{1,48}$/i.test(seg)) return null;
+    return seg.toLowerCase();
+  } catch {
+    return null;
+  }
+};
+
+// Public / admin API shape: omit internal sync metadata (externalKey, manualEdited)
+// so existing public & admin contracts remain clean and byte-compatible.
+const shapeCalendarEvent = (e) => ({
+  id: e.id,
+  org: e.org,
+  signupStart: e.signupStart,
+  signupEnd: e.signupEnd,
+  writtenExam: e.writtenExam,
+  answerKey: e.answerKey,
+  writtenResult: e.writtenResult,
+  interview: e.interview,
+  interview2: e.interview2,
+  finalResult: e.finalResult,
+  link: e.link,
+  note: e.note,
+  createdAt: e.createdAt,
+  updatedAt: e.updatedAt,
+});
 
 // Visible window: 上個月 ~ 下下下個月 (current month −1 ~ +3). Events whose dates
 // fall entirely outside this window are discarded to keep the data file small.
@@ -775,8 +815,22 @@ const pruneCalendar = () => {
   return before - calendarEvents.length;
 };
 
+const pruneSuppressedCalendar = () => {
+  const cutoff = Date.now() - suppressedTtlMs;
+  let removed = 0;
+  for (const [key, deletedAt] of calendarSuppressed) {
+    const ts = Date.parse(deletedAt);
+    if (!Number.isFinite(ts) || ts < cutoff) {
+      calendarSuppressed.delete(key);
+      removed += 1;
+    }
+  }
+  return removed;
+};
+
 const loadCalendar = async () => {
   calendarEvents = [];
+  calendarSuppressed.clear();
   if (useSqlite) {
     const rows = db.prepare('SELECT * FROM calendar_events').all();
     calendarEvents = sortCalendar(
@@ -785,11 +839,17 @@ const loadCalendar = async () => {
         // DB columns are snake_case; cleanCalendarInput keys on the camelCase
         // form names, so map them back via the shared calendarColumns table.
         ...cleanCalendarInput(Object.fromEntries(calendarColumns.map(([col, jsonKey]) => [jsonKey, r[col]]))),
+        externalKey: String(r.external_key || ''),
+        manualEdited: !!r.manual_edited,
         createdAt: String(r.created_at || ''),
         updatedAt: String(r.updated_at || ''),
       })),
     );
-    if (pruneCalendar() > 0) await persistCalendar();
+    for (const s of db.prepare('SELECT external_key, deleted_at FROM calendar_suppressed').all()) {
+      const k = String(s.external_key || '').trim();
+      if (k) calendarSuppressed.set(k, String(s.deleted_at || ''));
+    }
+    if (pruneCalendar() + pruneSuppressedCalendar() > 0) await persistCalendar();
     return;
   }
   let raw = '';
@@ -804,14 +864,27 @@ const loadCalendar = async () => {
   try {
     const parsed = JSON.parse(raw);
     const rows = Array.isArray(parsed) ? parsed : parsed?.events;
-    if (!Array.isArray(rows)) return;
-    calendarEvents = sortCalendar(
-      rows
-        .filter((e) => e && typeof e === 'object' && e.id)
-        .map((e) => ({ id: String(e.id), ...cleanCalendarInput(e), createdAt: String(e.createdAt || ''), updatedAt: String(e.updatedAt || '') })),
-    );
+    if (Array.isArray(rows)) {
+      calendarEvents = sortCalendar(
+        rows
+          .filter((e) => e && typeof e === 'object' && e.id)
+          .map((e) => ({
+            id: String(e.id),
+            ...cleanCalendarInput(e),
+            externalKey: typeof e.externalKey === 'string' ? e.externalKey : '',
+            manualEdited: !!e.manualEdited,
+            createdAt: String(e.createdAt || ''),
+            updatedAt: String(e.updatedAt || ''),
+          })),
+      );
+    }
+    if (parsed && !Array.isArray(parsed) && parsed.suppressed && typeof parsed.suppressed === 'object') {
+      for (const [k, v] of Object.entries(parsed.suppressed)) {
+        if (k && typeof v === 'string') calendarSuppressed.set(k, v);
+      }
+    }
     // Rewrite the file if startup pruning dropped anything (reclaims disk).
-    if (pruneCalendar() > 0) await persistCalendar();
+    if (pruneCalendar() + pruneSuppressedCalendar() > 0) await persistCalendar();
   } catch (error) {
     console.warn(`Could not parse ${calendarFile}; starting with an empty calendar.`, error);
   }
@@ -819,12 +892,24 @@ const loadCalendar = async () => {
 
 const persistCalendar = () => {
   if (useSqlite) {
-    const cols = ['id', ...calendarColumns.map(([col]) => col), 'created_at', 'updated_at'];
+    const cols = ['id', ...calendarColumns.map(([col]) => col), 'external_key', 'manual_edited', 'created_at', 'updated_at'];
     const ins = db.prepare(`INSERT OR REPLACE INTO calendar_events (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`);
+    const insSup = db.prepare('INSERT OR REPLACE INTO calendar_suppressed (external_key, deleted_at) VALUES (?, ?)');
     db.transaction(() => {
       db.prepare('DELETE FROM calendar_events').run();
       for (const e of calendarEvents) {
-        ins.run(String(e.id), ...calendarColumns.map(([, jsonKey]) => String(e[jsonKey] ?? '')), String(e.createdAt || ''), String(e.updatedAt || ''));
+        ins.run(
+          String(e.id),
+          ...calendarColumns.map(([, jsonKey]) => String(e[jsonKey] ?? '')),
+          String(e.externalKey || ''),
+          e.manualEdited ? 1 : 0,
+          String(e.createdAt || ''),
+          String(e.updatedAt || ''),
+        );
+      }
+      db.prepare('DELETE FROM calendar_suppressed').run();
+      for (const [k, deletedAt] of calendarSuppressed) {
+        insSup.run(String(k), String(deletedAt));
       }
     })();
     return Promise.resolve();
@@ -832,7 +917,10 @@ const persistCalendar = () => {
   calendarWriteQueue = calendarWriteQueue.then(async () => {
     await mkdir(dirname(calendarFile), { recursive: true });
     const tmpFile = `${calendarFile}.${process.pid}.${randomUUID()}.tmp`;
-    await writeFile(tmpFile, `${JSON.stringify(calendarEvents, null, 2)}\n`);
+    const payload = calendarSuppressed.size
+      ? { events: calendarEvents, suppressed: Object.fromEntries(calendarSuppressed) }
+      : calendarEvents;
+    await writeFile(tmpFile, `${JSON.stringify(payload, null, 2)}\n`);
     await rename(tmpFile, calendarFile);
   });
   return calendarWriteQueue;
@@ -1269,7 +1357,7 @@ const sendJson = (res, status, payload, cacheControl = 'no-store') => {
   res.end(JSON.stringify(payload));
 };
 
-const readBody = (req) =>
+const readBody = (req, maxLength = 16384) =>
   new Promise((resolve, reject) => {
     let body = '';
     let oversized = false;
@@ -1277,7 +1365,7 @@ const readBody = (req) =>
     req.on('data', (chunk) => {
       if (oversized) return;
       body += chunk;
-      if (body.length > 16384) {
+      if (body.length > maxLength) {
         oversized = true;
         body = '';
         reject(Object.assign(new Error('Request body too large'), { status: 413 }));
@@ -1287,11 +1375,11 @@ const readBody = (req) =>
     req.on('error', reject);
   });
 
-const readJsonBody = async (req) => {
+const readJsonBody = async (req, { maxLength = 16384 } = {}) => {
   if (!/^application\/json(?:\s*;|$)/i.test(req.headers['content-type'] || '')) {
     throw Object.assign(new Error('Content-Type must be application/json'), { status: 415 });
   }
-  const bodyText = await readBody(req);
+  const bodyText = await readBody(req, maxLength);
   try {
     const body = JSON.parse(bodyText);
     if (body && typeof body === 'object' && !Array.isArray(body)) return body;
@@ -1486,13 +1574,13 @@ createServer(async (req, res) => {
     // Public read.
     if (req.method === 'GET' && url.pathname === '/api/calendar') {
       // Filter by the current window in case it shifted since the last write.
-      sendJson(res, 200, { events: calendarEvents.filter(eventInWindow) }, cacheRead);
+      sendJson(res, 200, { events: calendarEvents.filter(eventInWindow).map(shapeCalendarEvent) }, cacheRead);
       return;
     }
 
     // Admin: fetch the calendar for a verified session.
     if (req.method === 'GET' && url.pathname === '/api/admin/calendar') {
-      sendJson(res, 200, { events: calendarEvents });
+      sendJson(res, 200, { events: calendarEvents.map(shapeCalendarEvent) });
       return;
     }
 
@@ -1509,12 +1597,133 @@ createServer(async (req, res) => {
         return;
       }
       const now = new Date().toISOString();
-      const event = { id: randomUUID(), ...fields, createdAt: now, updatedAt: now };
+      const event = {
+        id: randomUUID(),
+        ...fields,
+        externalKey: '',
+        manualEdited: true,
+        createdAt: now,
+        updatedAt: now,
+      };
       calendarEvents.push(event);
       sortCalendar(calendarEvents);
       pruneCalendar(); // drop any events that have since aged out of the window
       await persistCalendar();
-      sendJson(res, 200, { event, events: calendarEvents });
+      sendJson(res, 200, { event: shapeCalendarEvent(event), events: calendarEvents.map(shapeCalendarEvent) });
+      return;
+    }
+
+    // Admin: idempotent upsert sync for automated scrapers (e.g., TABF).
+    // Never deletes missing events, skips events edited or deleted by an admin,
+    // and deduplicates against pre-existing manual entries via TABF link slug.
+    if (req.method === 'POST' && url.pathname === '/api/admin/calendar/sync') {
+      const body = await readJsonBody(req, { maxLength: 131072 });
+      const source = typeof body.source === 'string' ? body.source.trim().toLowerCase() : '';
+      if (!/^[a-z0-9_-]{1,32}$/.test(source)) {
+        sendJson(res, 400, { error: 'source 格式不正確' });
+        return;
+      }
+      if (!Array.isArray(body.events) || body.events.length === 0 || body.events.length > maxSyncEvents) {
+        sendJson(res, 400, { error: `events 必須為 1～${maxSyncEvents} 筆陣列` });
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const summary = {
+        source,
+        received: body.events.length,
+        created: 0,
+        updated: 0,
+        unchanged: 0,
+        skippedOutOfWindow: 0,
+        skippedManual: 0,
+        skippedSuppressed: 0,
+        skippedInvalid: 0,
+        total: 0,
+      };
+
+      const seenKeys = new Set();
+      let dirty = pruneSuppressedCalendar() > 0;
+
+      for (const rawItem of body.events) {
+        if (!rawItem || typeof rawItem !== 'object') {
+          summary.skippedInvalid += 1;
+          continue;
+        }
+        const externalKey = typeof rawItem.externalKey === 'string' ? rawItem.externalKey.trim().toLowerCase() : '';
+        if (
+          !externalKey.startsWith(`${source}:`) ||
+          !/^[a-z0-9_:-]{3,80}$/.test(externalKey) ||
+          seenKeys.has(externalKey)
+        ) {
+          summary.skippedInvalid += 1;
+          continue;
+        }
+        seenKeys.add(externalKey);
+
+        const fields = cleanCalendarInput(rawItem);
+        const hasValidDates = calendarDateFields.every((f) => validDateValue(fields[f]));
+        const hasAtLeastOneDate = calendarDateFields.some((f) => Boolean(dateOnly(fields[f])));
+        if (!fields.org || !hasValidDates || !hasAtLeastOneDate) {
+          summary.skippedInvalid += 1;
+          continue;
+        }
+        if (!eventInWindow(fields)) {
+          summary.skippedOutOfWindow += 1;
+          continue;
+        }
+        if (calendarSuppressed.has(externalKey)) {
+          summary.skippedSuppressed += 1;
+          continue;
+        }
+
+        const incomingTabfSlug = source === 'tabf' ? extractTabfSlugFromLink(fields.link) || externalKey.slice('tabf:'.length) : null;
+        const existing = calendarEvents.find(
+          (e) =>
+            (e.externalKey && e.externalKey === externalKey) ||
+            (incomingTabfSlug && extractTabfSlugFromLink(e.link) === incomingTabfSlug),
+        );
+
+        if (existing) {
+          // Never overwrite admin-authored or admin-edited events.
+          if (existing.manualEdited || !existing.externalKey) {
+            summary.skippedManual += 1;
+            continue;
+          }
+          const changed = calendarFields.some((f) => existing[f] !== fields[f]);
+          if (!changed) {
+            summary.unchanged += 1;
+            continue;
+          }
+          Object.assign(existing, fields, { updatedAt: now });
+          summary.updated += 1;
+          dirty = true;
+          continue;
+        }
+
+        if (calendarEvents.length >= maxCalendarEvents) {
+          summary.skippedInvalid += 1;
+          continue;
+        }
+        calendarEvents.push({
+          id: randomUUID(),
+          ...fields,
+          externalKey,
+          manualEdited: false,
+          createdAt: now,
+          updatedAt: now,
+        });
+        summary.created += 1;
+        dirty = true;
+      }
+
+      if (pruneCalendar() > 0) dirty = true;
+      if (dirty) {
+        sortCalendar(calendarEvents);
+        await persistCalendar();
+      }
+      summary.total = calendarEvents.length;
+      sendJson(res, 200, { ok: true, summary });
       return;
     }
 
@@ -1529,9 +1738,13 @@ createServer(async (req, res) => {
       }
 
       if (req.method === 'DELETE') {
-        calendarEvents.splice(idx, 1);
+        const [removed] = calendarEvents.splice(idx, 1);
+        if (removed?.externalKey) {
+          calendarSuppressed.set(removed.externalKey, new Date().toISOString());
+          pruneSuppressedCalendar();
+        }
         await persistCalendar();
-        sendJson(res, 200, { events: calendarEvents });
+        sendJson(res, 200, { events: calendarEvents.map(shapeCalendarEvent) });
         return;
       }
 
@@ -1541,11 +1754,20 @@ createServer(async (req, res) => {
         sendJson(res, 400, { error: '機關/名稱不可為空' });
         return;
       }
-      calendarEvents[idx] = { ...calendarEvents[idx], ...fields, updatedAt: new Date().toISOString() };
+      calendarEvents[idx] = {
+        ...calendarEvents[idx],
+        ...fields,
+        manualEdited: true,
+        updatedAt: new Date().toISOString(),
+      };
       sortCalendar(calendarEvents);
       pruneCalendar(); // drop any events that have since aged out of the window
       await persistCalendar();
-      sendJson(res, 200, { event: calendarEvents.find((e) => e.id === id), events: calendarEvents });
+      const updatedEvent = calendarEvents.find((e) => e.id === id);
+      sendJson(res, 200, {
+        event: updatedEvent ? shapeCalendarEvent(updatedEvent) : undefined,
+        events: calendarEvents.map(shapeCalendarEvent),
+      });
       return;
     }
 

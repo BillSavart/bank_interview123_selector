@@ -17,6 +17,7 @@
     "build": "tsc -b && vite build && node scripts/prerender.mjs && node scripts/check-prerender.mjs",
     "build:banks-data": "node scripts/build-banks-data.mjs",
     "check:banks-data": "node scripts/check-banks-data.mjs",
+    "scrape:calendar": "node scripts/scrape-tabf-calendar.mjs",
     "typecheck": "tsc -b",
     "test": "vitest run",
     "preview": "vite preview"

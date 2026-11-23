@@ -89,8 +89,16 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   final_result   TEXT NOT NULL DEFAULT '',
   link           TEXT NOT NULL DEFAULT '',
   note           TEXT NOT NULL DEFAULT '',
+  external_key   TEXT NOT NULL DEFAULT '',
+  manual_edited  INTEGER NOT NULL DEFAULT 0,
   created_at     TEXT NOT NULL DEFAULT '',
   updated_at     TEXT NOT NULL DEFAULT ''
+);
+
+-- 管理員手動刪除過的自動同步事件鍵值，避免排程爬蟲隔天重複建回。
+CREATE TABLE IF NOT EXISTS calendar_suppressed (
+  external_key TEXT PRIMARY KEY,
+  deleted_at   TEXT NOT NULL DEFAULT ''
 );
 
 -- 小遊戲排行榜。game 區分各遊戲，每個遊戲每個名字最多一列。
@@ -144,6 +152,18 @@ export const calendarColumns = [
   ['note', 'note'],
 ];
 
+// Backfill newer columns when opening an existing production DB created before
+// automated calendar sync was added.
+const ensureCalendarMetaColumns = (db) => {
+  const existing = new Set(db.prepare('PRAGMA table_info(calendar_events)').all().map((col) => col.name));
+  if (!existing.has('external_key')) {
+    db.exec("ALTER TABLE calendar_events ADD COLUMN external_key TEXT NOT NULL DEFAULT ''");
+  }
+  if (!existing.has('manual_edited')) {
+    db.exec('ALTER TABLE calendar_events ADD COLUMN manual_edited INTEGER NOT NULL DEFAULT 0');
+  }
+};
+
 // Open (creating if needed) the SQLite database at `file`, apply pragmas, and
 // ensure the schema exists. Returns the better-sqlite3 handle.
 export const openDb = (file = defaultDbFile) => {
@@ -153,5 +173,6 @@ export const openDb = (file = defaultDbFile) => {
   db.pragma('foreign_keys = ON');
   db.pragma('busy_timeout = 5000');
   db.exec(SCHEMA);
+  ensureCalendarMetaColumns(db);
   return db;
 };
