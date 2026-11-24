@@ -1,4 +1,4 @@
-import { RefreshCcw, UserRound, X } from 'lucide-react';
+import { Check, Link2, RefreshCcw, UserRound, X } from 'lucide-react';
 import { interviewQuestions } from '../data/questions.generated';
 import { focusLabel } from '../lib/scoring';
 import type { CandidateProfile } from '../data/types';
@@ -12,6 +12,9 @@ interface CandidateControlsProps {
   onClose?: () => void;
   // hide the "顯示題數" slider where it isn't meaningful (e.g. the interview session)
   showPracticeSize?: boolean;
+  /** 提供時顯示「複製分享連結」按鈕。 */
+  onShare?: () => void;
+  shareCopied?: boolean;
 }
 
 export function CandidateControls({
@@ -22,6 +25,8 @@ export function CandidateControls({
   showClose = false,
   onClose,
   showPracticeSize = true,
+  onShare,
+  shareCopied = false,
 }: CandidateControlsProps) {
   const renderAnswerCheckbox = (
     key: 'isFreshGraduate' | 'hasBankExperience' | 'hasSalesExperience',
@@ -142,7 +147,14 @@ export function CandidateControls({
         </>
       )}
 
-      <button className="btn btn-outline-dark w-100 mt-3" type="button" onClick={onReset}>
+      {onShare && (
+        <button className="btn btn-outline-secondary w-100 mt-3 share-profile-button" type="button" onClick={onShare}>
+          {shareCopied ? <Check size={17} /> : <Link2 size={17} />}
+          <span aria-live="polite">{shareCopied ? '已複製分享連結' : '複製分享連結'}</span>
+        </button>
+      )}
+
+      <button className={`btn btn-outline-dark w-100 ${onShare ? 'mt-2' : 'mt-3'}`} type="button" onClick={onReset}>
         <RefreshCcw size={17} />
         重設條件
       </button>

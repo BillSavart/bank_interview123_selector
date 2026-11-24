@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, ExternalLink, X } from 'lucide-react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { AlarmClock, CalendarDays, ChevronLeft, ChevronRight, ExternalLink, List, PenLine, X } from 'lucide-react';
 import {
   fetchCalendar,
   CALENDAR_KIND_LABEL,
@@ -7,9 +7,22 @@ import {
   type CalendarScheduleItem,
   type CalendarScheduleKind,
 } from '../lib/calendar';
-
-const WEEKDAYS = ['日', '一', '二', '三', '四', '五', '六'];
-const DAY_MS = 86_400_000;
+import {
+  WEEKDAYS,
+  dayDiff,
+  filterByBanks,
+  formatMonthDay,
+  getSchedule,
+  listBanks,
+  monthAgenda,
+  orgBank,
+  parseYMD,
+  sameDay,
+  upcomingDeadlines,
+  upcomingExams,
+  type AgendaDay,
+  type CountdownItem,
+} from '../lib/calendarView';
 
 const DETAIL_LABEL: Partial<Record<CalendarScheduleKind, string>> = {
   signup: '報名期間',
@@ -18,43 +31,44 @@ const DETAIL_LABEL: Partial<Record<CalendarScheduleKind, string>> = {
   writtenResult: '筆試結果公佈',
 };
 
-// Date fields used for records saved without a detailed timeline.
-const SINGLE_DAY = [
-  { field: 'writtenExam', kind: 'written' },
-  { field: 'answerKey', kind: 'answerKey' },
-  { field: 'writtenResult', kind: 'writtenResult' },
-  { field: 'interview', kind: 'interview' },
-  { field: 'interview2', kind: 'interview2' },
-  { field: 'finalResult', kind: 'final' },
-] as const;
+const DEADLINE_DAYS = 7;
+const EXAM_DAYS = 30;
+const BOARD_LIMIT = 6;
 
-function getSchedule(event: CalendarEvent): CalendarScheduleItem[] {
-  const items = [...(event.scheduleDetails || [])];
-  const kinds = new Set(items.map(({ kind }) => kind));
-  if (!kinds.has('signup') && (event.signupStart || event.signupEnd)) {
-    items.push({ kind: 'signup', label: '', start: event.signupStart, end: event.signupEnd, period: '' });
-  }
-  for (const { field, kind } of SINGLE_DAY) {
-    if (!kinds.has(kind) && event[field]) {
-      items.push({ kind, label: '', start: event[field], end: '', period: '' });
-    }
-  }
-  return items.sort((a, b) => (a.start || a.end).localeCompare(b.start || b.end));
+// --- 檢視偏好（月曆／清單、銀行篩選）只存在這台裝置 --------------------------------
+
+type CalendarViewMode = 'month' | 'list';
+
+interface CalendarPrefs {
+  view: CalendarViewMode;
+  banks: string[];
 }
 
-// Parse a date that may carry a trailing time ('YYYY-MM-DD' or 'YYYY-MM-DD HH:MM')
-// to a local-midnight Date, or null when empty/invalid.
-function parseYMD(s: string): Date | null {
-  if (!s) return null;
-  const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
-  if (!m) return null;
-  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+const PREFS_KEY = 'bank-interview-calendar-prefs';
+
+function loadPrefs(): CalendarPrefs {
+  // Phones get the list by default: stacked bars in a 7-column grid are hard to read there.
+  const fallbackView: CalendarViewMode = window.matchMedia?.('(max-width: 640px)').matches ? 'list' : 'month';
+  try {
+    const raw = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null') as Partial<CalendarPrefs> | null;
+    return {
+      view: raw?.view === 'month' || raw?.view === 'list' ? raw.view : fallbackView,
+      banks: Array.isArray(raw?.banks) ? raw.banks.filter((bank): bank is string => typeof bank === 'string') : [],
+    };
+  } catch {
+    return { view: fallbackView, banks: [] };
+  }
 }
 
-const sameDay = (a: Date, b: Date) =>
-  a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+function savePrefs(prefs: CalendarPrefs) {
+  try {
+    localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+  } catch {
+    /* storage may be unavailable (private mode, quota) */
+  }
+}
 
-const dayDiff = (a: Date, b: Date) => Math.round((a.getTime() - b.getTime()) / DAY_MS);
+// --- 月曆格線 -------------------------------------------------------------------
 
 interface Segment {
   event: CalendarEvent;
@@ -115,6 +129,7 @@ export function CalendarPage() {
     return new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [selected, setSelected] = useState<CalendarEvent | null>(null);
+  const [prefs, setPrefs] = useState<CalendarPrefs>(loadPrefs);
 
   useEffect(() => {
     fetchCalendar()
@@ -125,7 +140,26 @@ export function CalendarPage() {
       .catch(() => setState('error'));
   }, []);
 
-  const segments = useMemo(() => buildSegments(events), [events]);
+  useEffect(() => {
+    savePrefs(prefs);
+  }, [prefs]);
+
+  const banks = useMemo(() => listBanks(events), [events]);
+  // Ignore saved banks that no longer have any recruitment, so a stale filter never hides everything.
+  const selectedBanks = useMemo(() => new Set(prefs.banks.filter((bank) => banks.includes(bank))), [prefs.banks, banks]);
+  const visibleEvents = useMemo(() => filterByBanks(events, selectedBanks), [events, selectedBanks]);
+  const segments = useMemo(() => buildSegments(visibleEvents), [visibleEvents]);
+
+  const toggleBank = (bank: string) =>
+    setPrefs((current) => {
+      const active = current.banks.filter((name) => banks.includes(name));
+      return {
+        ...current,
+        banks: active.includes(bank) ? active.filter((name) => name !== bank) : [...active, bank],
+      };
+    });
+  const clearBanks = () => setPrefs((current) => ({ ...current, banks: [] }));
+  const setMode = (mode: CalendarViewMode) => setPrefs((current) => ({ ...current, view: mode }));
 
   // 42-cell grid (6 weeks) starting from the Sunday on/before the 1st.
   const weeks = useMemo(() => {
@@ -144,6 +178,10 @@ export function CalendarPage() {
   }, [view]);
 
   const today = new Date();
+  const deadlines = upcomingDeadlines(visibleEvents, today, DEADLINE_DAYS);
+  const exams = upcomingExams(visibleEvents, today, EXAM_DAYS);
+  const agenda = monthAgenda(visibleEvents, view.getFullYear(), view.getMonth());
+
   // Only the window 上個月 ~ 下下下個月 (−1 ~ +3) is browsable; data outside it is
   // discarded on the server to save disk, so navigating further would show nothing.
   const baseMonth = today.getFullYear() * 12 + today.getMonth();
@@ -164,39 +202,95 @@ export function CalendarPage() {
         招考行事曆
       </div>
 
+      {state === 'ready' && banks.length > 1 && (
+        <div className="cal-filter" role="group" aria-label="依招考機構篩選">
+          <span className="cal-filter-label">篩選機構</span>
+          <button type="button" className={selectedBanks.size === 0 ? 'is-active' : ''} aria-pressed={selectedBanks.size === 0} onClick={clearBanks}>
+            全部
+          </button>
+          {banks.map((bank) => (
+            <button
+              key={bank}
+              type="button"
+              className={selectedBanks.has(bank) ? 'is-active' : ''}
+              aria-pressed={selectedBanks.has(bank)}
+              onClick={() => toggleBank(bank)}
+            >
+              {bank}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {state === 'ready' && events.length > 0 && (
+        <section className="cal-board" aria-label="近期倒數">
+          <CountdownColumn
+            icon={<AlarmClock size={17} />}
+            title={`${DEADLINE_DAYS} 天內報名截止`}
+            empty={`${DEADLINE_DAYS} 天內沒有報名截止。`}
+            items={deadlines}
+            isDeadline
+            onSelect={setSelected}
+          />
+          <CountdownColumn
+            icon={<PenLine size={17} />}
+            title="近期筆試／面試"
+            empty={`${EXAM_DAYS} 天內沒有筆試或面試。`}
+            items={exams}
+            onSelect={setSelected}
+          />
+        </section>
+      )}
+
       <div className="cal-toolbar">
         <h1 className="cal-month-title">
           {view.getFullYear()} 年 {view.getMonth() + 1} 月
         </h1>
-        <div className="cal-nav">
-          <button
-            type="button"
-            className="cal-nav-btn"
-            onClick={() => goMonth(-1)}
-            disabled={!canPrev}
-            aria-label="上個月"
-          >
-            <ChevronLeft size={18} />
-          </button>
-          <button type="button" className="cal-today-btn" onClick={goToday}>
-            今天
-          </button>
-          <button
-            type="button"
-            className="cal-nav-btn"
-            onClick={() => goMonth(1)}
-            disabled={!canNext}
-            aria-label="下個月"
-          >
-            <ChevronRight size={18} />
-          </button>
+        <div className="cal-toolbar-actions">
+          <div className="cal-view-toggle" role="group" aria-label="檢視方式">
+            <button type="button" className={prefs.view === 'month' ? 'is-active' : ''} aria-pressed={prefs.view === 'month'} onClick={() => setMode('month')}>
+              <CalendarDays size={16} />
+              月曆
+            </button>
+            <button type="button" className={prefs.view === 'list' ? 'is-active' : ''} aria-pressed={prefs.view === 'list'} onClick={() => setMode('list')}>
+              <List size={16} />
+              清單
+            </button>
+          </div>
+          <div className="cal-nav">
+            <button
+              type="button"
+              className="cal-nav-btn"
+              onClick={() => goMonth(-1)}
+              disabled={!canPrev}
+              aria-label="上個月"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <button type="button" className="cal-today-btn" onClick={goToday}>
+              今天
+            </button>
+            <button
+              type="button"
+              className="cal-nav-btn"
+              onClick={() => goMonth(1)}
+              disabled={!canNext}
+              aria-label="下個月"
+            >
+              <ChevronRight size={18} />
+            </button>
+          </div>
         </div>
       </div>
 
       {state === 'loading' && <p className="calendar-empty">載入中…</p>}
       {state === 'error' && <p className="calendar-empty">行事曆載入失敗，請稍後再試。</p>}
 
-      {state !== 'loading' && (
+      {state !== 'loading' && prefs.view === 'list' && events.length > 0 && (
+        <AgendaList key={viewMonth} days={agenda} today={today} onSelect={setSelected} />
+      )}
+
+      {state !== 'loading' && prefs.view === 'month' && (
         <div className="cal-grid">
           <div className="cal-weekday-row">
             {WEEKDAYS.map((w) => (
@@ -258,6 +352,128 @@ export function CalendarPage() {
       )}
 
       {selected && <EventModal event={selected} onClose={() => setSelected(null)} />}
+    </div>
+  );
+}
+
+interface CountdownColumnProps {
+  icon: ReactNode;
+  title: string;
+  empty: string;
+  items: CountdownItem[];
+  isDeadline?: boolean;
+  onSelect: (event: CalendarEvent) => void;
+}
+
+function CountdownColumn({ icon, title, empty, items, isDeadline = false, onSelect }: CountdownColumnProps) {
+  const shown = items.slice(0, BOARD_LIMIT);
+  return (
+    <div className="cal-board-col">
+      <h2 className="cal-board-title">
+        {icon}
+        {title}
+        {items.length > 0 && <span className="cal-board-count">{items.length}</span>}
+      </h2>
+      {shown.length === 0 ? (
+        <p className="cal-board-empty">{empty}</p>
+      ) : (
+        <ul className="cal-board-list">
+          {shown.map((entry) => (
+            <li key={`${entry.event.id}-${entry.item.kind}-${entry.label}-${entry.date.getTime()}`}>
+              <CountdownCard entry={entry} isDeadline={isDeadline} onSelect={onSelect} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {items.length > shown.length && (
+        <p className="cal-board-more">另有 {items.length - shown.length} 項，可在下方月曆或清單查看。</p>
+      )}
+    </div>
+  );
+}
+
+function CountdownCard({
+  entry,
+  isDeadline,
+  onSelect,
+}: {
+  entry: CountdownItem;
+  isDeadline: boolean;
+  onSelect: (event: CalendarEvent) => void;
+}) {
+  const { event, item, label, date, time, daysLeft, sessions } = entry;
+  const urgent = isDeadline && daysLeft <= 1;
+  const when = [formatMonthDay(date), time || item.period].filter(Boolean).join(' ');
+  return (
+    <button type="button" className={`cal-countdown ${urgent ? 'is-urgent' : ''}`} onClick={() => onSelect(event)}>
+      <span className="cal-countdown-days">
+        {daysLeft === 0 ? <strong>今天</strong> : daysLeft === 1 ? <strong>明天</strong> : (
+          <>
+            <small>{isDeadline ? '剩' : '還有'}</small>
+            <strong>{daysLeft}</strong>
+            <small>天</small>
+          </>
+        )}
+      </span>
+      <span className="cal-countdown-info">
+        <span className="cal-countdown-head">
+          <span className={`cal-kind is-${item.kind}`}>{label}</span>
+          <span className="cal-countdown-bank">{orgBank(event.org)}</span>
+        </span>
+        <span className="cal-countdown-org">{event.org}</span>
+        <span className="cal-countdown-date">
+          {when}
+          {isDeadline ? ' 截止' : sessions > 1 ? ` 起，共 ${sessions} 天` : ''}
+        </span>
+      </span>
+    </button>
+  );
+}
+
+function AgendaList({ days, today, onSelect }: { days: AgendaDay[]; today: Date; onSelect: (event: CalendarEvent) => void }) {
+  const [showPast, setShowPast] = useState(false);
+  if (days.length === 0) return <p className="calendar-empty">這個月沒有符合篩選的招考時程。</p>;
+
+  // In the current month, fold the days already gone so the list opens on what's next.
+  // A month that is entirely past (上個月) is shown in full.
+  const pastCount = days.filter((day) => dayDiff(day.date, today) < 0).length;
+  const canFold = pastCount > 0 && pastCount < days.length;
+  const shown = canFold && !showPast ? days.slice(pastCount) : days;
+
+  return (
+    <div className="cal-agenda">
+      {canFold && (
+        <button type="button" className="cal-agenda-toggle" aria-expanded={showPast} onClick={() => setShowPast((value) => !value)}>
+          {showPast ? '收合本月已過的日期' : `顯示本月已過的 ${pastCount} 天`}
+        </button>
+      )}
+      <ol className="cal-agenda-days">
+        {shown.map((day) => {
+          const diff = dayDiff(day.date, today);
+          return (
+            <li key={day.date.getTime()} className={`cal-agenda-day ${diff < 0 ? 'is-past' : ''} ${diff === 0 ? 'is-today' : ''}`}>
+              <div className="cal-agenda-date">
+                <strong>
+                  {day.date.getMonth() + 1}/{day.date.getDate()}
+                </strong>
+                <span>週{WEEKDAYS[day.date.getDay()]}</span>
+                {diff === 0 && <em>今天</em>}
+              </div>
+              <ul className="cal-agenda-entries">
+                {day.entries.map((entry, index) => (
+                  <li key={`${entry.event.id}-${index}`}>
+                    <button type="button" className="cal-agenda-entry" onClick={() => onSelect(entry.event)}>
+                      <span className={`cal-kind is-${entry.kind}`}>{entry.label}</span>
+                      <span className="cal-agenda-org">{entry.event.org}</span>
+                      {entry.when && <span className="cal-agenda-when">{entry.when}</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }

@@ -1,21 +1,65 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Banknote,
   ChevronDown,
   ChevronUp,
   ClipboardCheck,
+  Flag,
   Search,
   ShieldCheck,
   SlidersHorizontal,
   Star,
+  X,
 } from 'lucide-react';
 import { hasAnswer, renderStoredAnswer } from '../data/answerBank';
 import { interviewQuestions } from '../data/questions.generated';
 import { CandidateControls } from '../components/CandidateControls';
 import { CommentBoard } from '../components/CommentBoard';
+import { PracticeProgress } from '../components/PracticeProgress';
 import { categorySummary, defaultProfile, isProfileEmpty, scoreQuestion, tagLabels } from '../lib/scoring';
 import { fetchRatings, loadLocalScores, submitRating, type RatingMap } from '../lib/ratings';
+import {
+  PRACTICE_STATUSES,
+  PRACTICE_STATUS_LABEL,
+  autoPracticeSize,
+  hasProfileParams,
+  loadPracticeStatus,
+  loadSelectorState,
+  profileFromParams,
+  profileToParams,
+  savePracticeStatus,
+  saveSelectorState,
+  withoutProfileParams,
+  type PracticeStatus,
+  type PracticeStatusMap,
+} from '../lib/selectorStorage';
 import type { CandidateProfile, InterviewQuestion } from '../data/types';
+
+interface PracticeStatusPickerProps {
+  questionId: number;
+  status?: PracticeStatus;
+  onChange: (questionId: number, status: PracticeStatus | null) => void;
+}
+
+function PracticeStatusPicker({ questionId, status, onChange }: PracticeStatusPickerProps) {
+  return (
+    <div className="practice-status" role="group" aria-label={`第 ${questionId} 題練習狀態`}>
+      {PRACTICE_STATUSES.map(({ value, label }) => (
+        <button
+          key={value}
+          type="button"
+          className={`is-${value} ${status === value ? 'is-active' : ''}`}
+          aria-pressed={status === value}
+          title={status === value ? `取消「${label}」標記` : `標記為「${label}」`}
+          onClick={() => onChange(questionId, status === value ? null : value)}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 interface AnswerRatingProps {
   questionId: number;
@@ -56,7 +100,13 @@ function AnswerRating({ questionId, rating, myScore, isSaving, onRate }: AnswerR
 }
 
 export function SelectorPage() {
-  const [profile, setProfile] = useState<CandidateProfile>(defaultProfile);
+  const [searchParams, setSearchParams] = useSearchParams();
+  // A shared link (?age=…&focus=…) wins over the conditions saved on this device.
+  const [initialState] = useState(() => {
+    const shared = profileFromParams(searchParams);
+    return { state: shared ?? loadSelectorState(), fromLink: shared !== null };
+  });
+  const [profile, setProfile] = useState<CandidateProfile>(initialState.state?.profile ?? defaultProfile);
   const [keyword, setKeyword] = useState('');
   const [activeCategory, setActiveCategory] = useState('全部');
   const [activeDifficulty, setActiveDifficulty] = useState<InterviewQuestion['difficulty'] | '全部'>('全部');
@@ -66,7 +116,28 @@ export function SelectorPage() {
   const [myScores, setMyScores] = useState<Record<number, number>>(() => loadLocalScores());
   const [savingRatings, setSavingRatings] = useState<Set<number>>(() => new Set());
   // Once the user drags the 顯示題數 slider, stop auto-adjusting it.
-  const [practiceSizeTouched, setPracticeSizeTouched] = useState(false);
+  const [practiceSizeTouched, setPracticeSizeTouched] = useState(initialState.state?.practiceSizeTouched ?? false);
+  const [practice, setPractice] = useState<PracticeStatusMap>(() => loadPracticeStatus());
+  const [onlyUnfamiliar, setOnlyUnfamiliar] = useState(false);
+  const [showSharedNotice, setShowSharedNotice] = useState(initialState.fromLink);
+  const [shareCopied, setShareCopied] = useState(false);
+  const shareTimer = useRef<number | undefined>(undefined);
+
+  // The shared conditions are now applied (and saved below), so drop them from the
+  // address bar; a later reload then reflects whatever the user changes next.
+  useEffect(() => {
+    if (hasProfileParams(searchParams)) setSearchParams(withoutProfileParams(searchParams), { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    saveSelectorState({ profile, practiceSizeTouched });
+  }, [profile, practiceSizeTouched]);
+
+  useEffect(() => {
+    savePracticeStatus(practice);
+  }, [practice]);
+
+  useEffect(() => () => window.clearTimeout(shareTimer.current), []);
 
   useEffect(() => {
     let isMounted = true;
@@ -104,6 +175,7 @@ export function SelectorPage() {
     const filteredQuestions = interviewQuestions
       .filter((question) => activeDifficulty === '全部' || question.difficulty === activeDifficulty)
       .filter((question) => activeCategory === '全部' || question.category === activeCategory)
+      .filter((question) => !onlyUnfamiliar || practice[question.id] === 'unfamiliar')
       .filter((question) => {
         if (!normalizedKeyword) return true;
         return `${question.question} ${question.category} ${question.tags.join(' ')}`.toLowerCase().includes(normalizedKeyword);
@@ -113,7 +185,7 @@ export function SelectorPage() {
       .map((question) => (hasProfileCriteria ? scoreQuestion(question, scoringProfile) : { question, score: 0, reasons: [] }))
       .sort((a, b) => (hasProfileCriteria ? b.score - a.score || a.question.id - b.question.id : a.question.id - b.question.id))
       .slice(0, profile.practiceSize);
-  }, [activeCategory, activeDifficulty, keyword, profile]);
+  }, [activeCategory, activeDifficulty, keyword, onlyUnfamiliar, practice, profile]);
 
   const overviewQuestions = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLowerCase();
@@ -128,9 +200,11 @@ export function SelectorPage() {
 
   const profileIsEmpty = isProfileEmpty(profile);
   const visibleQuestions = rankedQuestions.map((item) => item.question);
-  const showDefaultCategoryOverview = profileIsEmpty && !keyword.trim() && activeDifficulty === '全部' && activeCategory === '全部';
+  const showDefaultCategoryOverview =
+    profileIsEmpty && !keyword.trim() && activeDifficulty === '全部' && activeCategory === '全部' && !onlyUnfamiliar;
   const summary = categorySummary(showDefaultCategoryOverview ? interviewQuestions : visibleQuestions);
   const topScore = rankedQuestions[0]?.score ?? 0;
+  const unfamiliarCount = Object.values(practice).filter((status) => status === 'unfamiliar').length;
 
   const handleResetFilters = () => {
     setProfile(defaultProfile);
@@ -138,7 +212,36 @@ export function SelectorPage() {
     setKeyword('');
     setActiveCategory('全部');
     setActiveDifficulty('全部');
+    setOnlyUnfamiliar(false);
     setExpandedAnswers(new Set());
+  };
+
+  const updatePracticeStatus = (questionId: number, status: PracticeStatus | null) => {
+    setPractice((current) => {
+      const next = { ...current };
+      if (status) next[questionId] = status;
+      else delete next[questionId];
+      return next;
+    });
+  };
+
+  const clearPractice = () => {
+    if (!window.confirm('確定要清除全部題目的練習進度嗎？此動作無法復原。')) return;
+    setPractice({});
+    setOnlyUnfamiliar(false);
+  };
+
+  const handleShare = async () => {
+    const query = profileToParams(profile).toString();
+    const url = `${window.location.origin}/selector${query ? `?${query}` : ''}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setShareCopied(true);
+      window.clearTimeout(shareTimer.current);
+      shareTimer.current = window.setTimeout(() => setShareCopied(false), 2000);
+    } catch {
+      window.prompt('複製這個網址分享你的考生條件：', url);
+    }
   };
 
   const toggleDifficulty = (difficulty: InterviewQuestion['difficulty']) => {
@@ -189,7 +292,7 @@ export function SelectorPage() {
       // Auto display-count until the user drags the slider:
       // nothing selected → all 123, any condition selected → 20.
       if (key !== 'practiceSize' && !practiceSizeTouched) {
-        next.practiceSize = isProfileEmpty(next) ? interviewQuestions.length : 20;
+        next.practiceSize = autoPracticeSize(next);
       }
 
       return next;
@@ -240,10 +343,26 @@ export function SelectorPage() {
 
           <div className="row g-4">
             <aside className="col-lg-4 col-xl-3 desktop-filter-panel">
-              <CandidateControls profile={profile} onUpdate={updateProfile} onReset={handleResetFilters} idPrefix="desktop" />
+              <CandidateControls
+                profile={profile}
+                onUpdate={updateProfile}
+                onReset={handleResetFilters}
+                idPrefix="desktop"
+                onShare={handleShare}
+                shareCopied={shareCopied}
+              />
             </aside>
 
             <div className="col-lg-8 col-xl-9">
+              {showSharedNotice && (
+                <div className="selector-notice" role="status">
+                  <span>已套用分享連結中的考生條件，並記在這台裝置上。</span>
+                  <button type="button" aria-label="關閉提示" onClick={() => setShowSharedNotice(false)}>
+                    <X size={16} />
+                  </button>
+                </div>
+              )}
+
               <div className="toolbar">
                 <div className="search-box">
                   <Search size={19} />
@@ -290,6 +409,18 @@ export function SelectorPage() {
                       <strong>{overviewQuestions.filter((question) => question.difficulty === '進階').length}</strong>
                     </div>
                   </button>
+                  <button
+                    className={`overview-item overview-button accent-rose ${onlyUnfamiliar ? 'is-active' : ''}`}
+                    type="button"
+                    onClick={() => setOnlyUnfamiliar((current) => !current)}
+                    aria-pressed={onlyUnfamiliar}
+                  >
+                    <Flag size={20} />
+                    <div>
+                      <span>只看不熟</span>
+                      <strong>{unfamiliarCount}</strong>
+                    </div>
+                  </button>
                 </div>
                 <div className="category-pills">
                   {Object.entries(summary).map(([category, count]) => (
@@ -306,12 +437,29 @@ export function SelectorPage() {
                 </div>
               </div>
 
+              <PracticeProgress
+                questions={interviewQuestions}
+                categories={categories.slice(1)}
+                statusMap={practice}
+                activeCategory={activeCategory}
+                onSelectCategory={toggleCategory}
+                onClear={clearPractice}
+              />
+
               <div className="question-list">
+                {rankedQuestions.length === 0 && (
+                  <p className="question-empty">
+                    {onlyUnfamiliar && unfamiliarCount === 0
+                      ? '還沒有標記為「不熟」的題目。在題目卡片按「不熟」，之後就能在這裡集中複習。'
+                      : '沒有符合目前篩選條件的題目，試著放寬分類、難度或搜尋關鍵字。'}
+                  </p>
+                )}
                 {rankedQuestions.map(({ question, score, reasons }) => (
                   <Fragment key={question.id}>
-                    <article className="question-card">
+                    <article className={`question-card ${practice[question.id] ? `is-${practice[question.id]}` : ''}`}>
                       <div className="question-rank">
                         <span>#{question.id}</span>
+                        {practice[question.id] && <small>{PRACTICE_STATUS_LABEL[practice[question.id]]}</small>}
                       </div>
                       <div className="question-body">
                         <div className="question-meta">
@@ -332,6 +480,11 @@ export function SelectorPage() {
                           ))}
                         </div>
                         <div className="question-actions">
+                          <PracticeStatusPicker
+                            questionId={question.id}
+                            status={practice[question.id]}
+                            onChange={updatePracticeStatus}
+                          />
                           {!profileIsEmpty && <div className="match-score">題目適配度 {score}%</div>}
                           <button
                             className="btn btn-dark answer-toggle-button"
@@ -384,6 +537,8 @@ export function SelectorPage() {
               idPrefix="mobile"
               showClose
               onClose={() => setIsFilterOpen(false)}
+              onShare={handleShare}
+              shareCopied={shareCopied}
             />
           </div>
         </div>
